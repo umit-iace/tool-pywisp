@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-import time
 
 import os
+from operator import itemgetter
+
 import yaml
 from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QRectF
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from operator import itemgetter
 from pyqtgraph import PlotWidget, exporters
 from pyqtgraph.dockarea import *
 
@@ -15,9 +15,7 @@ from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart
 from .visualization import MplVisualizer
-from .experiments import ExperimentInteractor, ExperimentView, PropertyItem
-import time
-from . import experimentModules
+
 
 class MainGui(QMainWindow):
     runExp = pyqtSignal()
@@ -113,7 +111,7 @@ class MainGui(QMainWindow):
         self.actLadeExperiments.setDisabled(False)
         self.actLadeExperiments.setShortcut(QKeySequence.Open)
         self.actLadeExperiments.triggered.connect(self.loadExpDialog)
-        
+
         self.actSpeichereExperiments = QAction(self)
         self.actSpeichereExperiments.setText("&Speichere Experimente in Datei")
         self.actSpeichereExperiments.setIcon(QIcon(get_resource("save.png")))
@@ -242,7 +240,7 @@ class MainGui(QMainWindow):
         self.toolbarExp.addSeparator()
         self.toolbarExp.addAction(self.actStartExperiment)
         self.toolbarExp.addAction(self.actStopExperiment)
-        
+
         self.expSettingsChanged = False
         self.exp.parameterItemChanged.connect(self.parameterItemChangedHandler)
 
@@ -317,12 +315,12 @@ class MainGui(QMainWindow):
                                    "names".format(title))
                 return
 
-        # check if plot has already been opened
-        openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-        if title in openDocks:
-            self.updatePlot(item)
-        else:
-            self.createPlot(item)
+            # check if plot has already been opened
+            openDocks = [dock.title() for dock in self.findAllPlotDocks()]
+            if title in openDocks:
+                self.updatePlot(item)
+            else:
+                self.createPlot(item)
 
     def updatePlot(self, item):
         title = item.text(0)
@@ -462,7 +460,7 @@ class MainGui(QMainWindow):
             return True
         else:
             return False
-            
+
     def saveExpDialog(self):
         filename = QFileDialog.getSaveFileName(self, "Experiment file speichern", "", "Experiment files (*.sreg)");
         if filename[0]:
@@ -485,7 +483,7 @@ class MainGui(QMainWindow):
 
         self._logger.info("Lade {} Experimente".format(len(self._experiments)))
         return
-    
+
     def saveExpToFile(self, filePath):
         """
         save experiments to file
@@ -493,38 +491,37 @@ class MainGui(QMainWindow):
         """
         fileName = os.path.split(filePath)[-1][:-5]
         self._logger.info("Speichere Experimentedatei: {0}".format(fileName))
-        
+
         experimentDict = self._experiments
 
-# ähnlich wie in startexperiment sollte auch das übernehmen der werte aus dem tree in die _experiments liste funktioneren
-#         for row in range(self.exp.targetModel.rowCount()):
-#             index = self.exp.targetModel.index(row, 0)
-#             parent = index.model().itemFromIndex(index)
-#             child = index.model().item(index.row(), 1)
-#             moduleName = parent.data(role=PropertyItem.RawDataRole)
-#             subModuleName = child.data(role=PropertyItem.RawDataRole)
-# 
-#             if subModuleName is None:
-#                 continue
-# 
-#             moduleClass = getattr(experimentModules, moduleName, None)
-#             subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
-# 
-#             settings = self.exp._getSettings(self.exp.targetModel, moduleName)
-#             for key, val in settings.items():
-#                 if val is not None:
-#TODO im dict werte richtig eintragen
-#                     for key, val in experimentDict:
-#                         if key=='name' and val == moduleName
+        # ähnlich wie in startexperiment sollte auch das übernehmen der werte aus dem tree in die _experiments liste funktioneren
+        #         for row in range(self.exp.targetModel.rowCount()):
+        #             index = self.exp.targetModel.index(row, 0)
+        #             parent = index.model().itemFromIndex(index)
+        #             child = index.model().item(index.row(), 1)
+        #             moduleName = parent.data(role=PropertyItem.RawDataRole)
+        #             subModuleName = child.data(role=PropertyItem.RawDataRole)
+        #
+        #             if subModuleName is None:
+        #                 continue
+        #
+        #             moduleClass = getattr(experimentModules, moduleName, None)
+        #             subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
+        #
+        #             settings = self.exp._getSettings(self.exp.targetModel, moduleName)
+        #             for key, val in settings.items():
+        #                 if val is not None:
+        # TODO im dict werte richtig eintragen
+        #                     for key, val in experimentDict:
+        #                         if key=='name' and val == moduleName
 
-            
         self._experiments = experimentDict
-        
+
         with open(filePath.encode(), "w") as f:
-            yaml.dump(experimentDict,f,default_flow_style=False)
+            yaml.dump(experimentDict, f, default_flow_style=False)
 
         return
-    
+
     def parameterItemChangedHandler(self, item):
         self.expSettingsChanged = True
 
@@ -542,7 +539,7 @@ class MainGui(QMainWindow):
         self.exp.applayingExperiment = True
         sucess = self.applyExperimentByName(str(item.text()))
         self.exp.applayingExperiment = False
-        
+
         for i in range(self.experimentList.count()):
             newfont = self.experimentList.item(i).font()
             if self.experimentList.item(i) == item and sucess:
@@ -593,7 +590,9 @@ class MainGui(QMainWindow):
 
     def closeEvent(self, QCloseEvent):
         if self.expSettingsChanged:
-            buttonReply = QMessageBox.warning(self, "Experiment geändert", "Sie haben ein Experiment geändert, möchten Sie Ihre Änderungen speichern?", QMessageBox.Yes | QMessageBox.No)
+            buttonReply = QMessageBox.warning(self, "Experiment geändert",
+                                              "Sie haben ein Experiment geändert, möchten Sie Ihre Änderungen speichern?",
+                                              QMessageBox.Yes | QMessageBox.No)
             if buttonReply == QMessageBox.Yes:
                 if not self.saveExpDialog():
                     QCloseEvent.ignore()

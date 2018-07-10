@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
+import ast
 from collections import OrderedDict
 
-import ast
 from PyQt5.QtCore import Qt, pyqtSlot, QModelIndex, QSize, pyqtSignal
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QItemDelegate, QComboBox, QTreeView
@@ -255,10 +255,10 @@ class ExperimentInteractor(QObject):
         else:
             idx = item.index()
             moduleItem = idx.model().item(idx.row())
-    
+
             # delete all old settings
             moduleItem.removeRows(0, moduleItem.rowCount())
-    
+
             # insert new settings
             self._addSettings(moduleItem.index())
 

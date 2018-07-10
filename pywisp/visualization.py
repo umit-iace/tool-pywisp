@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from abc import ABCMeta, abstractmethod
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT, FigureCanvasQTAgg as FigureCanvas
+
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 

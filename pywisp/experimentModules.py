@@ -1,6 +1,7 @@
 import logging
-from PyQt5.QtCore import QObject
 from abc import ABCMeta, abstractmethod
+
+from PyQt5.QtCore import QObject
 
 pyqtWrapperType = type(QObject)
 
@@ -41,6 +42,7 @@ class TestBench(ExperimentModule):
     """
     Base class for the used test bench
     """
+
     def __init__(self):
         ExperimentModule.__init__(self)
 

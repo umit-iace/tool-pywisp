@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 import logging.config
 
+from .connection import *
+from .experimentModules import *
+from .experiments import *
 from .experiments import *
 from .gui import *
 from .registry import *
 from .utils import *
-from .experimentModules import *
-from .experiments import *
-from .connection import *
 from .visualization import *
 
 # configure logging

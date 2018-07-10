@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-import os
 import logging
-from pyqtgraph import mkPen
+import os
+
 from PyQt5.QtGui import QColor
+from pyqtgraph import mkPen
 
 
 def get_resource(res_name, res_type="icons"):
@@ -23,6 +24,7 @@ class PlainTextLogger(logging.Handler):
     """
     Logging handler hat formats log data for line display
     """
+
     def __init__(self, level=logging.NOTSET):
         logging.Handler.__init__(self, level)
         self.name = "PlainTextLogger"
@@ -49,11 +51,12 @@ class DataPointBuffer(object):
     """
     Buffer object to store the values of the data points
     """
+
     def __init__(self, name):
         self.name = name
         self.values = []
         self.time = []
-    
+
     def addValue(self, time, value):
         """
         Adds a new value to the data point buffer
@@ -63,7 +66,7 @@ class DataPointBuffer(object):
         """
         self.time.append(time)
         self.values.append(value)
-        
+
     def clearBuffer(self):
         """
         Clears all the buffers of the data point
@@ -94,7 +97,7 @@ class PlotChart(object):
         self.dataPoints = []
         self.plotWidget = None
         self.plotCurves = []
-        
+
     def addPlotCurve(self, dataPoint):
         """
         Adds a curve to the plot widget
@@ -107,7 +110,7 @@ class PlotChart(object):
         colorItem = QColor(self.TABLEAU_COLORS[colorIdxItem][1])
 
         self.plotCurves.append(self.plotWidget.plot(name=dataPoint.name, pen=mkPen(colorItem, width=2)))
-        
+
     def updatePlot(self):
         """
         Updates all curves of the plot with the actual data in the buffers
@@ -115,4 +118,3 @@ class PlotChart(object):
         if self.plotWidget:
             for indx, curve in enumerate(self.plotCurves):
                 curve.setData(self.dataPoints[indx].time, self.dataPoints[indx].values)
-
