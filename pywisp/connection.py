@@ -38,6 +38,10 @@ class SerialConnection(QtCore.QThread):
         self.timer.start()
         self.exec_()
 
+    def stop(self):
+        self.timer.stop()
+        self.terminate()
+
     def connect(self):
         """ Checks of an arduino port is avaiable and connect to these one.
 
@@ -57,7 +61,7 @@ class SerialConnection(QtCore.QThread):
         else:
             self.port = arduino_ports[0]
             try:
-                self.serial = serial.Serial(self.port, self.baud, timeout=1000)
+                self.serial = serial.Serial(self.port, self.baud)
             except Exception as e:
                 self._logger.error('{0}'.format(e))
                 return False
@@ -69,18 +73,22 @@ class SerialConnection(QtCore.QThread):
 
         """
         self.serial.close()
+        self.serial = None
         self.isConnected = False
 
     def readData(self):
         """ Reads and emits the data, that comes over the serial interface.
 
         """
-        while self.doRead:
-            try:
-                data = self.serial.readline().decode('ascii').strip()
-                self.received.emit(data)
-            except:
-                continue
+        if self.isConnected:
+            while self.doRead:
+                try:
+                    data = self.serial.readline().decode('ascii').strip()
+                    self.received.emit(data)
+                except:
+                    continue
+        else:
+            time.sleep(1)
 
     def writeData(self, data):
         """ Writes the given data to the serial inferface.
@@ -91,7 +99,8 @@ class SerialConnection(QtCore.QThread):
             Readable string that will send over serial interface
 
         """
-        self.doRead = False
-        self.serial.write(data.encode('ascii'))
-        time.sleep(0.1)
-        self.doRead = True
+        if self.isConnected:
+            self.doRead = False
+            self.serial.write(data.encode('ascii'))
+            time.sleep(0.1)
+            self.doRead = True

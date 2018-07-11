@@ -118,3 +118,9 @@ class PlotChart(object):
         if self.plotWidget:
             for indx, curve in enumerate(self.plotCurves):
                 curve.setData(self.dataPoints[indx].time, self.dataPoints[indx].values)
+
+    def clear(self):
+        if self.plotWidget:
+            self.plotWidget.getPlotItem().clear()
+            self.dataPoints = []
+            self.plotCurves = []

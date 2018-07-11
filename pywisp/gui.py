@@ -335,8 +335,7 @@ class MainGui(QMainWindow):
         # set the new datapoints
         for chart in self.plotCharts:
             if chart.title == title:
-                chart.dataPoints = []
-                chart.plotCurves = []
+                chart.clear()
                 for dataPoint in newDataPoints:
                     chart.addPlotCurve(dataPoint)
                 chart.updatePlot()
@@ -623,7 +622,8 @@ class MainGui(QMainWindow):
     def disconnect(self):
         self.stopExperiment()
         self.connection.disconnect()
-        self.connection.quit()
+        self.connection.stop()
+        self.connection.received.disconnect()
         self.connection = None
         self._logger.info("Arduino getrennt.")
         self.actConnect.setEnabled(True)
