@@ -40,7 +40,7 @@ class MainGui(QMainWindow):
         icon = QIcon(res_path)
         self.setWindowIcon(icon)
         self.resize(1000, 700)
-        self.setWindowTitle('Live Ball in Tube Visualisierung')
+        self.setWindowTitle('Visualisierung')
 
         # status bar
         self.statusBar = QStatusBar()
@@ -183,7 +183,7 @@ class MainGui(QMainWindow):
 
         self.dataPointTreeWidget = QTreeWidget()
         self.dataPointTreeWidget.setHeaderLabels(["Plottitel", "Datenpunkte"])
-        self.dataPointTreeWidget.itemDoubleClicked.connect(self.plots)
+        self.dataPointTreeWidget.itemDoubleClicked.connect(self.plotsClicked)
         self.dataPointTreeWidget.setExpandsOnDoubleClick(0)
         self.dataPointTreeLayout = QVBoxLayout()
 
@@ -319,6 +319,26 @@ class MainGui(QMainWindow):
             openDocks = [dock.title() for dock in self.findAllPlotDocks()]
             if title in openDocks:
                 self.updatePlot(item)
+
+    def plotsClicked(self, item):
+        title = item.text(0)
+
+        # check if a top level item has been clicked
+        if not item.parent():
+            if title in self.nonPlottingDocks:
+                self._logger.error("Title '{}' not allowed for a plot window since"
+                                   "it would shadow on of the reserved "
+                                   "names".format(title))
+                return
+
+            # check if plot has already been opened
+            openDocks = [dock.title() for dock in self.findAllPlotDocks()]
+            if title in openDocks:
+                self.updatePlot(item)
+                try:
+                    self.area.docks[title].raiseDock()
+                except:
+                    pass
             else:
                 self.createPlot(item)
 
@@ -346,7 +366,6 @@ class MainGui(QMainWindow):
 
         # create plot widget and the PlotChart object
         widget = PlotWidget()
-        widget.setTitle(title)
         chart = PlotChart(title)
         chart.plotWidget = widget
         for indx in range(item.childCount()):
