@@ -152,6 +152,7 @@ class MainGui(QMainWindow):
                 self.dataPointBuffers.append(DataPointBuffer(data))
             self.dataPointListWidget.addItems(dataPointNames)
         self.dataPointListWidget.setLayout(self.dataPointListLayout)
+        self.dataPointListWidget.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.dataLayout.addWidget(self.dataPointListWidget)
 
         self.dataPointManipulationWidget = QWidget()
@@ -159,31 +160,43 @@ class MainGui(QMainWindow):
         self.dataPointManipulationLayout.addStretch(0)
         self.dataPointRightButtonWidget = QWidget()
         self.dataPointRightButtonLayout = QVBoxLayout()
-        self.dataPointRightButton = QPushButton(chr(8594), self)
+        self.dataPointRightButton = QPushButton(chr(0x226b), self)
+        self.dataPointRightButton.setToolTip(
+            "Add the selected data set from the left side to the selected plot "
+            "on the right.")
         self.dataPointRightButton.clicked.connect(self.addDatapointToTree)
         self.dataPointManipulationLayout.addWidget(self.dataPointRightButton)
         self.dataPointLeftButtonWidget = QWidget()
         self.dataPointLeftButtonLayout = QVBoxLayout()
-        self.dataPointLeftButton = QPushButton(chr(8592), self)
+        self.dataPointLeftButton = QPushButton(chr(0x226a), self)
+        self.dataPointLeftButton.setToolTip(
+            "Remove the selected data set from the plot on the right."
+        )
         self.dataPointLeftButton.clicked.connect(self.removeDatapointFromTree)
         self.dataPointManipulationLayout.addWidget(self.dataPointLeftButton)
         self.dataPointManipulationLayout.addStretch(0)
         self.dataPointPlotAddButtonWidget = QWidget()
         self.dataPointPlotAddButtonLayout = QVBoxLayout()
         self.dataPointPlotAddButton = QPushButton("+", self)
+        self.dataPointPlotAddButton.setToolTip(
+            "Create a new plot window."
+        )
         self.dataPointPlotAddButton.clicked.connect(self.addPlotTreeItem)
         self.dataPointManipulationLayout.addWidget(self.dataPointPlotAddButton)
         self.dataPointPlotRemoveButtonWidget = QWidget()
         self.dataPointPlotRemoveButtonLayout = QVBoxLayout()
         self.dataPointPlotRemoveButton = QPushButton("-", self)
-        self.dataPointPlotRemoveButton.clicked.connect(self.removePlotTreeItem)
+        self.dataPointPlotRemoveButton.setToolTip(
+            "Delete the selected plot window."
+        )
+        self.dataPointPlotRemoveButton.clicked.connect(self.removeSelectedPlotTreeItems)
         self.dataPointManipulationLayout.addWidget(self.dataPointPlotRemoveButton)
         self.dataPointManipulationWidget.setLayout(self.dataPointManipulationLayout)
         self.dataLayout.addWidget(self.dataPointManipulationWidget)
 
         self.dataPointTreeWidget = QTreeWidget()
         self.dataPointTreeWidget.setHeaderLabels(["Plottitel", "Datenpunkte"])
-        self.dataPointTreeWidget.itemDoubleClicked.connect(self.plotsClicked)
+        self.dataPointTreeWidget.itemDoubleClicked.connect(self.plotVectorClicked)
         self.dataPointTreeWidget.setExpandsOnDoubleClick(0)
         self.dataPointTreeLayout = QVBoxLayout()
 
@@ -247,62 +260,77 @@ class MainGui(QMainWindow):
     # event functions
     def addPlotTreeItem(self):
         name, ok = QInputDialog.getText(self, "Plottitel", "Plottitel:")
-        if ok and name:
-            # check if name is in treewidget
-            root = self.dataPointTreeWidget.invisibleRootItem()
-            child_count = root.childCount()
-            for i in range(child_count):
-                item = root.child(i)
-                _name = item.text(0)
-                if _name == name:
-                    self._logger.error("Name '{}' already exists".format(name))
-                    return
+        if not(ok and name):
+            return
+        similar_items = self.dataPointTreeWidget.findItems(name, Qt.MatchExactly)
+        if similar_items:
+            self._logger.error("Name '{}' existiert bereits!".format(name))
+            return
 
-            toplevelitem = QTreeWidgetItem()
-            toplevelitem.setText(0, name)
-            self.dataPointTreeWidget.addTopLevelItem(toplevelitem)
-            toplevelitem.setExpanded(1)
+        toplevelitem = QTreeWidgetItem()
+        toplevelitem.setText(0, name)
+        self.dataPointTreeWidget.addTopLevelItem(toplevelitem)
+        toplevelitem.setExpanded(1)
 
-    def removePlotTreeItem(self):
-        if self.dataPointTreeWidget.selectedItems():
-            toplevelitem = self.dataPointTreeWidget.selectedItems()[0]
-            while toplevelitem.parent():
-                toplevelitem = toplevelitem.parent()
+    def removeSelectedPlotTreeItems(self):
+        items = self.dataPointTreeWidget.selectedItems()
+        if not items:
+            return
 
-            text = "Der markierte Plot '" + self.dataPointTreeWidget.selectedItems()[0].text(0) + "' wird gelöscht!"
-            buttonReply = QMessageBox.warning(self, "Plot löschen", text, QMessageBox.Ok | QMessageBox.Cancel)
+        for item in items:
+            self.removePlotTreeItem(item)
+
+    def removePlotTreeItem(self, item):
+        # get the  top item
+        while item.parent():
+            item = item.parent()
+            text = "Der markierte Plot '" + item.text(0) + "' wird gelöscht!"
+            buttonReply = QMessageBox.warning(self, "Plot delete", text, QMessageBox.Ok | QMessageBox.Cancel)
             if buttonReply == QMessageBox.Ok:
                 openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-                if toplevelitem.text(0) in openDocks:
-                    self.area.docks[toplevelitem.text(0)].close()
+                if item.text(0) in openDocks:
+                    self.area.docks[item.text(0)].close()
 
-                self.dataPointTreeWidget.takeTopLevelItem(self.dataPointTreeWidget.indexOfTopLevelItem(toplevelitem))
+                self.dataPointTreeWidget.takeTopLevelItem(self.dataPointTreeWidget.indexOfTopLevelItem(item))
 
     def addDatapointToTree(self):
-        if self.dataPointListWidget.selectedIndexes() and self.dataPointTreeWidget.selectedIndexes():
-            datapoint = self.dataPointBuffers[self.dataPointListWidget.currentRow()]
-            toplevelitem = self.dataPointTreeWidget.selectedItems()[0]
-            while toplevelitem.parent():
-                toplevelitem = toplevelitem.parent()
+        if not(self.dataPointListWidget.selectedIndexes() and self.dataPointTreeWidget.selectedIndexes()):
+            return
 
-            for i in range(toplevelitem.childCount()):
-                if datapoint.name == toplevelitem.child(i).text(1):
-                    return
+        dataPoints = []
+        for item in self.dataPointListWidget.selectedItems():
+            for data in self.dataPointBuffers:
+                if data.name == item.text():
+                    dataPoints.append(data)
+                    continue
 
-            child = QTreeWidgetItem()
-            child.setText(1, datapoint.name)
-            toplevelitem.addChild(child)
+        toplevelItem = self.dataPointTreeWidget.selectedItems()[0]
+        while toplevelItem.parent():
+            toplevelItem = toplevelItem.parent()
 
-            self.plots(toplevelitem)
+        topLevelItemList = []
+        for i in range(toplevelItem.childCount()):
+            topLevelItemList.append(toplevelItem.child(i).text(1))
+
+        for dataPoint in dataPoints:
+            if dataPoint.name not in topLevelItemList:
+                child = QTreeWidgetItem()
+                child.setText(1, dataPoint.name)
+                toplevelItem.addChild(child)
+
+        self.plots(toplevelItem)
 
     def removeDatapointFromTree(self):
-        if self.dataPointTreeWidget.selectedItems():
-            toplevelitem = self.dataPointTreeWidget.selectedItems()[0]
-            while toplevelitem.parent():
-                toplevelitem = toplevelitem.parent()
+        items = self.dataPointTreeWidget.selectedItems()
+        if not items:
+            return
 
-            toplevelitem.takeChild(toplevelitem.indexOfChild(self.dataPointTreeWidget.selectedItems()[0]))
-            self.plots(toplevelitem)
+        toplevelitem = items[0]
+        while toplevelitem.parent():
+            toplevelitem = toplevelitem.parent()
+
+        toplevelitem.takeChild(toplevelitem.indexOfChild(self.dataPointTreeWidget.selectedItems()[0]))
+        self.plots(toplevelitem)
 
     def plots(self, item):
         title = item.text(0)
@@ -320,27 +348,29 @@ class MainGui(QMainWindow):
             if title in openDocks:
                 self.updatePlot(item)
 
-    def plotsClicked(self, item):
-        title = item.text(0)
+    def plotVectorClicked(self, item):
 
         # check if a top level item has been clicked
-        if not item.parent():
-            if title in self.nonPlottingDocks:
-                self._logger.error("Title '{}' not allowed for a plot window since"
-                                   "it would shadow on of the reserved "
-                                   "names".format(title))
-                return
+        if item.parent():
+            return
 
-            # check if plot has already been opened
-            openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-            if title in openDocks:
-                self.updatePlot(item)
-                try:
-                    self.area.docks[title].raiseDock()
-                except:
-                    pass
-            else:
-                self.createPlot(item)
+        title = item.text(0)
+        if title in self.nonPlottingDocks:
+            self._logger.error("Title '{}' not allowed for a plot window since"
+                               "it would shadow on of the reserved "
+                               "names".format(title))
+            return
+
+        # check if plot has already been opened
+        openDocks = [dock.title() for dock in self.findAllPlotDocks()]
+        if title in openDocks:
+            self._update_plot(item)
+            try:
+                self.area.docks[title].raiseDock()
+            except:
+                pass
+        else:
+            self.plotDataVector(item)
 
     def updatePlot(self, item):
         title = item.text(0)
@@ -361,27 +391,23 @@ class MainGui(QMainWindow):
                 chart.updatePlot()
                 break
 
-    def createPlot(self, item):
-        title = item.text(0)
+    def plotDataVector(self, item):
+        title = str(item.text(0))
 
-        # create plot widget and the PlotChart object
+        # create plot widget
         widget = PlotWidget()
         chart = PlotChart(title)
         chart.plotWidget = widget
-        for indx in range(item.childCount()):
+        widget.showGrid(True, True)
+        widget.getPlotItem().getAxis("bottom").setLabel(text="Time", units="s")
+
+        for idx in range(item.childCount()):
             for datapoint in self.dataPointBuffers:
-                if datapoint.name == item.child(indx).text(1):
+                if datapoint.name == item.child(idx).text(1):
                     chart.addPlotCurve(datapoint)
 
-        # before adding the PlotChart object to the list check if the plot contains any data points
-        if chart.dataPoints:
-            self.plotCharts.append(chart)
-        else:
-            return
-
-        widget.showGrid(True, True)
-
-        widget.scene().contextMenu = [QAction("Export png", self), QAction("Export csv", self)]
+        widget.scene().contextMenu = [QAction("Export png", self),
+                                      QAction("Export csv", self)]
         widget.scene().contextMenu[0].triggered.connect(lambda: self.exportPng(widget.getPlotItem(), title))
         widget.scene().contextMenu[1].triggered.connect(lambda: self.exportCsv(widget.getPlotItem(), title))
 
@@ -389,15 +415,12 @@ class MainGui(QMainWindow):
         dock = Dock(title, closable=True)
         dock.addWidget(widget)
         dock.sigClosed.connect(self.closedDock)
-        plotWidgets = self.findAllPlotDocks()
 
+        plotWidgets = self.findAllPlotDocks()
         if plotWidgets:
             self.area.addDock(dock, "above", plotWidgets[0])
         else:
             self.area.addDock(dock, "bottom", self.animationDock)
-
-        # update the plot with the stored data
-        chart.updatePlot()
 
     def closedDock(self):
         """ Gets called when a dock was closed, if it was a plot dock remove the corresponding PlotChart object
