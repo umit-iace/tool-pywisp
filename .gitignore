@@ -73,3 +73,8 @@ target/
 
 # MacOSX Files
 .DS_Store
+
+# LiClipse workspace
+pywisp/.project
+pywisp/.pydevproject
+pywisp/.settings

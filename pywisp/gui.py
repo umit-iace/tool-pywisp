@@ -11,10 +11,11 @@ from pyqtgraph import PlotWidget, exporters
 from pyqtgraph.dockarea import *
 
 from .connection import SerialConnection
-from .experiments import ExperimentInteractor, ExperimentView
+from .experiments import ExperimentInteractor, ExperimentView, PropertyItem
 from .registry import *
 from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart
 from .visualization import MplVisualizer
+from . import experimentModules
 
 
 class MainGui(QMainWindow):
@@ -533,33 +534,27 @@ class MainGui(QMainWindow):
         fileName = os.path.split(filePath)[-1][:-5]
         self._logger.info("Speichere Experimentedatei: {0}".format(fileName))
 
-        experimentDict = self._experiments
-
-        # ähnlich wie in startexperiment sollte auch das übernehmen der werte aus dem tree in die _experiments liste funktioneren
-        #         for row in range(self.exp.targetModel.rowCount()):
-        #             index = self.exp.targetModel.index(row, 0)
-        #             parent = index.model().itemFromIndex(index)
-        #             child = index.model().item(index.row(), 1)
-        #             moduleName = parent.data(role=PropertyItem.RawDataRole)
-        #             subModuleName = child.data(role=PropertyItem.RawDataRole)
-        #
-        #             if subModuleName is None:
-        #                 continue
-        #
-        #             moduleClass = getattr(experimentModules, moduleName, None)
-        #             subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
-        #
-        #             settings = self.exp._getSettings(self.exp.targetModel, moduleName)
-        #             for key, val in settings.items():
-        #                 if val is not None:
-        # TODO im dict werte richtig eintragen
-        #                     for key, val in experimentDict:
-        #                         if key=='name' and val == moduleName
-
-        self._experiments = experimentDict
+        for row in range(self.exp.targetModel.rowCount()):
+            index = self.exp.targetModel.index(row, 0)
+            parent = index.model().itemFromIndex(index)
+            child = index.model().item(index.row(), 1)
+            moduleName = parent.data(role=PropertyItem.RawDataRole)
+            subModuleName = child.data(role=PropertyItem.RawDataRole)
+ 
+            if subModuleName is None:
+                continue
+            moduleClass = getattr(experimentModules, moduleName, None)
+            subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
+ 
+            settings = self.exp._getSettings(self.exp.targetModel, moduleName)
+            for key, val in settings.items():
+                if val is not None:
+                    self._experiments[self._currentExperimentIndex][moduleName][key] = val
 
         with open(filePath.encode(), "w") as f:
-            yaml.dump(experimentDict, f, default_flow_style=False)
+            yaml.dump(self._experiments, f, default_flow_style=False)
+        
+        self.expSettingsChanged = False
 
         return
 
