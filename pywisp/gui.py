@@ -573,7 +573,7 @@ class MainGui(QMainWindow):
         Apply the selected experiment to the current target and set it bold.
         """
         self.exp.applayingExperiment = True
-        sucess = self.applyExperimentByName(str(item.text()))
+        sucess = self._applyExperimentByIdx(self.experimentList.row(item))
         self.exp.applayingExperiment = False
 
         for i in range(self.experimentList.count()):
