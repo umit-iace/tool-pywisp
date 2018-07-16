@@ -146,11 +146,9 @@ class MainGui(QMainWindow):
         self.dataPointListWidget = QListWidget()
         self.dataPointListLayout = QVBoxLayout()
         dataPointNames = self.exp.getDataPoints()
-        self.dataPointBuffers = []
         self.plotCharts = []
         if dataPointNames:
-            for data in dataPointNames:
-                self.dataPointBuffers.append(DataPointBuffer(data))
+            self.dataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
             self.dataPointListWidget.addItems(dataPointNames)
         self.dataPointListWidget.setLayout(self.dataPointListLayout)
         self.dataPointListWidget.setSelectionMode(QAbstractItemView.ExtendedSelection)
