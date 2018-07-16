@@ -405,6 +405,12 @@ class MainGui(QMainWindow):
                 if datapoint.name == item.child(idx).text(1):
                     chart.addPlotCurve(datapoint)
 
+        # before adding the PlotChart object to the list check if the plot contains any data points
+        if chart.dataPoints:
+            self.plotCharts.append(chart)
+        else:
+            return
+
         widget.scene().contextMenu = [QAction("Export png", self),
                                       QAction("Export csv", self)]
         widget.scene().contextMenu[0].triggered.connect(lambda: self.exportPng(widget.getPlotItem(), title))
