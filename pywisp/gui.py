@@ -363,7 +363,7 @@ class MainGui(QMainWindow):
         # check if plot has already been opened
         openDocks = [dock.title() for dock in self.findAllPlotDocks()]
         if title in openDocks:
-            self._update_plot(item)
+            self.updatePlot(item)
             try:
                 self.area.docks[title].raiseDock()
             except:
