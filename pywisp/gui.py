@@ -283,14 +283,15 @@ class MainGui(QMainWindow):
         # get the  top item
         while item.parent():
             item = item.parent()
-            text = "Der markierte Plot '" + item.text(0) + "' wird gelöscht!"
-            buttonReply = QMessageBox.warning(self, "Plot delete", text, QMessageBox.Ok | QMessageBox.Cancel)
-            if buttonReply == QMessageBox.Ok:
-                openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-                if item.text(0) in openDocks:
-                    self.area.docks[item.text(0)].close()
 
-                self.dataPointTreeWidget.takeTopLevelItem(self.dataPointTreeWidget.indexOfTopLevelItem(item))
+        text = "Der markierte Plot '" + item.text(0) + "' wird gelöscht!"
+        buttonReply = QMessageBox.warning(self, "Plot delete", text, QMessageBox.Ok | QMessageBox.Cancel)
+        if buttonReply == QMessageBox.Ok:
+            openDocks = [dock.title() for dock in self.findAllPlotDocks()]
+            if item.text(0) in openDocks:
+                self.area.docks[item.text(0)].close()
+
+            self.dataPointTreeWidget.takeTopLevelItem(self.dataPointTreeWidget.indexOfTopLevelItem(item))
 
     def addDatapointToTree(self):
         if not(self.dataPointListWidget.selectedIndexes() and self.dataPointTreeWidget.selectedIndexes()):
@@ -406,11 +407,12 @@ class MainGui(QMainWindow):
                     chart.addPlotCurve(datapoint)
 
         # before adding the PlotChart object to the list check if the plot contains any data points
-        if chart.dataPoints:
+        if chart.dataPoints is not None:
             self.plotCharts.append(chart)
         else:
             return
 
+        chart.updatePlot()
         widget.scene().contextMenu = [QAction("Export png", self),
                                       QAction("Export csv", self)]
         widget.scene().contextMenu[0].triggered.connect(lambda: self.exportPng(widget.getPlotItem(), title))
