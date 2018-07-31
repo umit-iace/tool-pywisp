@@ -510,7 +510,6 @@ class MainGui(QMainWindow):
 
         self.stopExp.emit()
 
-
     def loadExpDialog(self):
         filename = QFileDialog.getOpenFileName(self, "Experiment file öffnen", "", "Experiment files (*.sreg)");
         if filename[0]:
@@ -727,8 +726,31 @@ class MainGui(QMainWindow):
             self._logger.error('Keine Verbindung vorhanden!')
 
     def saveLastMeas(self):
-        data = {'expindex':self._currentExperimentIndex}
+        data = {}
         data.update({'datapointbuffers':self.dataPointBuffers})
+
+        experiment = self._experiments
+
+        if self.expSettingsChanged:
+            for row in range(self.exp.targetModel.rowCount()):
+                index = self.exp.targetModel.index(row, 0)
+                parent = index.model().itemFromIndex(index)
+                child = index.model().item(index.row(), 1)
+                moduleName = parent.data(role=PropertyItem.RawDataRole)
+                subModuleName = child.data(role=PropertyItem.RawDataRole)
+
+                if subModuleName is None:
+                    continue
+                moduleClass = getattr(experimentModules, moduleName, None)
+                subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
+
+                settings = self.exp._getSettings(self.exp.targetModel, moduleName)
+                for key, val in settings.items():
+                    if val is not None:
+                        experiment = [self._currentExperimentIndex][moduleName][key] = val
+
+        data.update({'exp',experiment})
+
         self.lastMeasurements.append(data)
         self.lastMeasList.addItem(QListWidgetItem(self._currentExperimentName))
 
@@ -736,7 +758,7 @@ class MainGui(QMainWindow):
         measurement = self.lastMeasurements[self.lastMeasList.row(item)]
 
         self.exp.applayingExperiment = True
-        sucess = self._applyExperimentByIdx(measurement['expindex'])
+        sucess = self.exp.setExperiment(measurement['exp'])
         self.exp.applayingExperiment = False
 
         self.setQListItemBold(self.lastMeasList, item, [sucess])
