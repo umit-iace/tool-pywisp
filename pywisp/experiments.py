@@ -190,6 +190,7 @@ class ExperimentInteractor(QObject):
     """
     sendData = pyqtSignal(object)
     parameterItemChanged = pyqtSignal(object)
+    expfinished = pyqtSignal(object)
 
     def __init__(self, moduleList, parent=None):
         QObject.__init__(self, parent)
@@ -432,3 +433,5 @@ class ExperimentInteractor(QObject):
         data.append('exp------0\n')
         for _data in data:
             self.sendData.emit(_data)
+
+        self.expfinished.emit()

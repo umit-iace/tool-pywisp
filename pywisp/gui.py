@@ -55,6 +55,7 @@ class MainGui(QMainWindow):
 
         # create docks
         self.experimentDock = Dock("Experimente")
+        self.lastMeasDock = Dock("Vorherige Messungen")
         self.propertyDock = Dock("Parameter")
         self.logDock = Dock("Log")
         self.dataDock = Dock("Daten")
@@ -62,7 +63,8 @@ class MainGui(QMainWindow):
 
         # arrange docks
         self.area.addDock(self.animationDock, "right")
-        self.area.addDock(self.experimentDock, "left", self.animationDock)
+        self.area.addDock(self.lastMeasDock, "left", self.animationDock)
+        self.area.addDock(self.experimentDock, "above", self.lastMeasDock)
         self.area.addDock(self.propertyDock, "bottom", self.experimentDock)
         self.area.addDock(self.dataDock, "bottom", self.propertyDock)
         self.area.addDock(self.logDock, "bottom", self.dataDock)
@@ -133,6 +135,13 @@ class MainGui(QMainWindow):
         self.actStopExperiment.setIcon(QIcon(get_resource("stop.png")))
         self.actStopExperiment.setShortcut(QKeySequence("F6"))
         self.actStopExperiment.triggered.connect(self.stopExperiment)
+
+        # lastmeas dock
+        self.lastMeasList = QListWidget(self)
+        self.lastMeasDock.addWidget(self.lastMeasList)
+        self.lastMeasList.itemDoubleClicked.connect(self.loadLastMeas)
+        self.exp.expfinished.connect(self.saveLastMeas)
+        self.lastMeasurements = []
 
         # log dock
         self.logBox = QPlainTextEdit(self)
@@ -501,6 +510,7 @@ class MainGui(QMainWindow):
 
         self.stopExp.emit()
 
+
     def loadExpDialog(self):
         filename = QFileDialog.getOpenFileName(self, "Experiment file öffnen", "", "Experiment files (*.sreg)");
         if filename[0]:
@@ -582,14 +592,8 @@ class MainGui(QMainWindow):
         sucess = self._applyExperimentByIdx(self.experimentList.row(item))
         self.exp.applayingExperiment = False
 
-        for i in range(self.experimentList.count()):
-            newfont = self.experimentList.item(i).font()
-            if self.experimentList.item(i) == item and sucess:
-                newfont.setBold(1)
-            else:
-                newfont.setBold(0)
-            self.experimentList.item(i).setFont(newfont)
-        self.experimentList.repaint()
+        self.setQListItemBold(self.experimentList, item, [sucess])
+        self.setQListItemBold(self.lastMeasList, item, [sucess])
 
     def applyExperimentByName(self, experimentName):
         """
@@ -721,3 +725,39 @@ class MainGui(QMainWindow):
             self.connection.writeData(data)
         else:
             self._logger.error('Keine Verbindung vorhanden!')
+
+    def saveLastMeas(self):
+        data = {'expindex':self._currentExperimentIndex}
+        data.update({'datapointbuffers':self.dataPointBuffers})
+        self.lastMeasurements.append(data)
+        self.lastMeasList.addItem(QListWidgetItem(self._currentExperimentName))
+
+    def loadLastMeas(self, item):
+        measurement = self.lastMeasurements[self.lastMeasList.row(item)]
+
+        self.exp.applayingExperiment = True
+        sucess = self._applyExperimentByIdx(measurement['expindex'])
+        self.exp.applayingExperiment = False
+
+        self.setQListItemBold(self.lastMeasList, item, [sucess])
+        self.setQListItemBold(self.experimentList, item, [sucess])
+
+        self.dataPointBuffers = measurement['datapointbuffers']
+
+        for chart in self.plotCharts:
+            chart.updatePlot()
+
+    def setQListItemBold(self, QList=None, item=None, args=[]):
+        sucess = True
+        for arg in args:
+            if arg == False:
+                sucess = False
+                break
+        for i in range(QList.count()):
+            newfont = QList.item(i).font()
+            if QList.item(i) == item and sucess:
+                newfont.setBold(1)
+            else:
+                newfont.setBold(0)
+            QList.item(i).setFont(newfont)
+        QList.repaint()
