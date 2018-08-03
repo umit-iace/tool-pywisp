@@ -9,6 +9,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from pyqtgraph import PlotWidget, exporters
 from pyqtgraph.dockarea import *
+from copy import deepcopy
 
 from .connection import SerialConnection
 from .experiments import ExperimentInteractor, ExperimentView, PropertyItem
@@ -727,32 +728,31 @@ class MainGui(QMainWindow):
 
     def saveLastMeas(self):
         data = {}
-        data.update({'datapointbuffers':self.dataPointBuffers})
+        data.update({'datapointbuffers':deepcopy(self.dataPointBuffers)})
 
-        experiment = self._experiments
+        experiment = deepcopy( self._experiments[self._currentExperimentIndex])
 
-        if self.expSettingsChanged:
-            for row in range(self.exp.targetModel.rowCount()):
-                index = self.exp.targetModel.index(row, 0)
-                parent = index.model().itemFromIndex(index)
-                child = index.model().item(index.row(), 1)
-                moduleName = parent.data(role=PropertyItem.RawDataRole)
-                subModuleName = child.data(role=PropertyItem.RawDataRole)
+        # save actual parameter
+        for row in range(self.exp.targetModel.rowCount()):
+            index = self.exp.targetModel.index(row, 0)
+            parent = index.model().itemFromIndex(index)
+            child = index.model().item(index.row(), 1)
+            moduleName = parent.data(role=PropertyItem.RawDataRole)
+            subModuleName = child.data(role=PropertyItem.RawDataRole)
 
-                if subModuleName is None:
-                    continue
-                moduleClass = getattr(experimentModules, moduleName, None)
-                subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
+            if subModuleName is None:
+                continue
+            moduleClass = getattr(experimentModules, moduleName, None)
+            subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
 
-                settings = self.exp._getSettings(self.exp.targetModel, moduleName)
-                for key, val in settings.items():
-                    if val is not None:
-                        experiment = [self._currentExperimentIndex][moduleName][key] = val
-
-        data.update({'exp',experiment})
-
+            settings = self.exp._getSettings(self.exp.targetModel, moduleName)
+            for key, val in settings.items():
+                if val is not None:
+                    experiment[moduleName][key] = val
+        data.update({'exp':experiment})
+        
         self.lastMeasurements.append(data)
-        self.lastMeasList.addItem(QListWidgetItem(self._currentExperimentName))
+        self.lastMeasList.addItem(QListWidgetItem(str(self.lastMeasList.count()+1)+": "+self._currentExperimentName))
 
     def loadLastMeas(self, item):
         measurement = self.lastMeasurements[self.lastMeasList.row(item)]
@@ -766,8 +766,10 @@ class MainGui(QMainWindow):
 
         self.dataPointBuffers = measurement['datapointbuffers']
 
-        for chart in self.plotCharts:
-            chart.updatePlot()
+        for i in range(self.dataPointTreeWidget.topLevelItemCount()):
+            self.updatePlot(self.dataPointTreeWidget.topLevelItem(i))
+        
+        self._logger.info("Letzte Messung '{}' übernommen".format(measurement['exp']['Name']))
 
     def setQListItemBold(self, QList=None, item=None, args=[]):
         sucess = True
