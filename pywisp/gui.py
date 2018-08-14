@@ -706,7 +706,7 @@ class MainGui(QMainWindow):
 
         data = self.outputQueue.get()
 
-        if len(data.split(';')) != len(self.dataPointBuffers):
+        if len(data.split(';')) != len(self.dataPointBuffers) + 1:
             self._logger.warning("Fehler bei der Datenübertragung: " + str(data))
             return
 
