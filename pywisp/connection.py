@@ -11,36 +11,35 @@ class SerialConnection(QtCore.QThread):
     """ A class for a serial interface connection implemented as a QThread
 
     """
-    received = QtCore.pyqtSignal(object)
-
-    def __init__(self, baud=115200):
+    def __init__(self,
+                 inputQueue,
+                 outputQueue,
+                 baud=115200):
         QtCore.QThread.__init__(self)
         self.serial = None
         self.baud = baud
         self.port = None
         self.isConnected = False
+        self.inputQueue = inputQueue
+        self.outputQueue = outputQueue
 
         self.moveToThread(self)
-
-        self.timer = QtCore.QTimer()
-        self.timer.moveToThread(self)
-        self.timer.setInterval(100)
-        self.timer.timeout.connect(self.readData)
-        self.doRead = True
 
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def run(self):
-        """ Starts the timer and thread
+        self.serial.flushInput()
 
-        """
-        self.timer.start()
-        self.exec_()
+        while True and self.isConnected:
+            # look for incoming request
+            if not self.inputQueue.empty():
+                self.writeSerial(self.inputQueue.get())
 
-    def stop(self):
-        self.timer.stop()
-        self.terminate()
+            # look for incoming serial data
+            if self.serial.in_waiting > 0:
+                data = self.readSerial()
+                self.outputQueue.put(data)
 
     def connect(self):
         """ Checks of an arduino port is avaiable and connect to these one.
@@ -61,7 +60,7 @@ class SerialConnection(QtCore.QThread):
         else:
             self.port = arduino_ports[0]
             try:
-                self.serial = serial.Serial(self.port, self.baud)
+                self.serial = serial.Serial(self.port, self.baud, timeout=0)
             except Exception as e:
                 self._logger.error('{0}'.format(e))
                 return False
@@ -80,15 +79,7 @@ class SerialConnection(QtCore.QThread):
         """ Reads and emits the data, that comes over the serial interface.
 
         """
-        if self.isConnected:
-            while self.doRead:
-                try:
-                    data = self.serial.readline().decode('ascii').strip()
-                    self.received.emit(data)
-                except:
-                    continue
-        else:
-            time.sleep(1)
+        return self.serial.readline().decode('ascii').strip()
 
     def writeData(self, data):
         """ Writes the given data to the serial inferface.
@@ -99,8 +90,5 @@ class SerialConnection(QtCore.QThread):
             Readable string that will send over serial interface
 
         """
-        if self.isConnected:
-            self.doRead = False
-            self.serial.write(data.encode('ascii'))
-            time.sleep(0.1)
-            self.doRead = True
+        self.serial.write(data.encode('ascii'))
+        time.sleep(0.1)

@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
 
 import os
+from copy import deepcopy
 from operator import itemgetter
 
 import yaml
-from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QRectF
+from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QRectF, QTimer
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from pyqtgraph import PlotWidget, exporters
 from pyqtgraph.dockarea import *
-from copy import deepcopy
 
+from . import experimentModules
 from .connection import SerialConnection
 from .experiments import ExperimentInteractor, ExperimentView, PropertyItem
 from .registry import *
 from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart
 from .visualization import MplVisualizer
-from . import experimentModules
 
 
 class MainGui(QMainWindow):
@@ -26,6 +26,12 @@ class MainGui(QMainWindow):
     def __init__(self, moduleList, parent=None):
         super(MainGui, self).__init__(parent)
         self.connection = None
+        self.inputQueue = Queue()
+        self.outputQueue = Queue()
+
+        self.timer = QTimer()
+        self.timer.setInterval(500)
+        self.timer.timeout.connect(self.updateData)
 
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -266,10 +272,11 @@ class MainGui(QMainWindow):
         self.expSettingsChanged = False
         self.exp.parameterItemChanged.connect(self.parameterItemChangedHandler)
 
-    # event functions
+        # event functions
+
     def addPlotTreeItem(self):
         name, ok = QInputDialog.getText(self, "Plottitel", "Plottitel:")
-        if not(ok and name):
+        if not (ok and name):
             return
         similar_items = self.dataPointTreeWidget.findItems(name, Qt.MatchExactly)
         if similar_items:
@@ -304,7 +311,7 @@ class MainGui(QMainWindow):
             self.dataPointTreeWidget.takeTopLevelItem(self.dataPointTreeWidget.indexOfTopLevelItem(item))
 
     def addDatapointToTree(self):
-        if not(self.dataPointListWidget.selectedIndexes() and self.dataPointTreeWidget.selectedIndexes()):
+        if not (self.dataPointListWidget.selectedIndexes() and self.dataPointTreeWidget.selectedIndexes()):
             return
 
         dataPoints = []
@@ -556,12 +563,12 @@ class MainGui(QMainWindow):
             child = index.model().item(index.row(), 1)
             moduleName = parent.data(role=PropertyItem.RawDataRole)
             subModuleName = child.data(role=PropertyItem.RawDataRole)
- 
+
             if subModuleName is None:
                 continue
             moduleClass = getattr(experimentModules, moduleName, None)
             subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
- 
+
             settings = self.exp._getSettings(self.exp.targetModel, moduleName)
             for key, val in settings.items():
                 if val is not None:
@@ -569,7 +576,7 @@ class MainGui(QMainWindow):
 
         with open(filePath.encode(), "w") as f:
             yaml.dump(self._experiments, f, default_flow_style=False)
-        
+
         self.expSettingsChanged = False
 
         return
@@ -650,7 +657,7 @@ class MainGui(QMainWindow):
         super().closeEvent(QCloseEvent)
 
     def connect(self):
-        self.connection = SerialConnection()
+        self.connection = SerialConnection(self.inputQueue, self.outputQueue)
         if self.connection.connect():
             self._logger.info("Mit Arduino auf " + self.connection.port + " verbunden.")
             self.actConnect.setEnabled(False)
@@ -659,7 +666,6 @@ class MainGui(QMainWindow):
                 self.actStartExperiment.setEnabled(True)
             self.actStopExperiment.setEnabled(False)
             self.statusbarLabel.setText("Verbunden")
-            self.connection.received.connect(self.updateData)
             self.connection.start()
         else:
             self.connection = None
@@ -669,8 +675,7 @@ class MainGui(QMainWindow):
     def disconnect(self):
         self.stopExperiment()
         self.connection.disconnect()
-        self.connection.stop()
-        self.connection.received.disconnect()
+        self.connection.terminate()
         self.connection = None
         self._logger.info("Arduino getrennt.")
         self.actConnect.setEnabled(True)
@@ -689,25 +694,26 @@ class MainGui(QMainWindow):
 
         return list
 
-    def updateData(self, data):
-        if len(data.split(';')) != len(self.dataPointBuffers):
-            self._logger.warning("Fehler bei der Datenübertragung")
-            return
-        for value in data.split(';'):
-            _val = value.split(': ')
-            name = _val[0]
-            value = float(_val[1])
-            if name == 'Zeit':
-                time = value
+    def updateData(self):
+        for data in iter(self.outputQueue.get, None):
+            if len(data.split(';')) != len(self.dataPointBuffers):
+                self._logger.warning("Fehler bei der Datenübertragung")
                 continue
-            for buffer in self.dataPointBuffers:
-                if name == buffer.name:
-                    buffer.addValue(time, value)
-                    if self.visualizer:
-                        for dataPoint in self.visualizer.dataPoints:
-                            if buffer.name == dataPoint:
-                                self.visualizer.update({dataPoint: value})
+            for value in data.split(';'):
+                _val = value.split(': ')
+                name = _val[0]
+                value = float(_val[1])
+                if name == 'Zeit':
+                    time = value
                     continue
+                for buffer in self.dataPointBuffers:
+                    if name == buffer.name:
+                        buffer.addValue(time, value)
+                        if self.visualizer:
+                            for dataPoint in self.visualizer.dataPoints:
+                                if buffer.name == dataPoint:
+                                    self.visualizer.update({dataPoint: value})
+                        continue
 
         for chart in self.plotCharts:
             chart.updatePlot()
@@ -722,15 +728,15 @@ class MainGui(QMainWindow):
 
     def writeToSerial(self, data):
         if self.connection:
-            self.connection.writeData(data)
+            self.inputQueue.put(data)
         else:
             self._logger.error('Keine Verbindung vorhanden!')
 
     def saveLastMeas(self):
         data = {}
-        data.update({'datapointbuffers':deepcopy(self.dataPointBuffers)})
+        data.update({'datapointbuffers': deepcopy(self.dataPointBuffers)})
 
-        experiment = deepcopy( self._experiments[self._currentExperimentIndex])
+        experiment = deepcopy(self._experiments[self._currentExperimentIndex])
 
         # save actual parameter
         for row in range(self.exp.targetModel.rowCount()):
@@ -749,8 +755,8 @@ class MainGui(QMainWindow):
             for key, val in settings.items():
                 if val is not None:
                     experiment[moduleName][key] = val
-        data.update({'exp':experiment})
-        
+        data.update({'exp': experiment})
+
         self.lastMeasurements.append(data)
         self.lastMeasList.addItem(QListWidgetItem(str(self.lastMeasList.count()+1)+": "+self._currentExperimentName))
 
@@ -768,7 +774,7 @@ class MainGui(QMainWindow):
 
         for i in range(self.dataPointTreeWidget.topLevelItemCount()):
             self.updatePlot(self.dataPointTreeWidget.topLevelItem(i))
-        
+
         self._logger.info("Letzte Messung '{}' übernommen".format(measurement['exp']['Name']))
 
     def setQListItemBold(self, QList=None, item=None, args=[]):
