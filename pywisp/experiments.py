@@ -190,7 +190,7 @@ class ExperimentInteractor(QObject):
     """
     sendData = pyqtSignal(object)
     parameterItemChanged = pyqtSignal(object)
-    expfinished = pyqtSignal()
+    expFinished = pyqtSignal()
 
     def __init__(self, moduleList, parent=None):
         QObject.__init__(self, parent)
@@ -265,7 +265,7 @@ class ExperimentInteractor(QObject):
 
         return
 
-    def _getSettings(self, model, module_name):
+    def getSettings(self, model, module_name):
         item = model.findItems(module_name).pop(0)
 
         settings = OrderedDict()
@@ -396,7 +396,7 @@ class ExperimentInteractor(QObject):
             if startParams is not None:
                 data += startParams
 
-            settings = self._getSettings(self.targetModel, moduleName)
+            settings = self.getSettings(self.targetModel, moduleName)
             vals = []
             for key, val in settings.items():
                 if val is not None:
@@ -434,4 +434,4 @@ class ExperimentInteractor(QObject):
         for _data in data:
             self.sendData.emit(_data)
 
-        self.expfinished.emit()
+        self.expFinished.emit()

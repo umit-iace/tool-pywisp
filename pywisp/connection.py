@@ -22,24 +22,26 @@ class SerialConnection(QtCore.QThread):
         self.isConnected = False
         self.inputQueue = inputQueue
         self.outputQueue = outputQueue
+        self.inputString = ''
 
         self.moveToThread(self)
+
+        self.doRead = True
 
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def run(self):
-        self.serial.flushInput()
+        """ Starts the timer and thread
+        """
+        self.serial.reset_input_buffer()
+        self.serial.reset_output_buffer()
 
         while True and self.isConnected:
-            # look for incoming request
             if not self.inputQueue.empty():
-                self.writeSerial(self.inputQueue.get())
+                self.writeData(self.inputQueue.get())
 
-            # look for incoming serial data
-            if self.serial.in_waiting > 0:
-                data = self.readSerial()
-                self.outputQueue.put(data)
+            self.readData()
 
     def connect(self):
         """ Checks of an arduino port is avaiable and connect to these one.
@@ -71,24 +73,33 @@ class SerialConnection(QtCore.QThread):
         """ Close the serial interface connection
 
         """
+        self.isConnected = False
+        time.sleep(0.5)
+        if not self.inputQueue.empty():
+            self.writeData(self.inputQueue.get())
         self.serial.close()
         self.serial = None
-        self.isConnected = False
 
     def readData(self):
         """ Reads and emits the data, that comes over the serial interface.
-
         """
-        return self.serial.readline().decode('ascii').strip()
+        self.serial.flush()
+        data = self.serial.readline()
+        if len(data) > 0:
+            print(data)
+        # if data:
+        #     self.inputString += data
+        #     if "\r\n" in data:
+        #         print(self.inputString)
+        #         self.outputQueue.put(self.inputString)
+        #         self.inputString = ''
 
     def writeData(self, data):
         """ Writes the given data to the serial inferface.
-
         Parameters
         ----------
         data : str
             Readable string that will send over serial interface
-
         """
         self.serial.write(data.encode('ascii'))
         time.sleep(0.1)

@@ -1,17 +1,15 @@
 # -*- coding: utf-8 -*-
-
 import os
-from copy import deepcopy
-from operator import itemgetter
-
 import yaml
 from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QRectF, QTimer
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
+from copy import deepcopy
+from operator import itemgetter
 from pyqtgraph import PlotWidget, exporters
 from pyqtgraph.dockarea import *
+from queue import Queue
 
-from . import experimentModules
 from .connection import SerialConnection
 from .experiments import ExperimentInteractor, ExperimentView, PropertyItem
 from .registry import *
@@ -30,7 +28,6 @@ class MainGui(QMainWindow):
         self.outputQueue = Queue()
 
         self.timer = QTimer()
-        self.timer.setInterval(500)
         self.timer.timeout.connect(self.updateData)
 
         # initialize logger
@@ -147,7 +144,7 @@ class MainGui(QMainWindow):
         self.lastMeasList = QListWidget(self)
         self.lastMeasDock.addWidget(self.lastMeasList)
         self.lastMeasList.itemDoubleClicked.connect(self.loadLastMeas)
-        self.exp.expfinished.connect(self.saveLastMeas)
+        self.exp.expFinished.connect(self.saveLastMeas)
         self.lastMeasurements = []
 
         # log dock
@@ -519,7 +516,7 @@ class MainGui(QMainWindow):
         self.stopExp.emit()
 
     def loadExpDialog(self):
-        filename = QFileDialog.getOpenFileName(self, "Experiment file öffnen", "", "Experiment files (*.sreg)");
+        filename = QFileDialog.getOpenFileName(self, "Experiment file öffnen", "", "Experiment files (*.sreg)")
         if filename[0]:
             self.loadExpFromFile(filename[0])
             return True
@@ -527,7 +524,7 @@ class MainGui(QMainWindow):
             return False
 
     def saveExpDialog(self):
-        filename = QFileDialog.getSaveFileName(self, "Experiment file speichern", "", "Experiment files (*.sreg)");
+        filename = QFileDialog.getSaveFileName(self, "Experiment file speichern", "", "Experiment files (*.sreg)")
         if filename[0]:
             self.saveExpToFile(filename[0])
             return True
@@ -566,10 +563,8 @@ class MainGui(QMainWindow):
 
             if subModuleName is None:
                 continue
-            moduleClass = getattr(experimentModules, moduleName, None)
-            subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
 
-            settings = self.exp._getSettings(self.exp.targetModel, moduleName)
+            settings = self.exp.getSettings(self.exp.targetModel, moduleName)
             for key, val in settings.items():
                 if val is not None:
                     self._experiments[self._currentExperimentIndex][moduleName][key] = val
@@ -675,7 +670,6 @@ class MainGui(QMainWindow):
     def disconnect(self):
         self.stopExperiment()
         self.connection.disconnect()
-        self.connection.terminate()
         self.connection = None
         self._logger.info("Arduino getrennt.")
         self.actConnect.setEnabled(True)
@@ -695,28 +689,33 @@ class MainGui(QMainWindow):
         return list
 
     def updateData(self):
-        for data in iter(self.outputQueue.get, None):
-            if len(data.split(';')) != len(self.dataPointBuffers):
-                self._logger.warning("Fehler bei der Datenübertragung")
-                continue
-            for value in data.split(';'):
-                _val = value.split(': ')
-                name = _val[0]
-                value = float(_val[1])
-                if name == 'Zeit':
-                    time = value
-                    continue
-                for buffer in self.dataPointBuffers:
-                    if name == buffer.name:
-                        buffer.addValue(time, value)
-                        if self.visualizer:
-                            for dataPoint in self.visualizer.dataPoints:
-                                if buffer.name == dataPoint:
-                                    self.visualizer.update({dataPoint: value})
-                        continue
+        pass
+        # if self.inputQueue.empty():
+        #     return
+        # for data in iter(self.outputQueue.get, None):
+        #     print(data)
 
-        for chart in self.plotCharts:
-            chart.updatePlot()
+            # if len(data.split(';')) != len(self.dataPointBuffers):
+            #     self._logger.warning("Fehler bei der Datenübertragung")
+            #     continue
+            # for value in data.split(';'):
+            #     _val = value.split(': ')
+            #     name = _val[0]
+            #     value = float(_val[1])
+            #     if name == 'Zeit':
+            #         time = value
+            #         continue
+            #     for buffer in self.dataPointBuffers:
+            #         if name == buffer.name:
+            #             buffer.addValue(time, value)
+            #             if self.visualizer:
+            #                 for dataPoint in self.visualizer.dataPoints:
+            #                     if buffer.name == dataPoint:
+            #                         self.visualizer.update({dataPoint: value})
+            #             continue
+
+        # for chart in self.plotCharts:
+        #     chart.updatePlot()
 
     def loadStandardDockState(self):
         self.plotCharts.clear()
@@ -733,6 +732,9 @@ class MainGui(QMainWindow):
             self._logger.error('Keine Verbindung vorhanden!')
 
     def saveLastMeas(self):
+        if self._currentExperimentIndex is None:
+            return
+
         data = {}
         data.update({'datapointbuffers': deepcopy(self.dataPointBuffers)})
 
@@ -748,17 +750,16 @@ class MainGui(QMainWindow):
 
             if subModuleName is None:
                 continue
-            moduleClass = getattr(experimentModules, moduleName, None)
-            subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
 
-            settings = self.exp._getSettings(self.exp.targetModel, moduleName)
+            settings = self.exp.getSettings(self.exp.targetModel, moduleName)
             for key, val in settings.items():
                 if val is not None:
                     experiment[moduleName][key] = val
         data.update({'exp': experiment})
 
         self.lastMeasurements.append(data)
-        self.lastMeasList.addItem(QListWidgetItem(str(self.lastMeasList.count()+1)+": "+self._currentExperimentName))
+        self.lastMeasList.addItem(
+            QListWidgetItem(str(self.lastMeasList.count() + 1) + ": " + self._currentExperimentName))
 
     def loadLastMeas(self, item):
         measurement = self.lastMeasurements[self.lastMeasList.row(item)]
