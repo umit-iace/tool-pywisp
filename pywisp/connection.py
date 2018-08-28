@@ -22,7 +22,7 @@ class SerialConnection(QtCore.QThread):
         self.isConnected = False
         self.inputQueue = inputQueue
         self.outputQueue = outputQueue
-        self.inputString = ''
+        self.buffer = b''
 
         self.moveToThread(self)
 
@@ -86,13 +86,13 @@ class SerialConnection(QtCore.QThread):
         self.serial.flush()
         data = self.serial.readline()
         if len(data) > 0:
-            print(data)
-        # if data:
-        #     self.inputString += data
-        #     if "\r\n" in data:
-        #         print(self.inputString)
-        #         self.outputQueue.put(self.inputString)
-        #         self.inputString = ''
+            self.buffer += data
+            if b'\r\n' in data:
+                vals = self.buffer.decode('ascii').split('\r\n')
+                for val in vals:
+                    if val:
+                        self.outputQueue.put(val.strip())
+                self.buffer = b''
 
     def writeData(self, data):
         """ Writes the given data to the serial inferface.

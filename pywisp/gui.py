@@ -29,6 +29,7 @@ class MainGui(QMainWindow):
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.updateData)
+        self.timer.start(1)
 
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -689,33 +690,33 @@ class MainGui(QMainWindow):
         return list
 
     def updateData(self):
-        pass
-        # if self.inputQueue.empty():
-        #     return
-        # for data in iter(self.outputQueue.get, None):
-        #     print(data)
+        if self.outputQueue.empty():
+            return
 
-            # if len(data.split(';')) != len(self.dataPointBuffers):
-            #     self._logger.warning("Fehler bei der Datenübertragung")
-            #     continue
-            # for value in data.split(';'):
-            #     _val = value.split(': ')
-            #     name = _val[0]
-            #     value = float(_val[1])
-            #     if name == 'Zeit':
-            #         time = value
-            #         continue
-            #     for buffer in self.dataPointBuffers:
-            #         if name == buffer.name:
-            #             buffer.addValue(time, value)
-            #             if self.visualizer:
-            #                 for dataPoint in self.visualizer.dataPoints:
-            #                     if buffer.name == dataPoint:
-            #                         self.visualizer.update({dataPoint: value})
-            #             continue
+        data = self.outputQueue.get()
 
-        # for chart in self.plotCharts:
-        #     chart.updatePlot()
+        if len(data.split(';')) != len(self.dataPointBuffers):
+            self._logger.warning("Fehler bei der Datenübertragung: " + str(data))
+            return
+
+        for value in data.split(';'):
+            _val = value.split(': ')
+            name = _val[0]
+            value = float(_val[1])
+            if name == 'Zeit':
+                time = value
+                continue
+            for buffer in self.dataPointBuffers:
+                if name == buffer.name:
+                    buffer.addValue(time, value)
+                    if self.visualizer:
+                        for dataPoint in self.visualizer.dataPoints:
+                            if buffer.name == dataPoint:
+                                self.visualizer.update({dataPoint: value})
+                    continue
+
+        for chart in self.plotCharts:
+            chart.updatePlot()
 
     def loadStandardDockState(self):
         self.plotCharts.clear()
