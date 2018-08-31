@@ -690,7 +690,7 @@ class MainGui(QMainWindow):
         return list
 
     def updateData(self, data):
-        if len(data.split(';')) != len(self.dataPointBuffers):
+        if len(data.split(';')) != len(self.dataPointBuffers) + 1:
             self._logger.warning("Fehler bei der Datenübertragung")
             return
         for value in data.split(';'):
