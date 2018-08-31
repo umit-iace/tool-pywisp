@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
-
-import ast
 from collections import OrderedDict
 
+import ast
 from PyQt5.QtCore import Qt, pyqtSlot, QModelIndex, QSize, pyqtSignal
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QItemDelegate, QComboBox, QTreeView
@@ -188,14 +187,14 @@ class ExperimentInteractor(QObject):
     Class that interacts between the gui which controls the programs execution
     and the Experiment
     """
-    sendData = pyqtSignal(object)
     parameterItemChanged = pyqtSignal(object)
     expFinished = pyqtSignal()
 
-    def __init__(self, moduleList, parent=None):
+    def __init__(self, moduleList, inputQueue, parent=None):
         QObject.__init__(self, parent)
         self._logger = logging.getLogger(self.__class__.__name__)
         self.setupList = moduleList
+        self.inputQueue = inputQueue
         self._setup_model()
         self.applayingExperiment = False
 
@@ -377,7 +376,6 @@ class ExperimentInteractor(QObject):
 
         return dataPoints
 
-    @pyqtSlot()
     def runExperiment(self):
         data = []
         for row in range(self.targetModel.rowCount()):
@@ -408,9 +406,8 @@ class ExperimentInteractor(QObject):
         # start experiment
         data.append('exp------1\n')
         for _data in data:
-            self.sendData.emit(_data)
+            self.inputQueue.put(_data)
 
-    @pyqtSlot()
     def stopExperiment(self):
         data = []
 
@@ -432,6 +429,6 @@ class ExperimentInteractor(QObject):
 
         data.append('exp------0\n')
         for _data in data:
-            self.sendData.emit(_data)
+            self.inputQueue.put(_data)
 
         self.expFinished.emit()

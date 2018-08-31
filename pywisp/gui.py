@@ -29,14 +29,12 @@ class MainGui(QMainWindow):
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.updateData)
-        self.timer.start(1)
 
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
 
         # create experiment backend
-        self.exp = ExperimentInteractor(moduleList, self)
-        self.exp.sendData.connect(self.writeToSerial)
+        self.exp = ExperimentInteractor(moduleList, self.inputQueue, self)
         self.runExp.connect(self.exp.runExperiment)
         self.stopExp.connect(self.exp.stopExperiment)
 
@@ -504,17 +502,28 @@ class MainGui(QMainWindow):
 
         for buffer in self.dataPointBuffers:
             buffer.clearBuffer()
-        self.runExp.emit()
+
+        for chart in self.plotCharts:
+            chart.updatePlot()
+
+        while not self.outputQueue.empty():
+            self.outputQueue.get()
+
+        self.connection.doRead = True
+        self.timer.start(1)
+        self.exp.runExperiment()
 
     @pyqtSlot()
     def stopExperiment(self):
         self.actStartExperiment.setDisabled(False)
         self.actStopExperiment.setDisabled(True)
-        if self._currentExperimentIndex is not None:
-            self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.white))
-            self.experimentList.repaint()
+        for i in range(self.experimentList.count()):
+            self.experimentList.item(i).setBackground(QBrush(Qt.white))
+        self.experimentList.repaint()
 
-        self.stopExp.emit()
+        self.connection.doRead = False
+        self.timer.stop()
+        self.exp.stopExperiment()
 
     def loadExpDialog(self):
         filename = QFileDialog.getOpenFileName(self, "Experiment file öffnen", "", "Experiment files (*.sreg)")
@@ -634,7 +643,9 @@ class MainGui(QMainWindow):
         self._currentExperimentName = exp_name
 
         if self.connection is not None:
-            self.actStartExperiment.setDisabled(False)
+            # check if experiment runs
+            if not self.actStopExperiment.isEnabled():
+                self.actStartExperiment.setDisabled(False)
         return self.exp.setExperiment(self._experiments[index])
 
     def closeEvent(self, QCloseEvent):
@@ -725,12 +736,6 @@ class MainGui(QMainWindow):
             dock.close()
             # TODO hier kommt noch ein Fehler und prüfen ob experiment nicht gerade läuft
         self.area.restoreState(self.standardDockState)
-
-    def writeToSerial(self, data):
-        if self.connection:
-            self.inputQueue.put(data)
-        else:
-            self._logger.error('Keine Verbindung vorhanden!')
 
     def saveLastMeas(self):
         if self._currentExperimentIndex is None:

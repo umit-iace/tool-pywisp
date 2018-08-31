@@ -26,7 +26,7 @@ class SerialConnection(QtCore.QThread):
 
         self.moveToThread(self)
 
-        self.doRead = True
+        self.doRead = False
 
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -74,8 +74,8 @@ class SerialConnection(QtCore.QThread):
 
         """
         self.isConnected = False
-        time.sleep(0.5)
-        if not self.inputQueue.empty():
+        time.sleep(1)
+        while not self.inputQueue.empty():
             self.writeData(self.inputQueue.get())
         self.serial.close()
         self.serial = None
@@ -85,7 +85,7 @@ class SerialConnection(QtCore.QThread):
         """
         self.serial.flush()
         data = self.serial.readline()
-        if len(data) > 0:
+        if len(data) > 0 and self.doRead:
             self.buffer += data
             if b'\r\n' in data:
                 vals = self.buffer.decode('ascii').split('\r\n')
