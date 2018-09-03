@@ -22,7 +22,6 @@ class SerialConnection(QtCore.QThread):
         self.isConnected = False
         self.inputQueue = inputQueue
         self.outputQueue = outputQueue
-        self.buffer = b''
 
         self.moveToThread(self)
 
@@ -40,8 +39,9 @@ class SerialConnection(QtCore.QThread):
         while True and self.isConnected:
             if not self.inputQueue.empty():
                 self.writeData(self.inputQueue.get())
+            if self.serial.in_waiting > 2 and self.doRead:
+                self.readData()
 
-            self.readData()
 
     def connect(self):
         """ Checks of an arduino port is avaiable and connect to these one.
@@ -62,7 +62,7 @@ class SerialConnection(QtCore.QThread):
         else:
             self.port = arduino_ports[0]
             try:
-                self.serial = serial.Serial(self.port, self.baud, timeout=0)
+                self.serial = serial.Serial(self.port, self.baud, timeout=None)
             except Exception as e:
                 self._logger.error('{0}'.format(e))
                 return False
@@ -84,15 +84,13 @@ class SerialConnection(QtCore.QThread):
         """ Reads and emits the data, that comes over the serial interface.
         """
         self.serial.flush()
-        data = self.serial.readline()
-        if len(data) > 0 and self.doRead:
-            self.buffer += data
-            if b'\r\n' in data:
-                vals = self.buffer.decode('ascii').split('\r\n')
-                for val in vals:
-                    if val:
-                        self.outputQueue.put(val.strip())
-                self.buffer = b''
+        data = self.serial.read_until(b'\r\n')
+
+        # delete newline
+        data =  data[0:len(data)-2]
+
+        val = data.decode('ascii')
+        self.outputQueue.put(val.strip())
 
     def writeData(self, data):
         """ Writes the given data to the serial inferface.
