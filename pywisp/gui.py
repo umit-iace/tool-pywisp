@@ -221,7 +221,7 @@ class MainGui(QMainWindow):
         self.textLogger = PlainTextLogger()
         self.textLogger.set_target_cb(self.logBox.appendPlainText)
         logging.getLogger().addHandler(self.textLogger)
-        self._logger.info('Visualisierung für Versuchsstand Ball in Tube')
+        self._logger.info('Laborvisualisierung')
 
         # menu bar
         dateiMenu = self.menuBar().addMenu("&Datei")
