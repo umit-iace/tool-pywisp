@@ -27,6 +27,10 @@ class SerialConnection(QtCore.QThread):
 
         self.doRead = False
 
+        # error flags
+        self.eC = 0
+        self.eD = 0
+
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -91,12 +95,24 @@ class SerialConnection(QtCore.QThread):
         chcksum = data[len(data)-2:len(data)]
         data = data[0:len(data)-2]
 
+        try:
+            val = data.decode('ascii')
+            self.eD = 0
+        except UnicodeDecodeError:
+            if self.eD == 0:
+                self._logger.warning("Decoding Error. Throwing away dataset: " + str(data))
+                self.eD = 1
+            return
         # calculate checksum
         sm = 0
         for i in range(0, len(data)):
             sm = (sm + data[i]) % 0xffff
         if ~sm&0xffff == int.from_bytes(chcksum,'big'):
             self.outputQueue.put(val.strip())
+            self.eC = 0
+        elif self.eC == 0:
+            self._logger.warning("Checksum failed. Throwing away dataset: " + str(val))
+            self.eC = 1
 
     def writeData(self, data):
         """ Writes the given data to the serial inferface.
