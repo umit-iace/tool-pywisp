@@ -701,33 +701,41 @@ class MainGui(QMainWindow):
         return list
 
     def updateData(self):
-        if self.outputQueue.empty():
-            return
+        try:
+            data_list = []
 
-        data = self.outputQueue.get()
+            if self.outputQueue.empty():
+                return
 
-        if len(data.split(';')) != len(self.dataPointBuffers) + 1:
-            self._logger.warning("Fehler bei der Datenübertragung: " + str(data))
-            return
+            for i in range(0, self.outputQueue.qsize()):
+                data_list.append(self.outputQueue.get())
 
-        for value in data.split(';'):
-            _val = value.split(': ')
-            name = _val[0]
-            value = float(_val[1])
-            if name == 'Zeit':
-                time = value
-                continue
-            for buffer in self.dataPointBuffers:
-                if name == buffer.name:
-                    buffer.addValue(time, value)
-                    if self.visualizer:
-                        for dataPoint in self.visualizer.dataPoints:
-                            if buffer.name == dataPoint:
-                                self.visualizer.update({dataPoint: value})
-                    break
+            for data in data_list:
+                if len(data.split(';')) != len(self.dataPointBuffers) + 1:
+                    self._logger.warning("Fehler bei der Datenübertragung: " + str(data))
+                    continue
 
-        for chart in self.plotCharts:
-            chart.updatePlot()
+                for value in data.split(';'):
+                    _val = value.split(': ')
+                    name = _val[0]
+                    value = float(_val[1])
+                    if name == 'Zeit':
+                        time = value
+                        continue
+                    for buffer in self.dataPointBuffers:
+                        if name == buffer.name:
+                            buffer.addValue(time, value)
+                            if self.visualizer:
+                                for dataPoint in self.visualizer.dataPoints:
+                                    if buffer.name == dataPoint:
+                                        self.visualizer.update({dataPoint: value})
+                            break
+
+            for chart in self.plotCharts:
+                chart.updatePlot()
+        # TODO probably don't do this
+        except Exception as err:
+            self._logger.error("Unknown exception in updateData: " + repr(err))
 
     def loadStandardDockState(self):
         self.plotCharts.clear()
