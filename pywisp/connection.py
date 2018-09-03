@@ -42,7 +42,6 @@ class SerialConnection(QtCore.QThread):
             if self.serial.in_waiting > 2 and self.doRead:
                 self.readData()
 
-
     def connect(self):
         """ Checks of an arduino port is avaiable and connect to these one.
 
@@ -88,9 +87,16 @@ class SerialConnection(QtCore.QThread):
 
         # delete newline
         data =  data[0:len(data)-2]
+        # extract checksum
+        chcksum = data[len(data)-2:len(data)]
+        data = data[0:len(data)-2]
 
-        val = data.decode('ascii')
-        self.outputQueue.put(val.strip())
+        # calculate checksum
+        sm = 0
+        for i in range(0, len(data)):
+            sm = (sm + data[i]) % 0xffff
+        if ~sm&0xffff == int.from_bytes(chcksum,'big'):
+            self.outputQueue.put(val.strip())
 
     def writeData(self, data):
         """ Writes the given data to the serial inferface.
