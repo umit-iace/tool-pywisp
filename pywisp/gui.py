@@ -724,7 +724,7 @@ class MainGui(QMainWindow):
                         for dataPoint in self.visualizer.dataPoints:
                             if buffer.name == dataPoint:
                                 self.visualizer.update({dataPoint: value})
-                    continue
+                    break
 
         for chart in self.plotCharts:
             chart.updatePlot()
