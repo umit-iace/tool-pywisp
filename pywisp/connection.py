@@ -11,36 +11,40 @@ class SerialConnection(QtCore.QThread):
     """ A class for a serial interface connection implemented as a QThread
 
     """
-    received = QtCore.pyqtSignal(object)
-
-    def __init__(self, baud=115200):
+    def __init__(self,
+                 inputQueue,
+                 outputQueue,
+                 baud=115200):
         QtCore.QThread.__init__(self)
         self.serial = None
         self.baud = baud
         self.port = None
         self.isConnected = False
+        self.inputQueue = inputQueue
+        self.outputQueue = outputQueue
 
         self.moveToThread(self)
 
-        self.timer = QtCore.QTimer()
-        self.timer.moveToThread(self)
-        self.timer.setInterval(100)
-        self.timer.timeout.connect(self.readData)
-        self.doRead = True
+        self.doRead = False
+
+        # error flags
+        self.eC = 0
+        self.eD = 0
 
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def run(self):
         """ Starts the timer and thread
-
         """
-        self.timer.start()
-        self.exec_()
+        self.serial.reset_input_buffer()
+        self.serial.reset_output_buffer()
 
-    def stop(self):
-        self.timer.stop()
-        self.terminate()
+        while True and self.isConnected:
+            if not self.inputQueue.empty():
+                self.writeData(self.inputQueue.get())
+            if self.serial.in_waiting > 2 and self.doRead:
+                self.readData()
 
     def connect(self):
         """ Checks of an arduino port is avaiable and connect to these one.
@@ -61,7 +65,7 @@ class SerialConnection(QtCore.QThread):
         else:
             self.port = arduino_ports[0]
             try:
-                self.serial = serial.Serial(self.port, self.baud)
+                self.serial = serial.Serial(self.port, self.baud, timeout=None)
             except Exception as e:
                 self._logger.error('{0}'.format(e))
                 return False
@@ -72,35 +76,50 @@ class SerialConnection(QtCore.QThread):
         """ Close the serial interface connection
 
         """
+        self.isConnected = False
+        time.sleep(1)
+        while not self.inputQueue.empty():
+            self.writeData(self.inputQueue.get())
         self.serial.close()
         self.serial = None
-        self.isConnected = False
 
     def readData(self):
         """ Reads and emits the data, that comes over the serial interface.
-
         """
-        if self.isConnected:
-            while self.doRead:
-                try:
-                    data = self.serial.readline().decode('ascii').strip()
-                    self.received.emit(data)
-                except:
-                    continue
-        else:
-            time.sleep(1)
+        self.serial.flush()
+        data = self.serial.read_until(b'\r\n')
+
+        # delete newline
+        data =  data[0:len(data)-2]
+        # extract checksum
+        chcksum = data[len(data)-2:len(data)]
+        data = data[0:len(data)-2]
+
+        try:
+            val = data.decode('ascii')
+            self.eD = 0
+        except UnicodeDecodeError:
+            if self.eD == 0:
+                self._logger.warning("Decoding Error. Throwing away dataset: " + str(data))
+                self.eD = 1
+            return
+        # calculate checksum
+        sm = 0
+        for i in range(0, len(data)):
+            sm = (sm + data[i]) % 0xffff
+        if ~sm&0xffff == int.from_bytes(chcksum,'big'):
+            self.outputQueue.put(val.strip())
+            self.eC = 0
+        elif self.eC == 0:
+            self._logger.warning("Checksum failed. Throwing away dataset: " + str(val))
+            self.eC = 1
 
     def writeData(self, data):
         """ Writes the given data to the serial inferface.
-
         Parameters
         ----------
         data : str
             Readable string that will send over serial interface
-
         """
-        if self.isConnected:
-            self.doRead = False
-            self.serial.write(data.encode('ascii'))
-            time.sleep(0.1)
-            self.doRead = True
+        self.serial.write(data.encode('ascii'))
+        time.sleep(0.1)
