@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-import logging
 import time
 
+import logging
 import serial
 import serial.tools.list_ports
 from PyQt5 import QtCore
@@ -11,6 +11,7 @@ class SerialConnection(QtCore.QThread):
     """ A class for a serial interface connection implemented as a QThread
 
     """
+
     def __init__(self,
                  inputQueue,
                  outputQueue,
@@ -90,10 +91,10 @@ class SerialConnection(QtCore.QThread):
         data = self.serial.read_until(b'\r\n')
 
         # delete newline
-        data =  data[0:len(data)-2]
+        data = data[0:len(data) - 2]
         # extract checksum
-        chcksum = data[len(data)-2:len(data)]
-        data = data[0:len(data)-2]
+        chcksum = data[len(data) - 2:len(data)]
+        data = data[0:len(data) - 2]
 
         try:
             val = data.decode('ascii')
@@ -107,7 +108,7 @@ class SerialConnection(QtCore.QThread):
         sm = 0
         for i in range(0, len(data)):
             sm = (sm + data[i]) % 0xffff
-        if ~sm&0xffff == int.from_bytes(chcksum,'big'):
+        if ~sm & 0xffff == int.from_bytes(chcksum, 'big'):
             self.outputQueue.put(val.strip())
             self.eC = 0
         elif self.eC == 0:

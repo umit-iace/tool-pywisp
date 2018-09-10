@@ -702,15 +702,15 @@ class MainGui(QMainWindow):
 
     def updateData(self):
         try:
-            data_list = []
+            dataList = []
 
             if self.outputQueue.empty():
                 return
 
             for i in range(0, self.outputQueue.qsize()):
-                data_list.append(self.outputQueue.get())
+                dataList.append(self.outputQueue.get())
 
-            for data in data_list:
+            for data in dataList:
                 if len(data.split(';')) != len(self.dataPointBuffers) + 1:
                     self._logger.warning("Fehler bei der Datenübertragung: " + str(data))
                     continue
