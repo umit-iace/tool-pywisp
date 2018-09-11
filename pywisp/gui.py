@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+import serial.tools.list_ports
 import yaml
 from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QRectF, QTimer
 from PyQt5.QtGui import *
@@ -9,7 +10,6 @@ from operator import itemgetter
 from pyqtgraph import PlotWidget, exporters
 from pyqtgraph.dockarea import *
 from queue import Queue
-import serial.tools.list_ports
 
 from .connection import SerialConnection
 from .experiments import ExperimentInteractor, ExperimentView, PropertyItem
@@ -274,13 +274,12 @@ class MainGui(QMainWindow):
         self.expSettingsChanged = False
         self.exp.parameterItemChanged.connect(self.parameterItemChangedHandler)
 
-        # event functions
-
-
+    # event functions
     def getComPorts(self):
         def setPort(port):
             def fn():
                 self.port = port
+
             return fn
 
         self.comMenu.clear()
@@ -291,15 +290,15 @@ class MainGui(QMainWindow):
                 if len(arduinoPorts) != 0:
                     self.port = arduinoPorts[0]
             for p in comPorts:
-                portaction = QAction(p.device,self)
-                portaction.setCheckable(True)
-                portaction.setChecked(True if p.device in self.port else False)
-                portaction.triggered.connect(setPort(p.device))
-                self.comMenu.addAction(portaction)
+                portAction = QAction(p.device, self)
+                portAction.setCheckable(True)
+                portAction.setChecked(True if p.device in self.port else False)
+                portAction.triggered.connect(setPort(p.device))
+                self.comMenu.addAction(portAction)
         else:
-            noaction = QAction("(None)",self)
-            noaction.setEnabled(False)
-            self.comMenu.addAction(noaction)
+            noAction = QAction("(None)", self)
+            noAction.setEnabled(False)
+            self.comMenu.addAction(noAction)
 
     def addPlotTreeItem(self):
         name, ok = QInputDialog.getText(self, "Plottitel", "Plottitel:")
