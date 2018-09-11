@@ -175,7 +175,7 @@ class MainGui(QMainWindow):
         self.dataPointRightButtonLayout = QVBoxLayout()
         self.dataPointRightButton = QPushButton(chr(0x226b), self)
         self.dataPointRightButton.setToolTip(
-            "Add the selected data set from the left side to the selected plot "
+            "Add the selected data set from the left to the selected plot "
             "on the right.")
         self.dataPointRightButton.clicked.connect(self.addDatapointToTree)
         self.dataPointManipulationLayout.addWidget(self.dataPointRightButton)
@@ -300,13 +300,21 @@ class MainGui(QMainWindow):
             noAction.setEnabled(False)
             self.comMenu.addAction(noAction)
 
-    def addPlotTreeItem(self):
-        name, ok = QInputDialog.getText(self, "Plottitel", "Plottitel:")
-        if not (ok and name):
-            return
-        similar_items = self.dataPointTreeWidget.findItems(name, Qt.MatchExactly)
-        if similar_items:
-            self._logger.error("Name '{}' existiert bereits!".format(name))
+    def addPlotTreeItem(self, default=False):
+        text = "plot_{:03d}".format(self.dataPointTreeWidget.topLevelItemCount())
+        if not default:
+            name, ok = QInputDialog.getText(self,
+                                            "PlotTitle",
+                                            "PlotTitle:",
+                                            text=text)
+            if not (ok and name):
+                return
+        else:
+            name = text
+
+        similarItems = self.dataPointTreeWidget.findItems(name, Qt.MatchExactly)
+        if similarItems:
+            self._logger.error("Name '{}' existiert bereits".format(name))
             return
 
         toplevelitem = QTreeWidgetItem()
@@ -317,6 +325,7 @@ class MainGui(QMainWindow):
     def removeSelectedPlotTreeItems(self):
         items = self.dataPointTreeWidget.selectedItems()
         if not items:
+            self._logger.error("Kann Plot nicht löschen: Kein Plot ausgewählt.")
             return
 
         for item in items:
@@ -337,7 +346,8 @@ class MainGui(QMainWindow):
             self.dataPointTreeWidget.takeTopLevelItem(self.dataPointTreeWidget.indexOfTopLevelItem(item))
 
     def addDatapointToTree(self):
-        if not (self.dataPointListWidget.selectedIndexes() and self.dataPointTreeWidget.selectedIndexes()):
+        if not self.dataPointListWidget.selectedIndexes():
+            self._logger.error("Kann Datenpunkt nicht hinzufügen: Keine Datenpunkte ausgewählt.")
             return
 
         dataPoints = []
@@ -347,7 +357,18 @@ class MainGui(QMainWindow):
                     dataPoints.append(data)
                     continue
 
-        toplevelItem = self.dataPointTreeWidget.selectedItems()[0]
+        toplevelItems = self.dataPointTreeWidget.selectedItems()
+        if not toplevelItems:
+            if self.dataPointTreeWidget.topLevelItemCount() < 2:
+                if self.dataPointTreeWidget.topLevelItemCount() < 1:
+                    self.addPlotTreeItem(default=True)
+                toplevelItem = self.dataPointTreeWidget.topLevelItem(0)
+            else:
+                self._logger.error("Kann Datenset nicht hinzufügen: Kein Datenset ausgewählt.")
+                return
+        else:
+            toplevelItem = toplevelItems[0]
+
         while toplevelItem.parent():
             toplevelItem = toplevelItem.parent()
 
@@ -366,6 +387,7 @@ class MainGui(QMainWindow):
     def removeDatapointFromTree(self):
         items = self.dataPointTreeWidget.selectedItems()
         if not items:
+            self._logger.error("Kann Datenset nicht löschen: Kein Datenset ausgewählt")
             return
 
         toplevelitem = items[0]
