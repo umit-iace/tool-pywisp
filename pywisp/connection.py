@@ -15,11 +15,12 @@ class SerialConnection(QtCore.QThread):
     def __init__(self,
                  inputQueue,
                  outputQueue,
+                 port,
                  baud=115200):
         QtCore.QThread.__init__(self)
         self.serial = None
         self.baud = baud
-        self.port = None
+        self.port = port
         self.isConnected = False
         self.inputQueue = inputQueue
         self.outputQueue = outputQueue
@@ -55,16 +56,14 @@ class SerialConnection(QtCore.QThread):
         bool
             True if successful connected, False otherwise.
         """
-        arduino_ports = [
+        ports = [
             p.device
             for p in serial.tools.list_ports.comports()
-            if 'Arduino' in p.description
         ]
-        if not arduino_ports:
+        if self.port not in ports:
             self.isConnected = False
             return False
         else:
-            self.port = arduino_ports[0]
             try:
                 self.serial = serial.Serial(self.port, self.baud, timeout=None)
             except Exception as e:

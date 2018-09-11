@@ -9,6 +9,7 @@ from operator import itemgetter
 from pyqtgraph import PlotWidget, exporters
 from pyqtgraph.dockarea import *
 from queue import Queue
+import serial.tools.list_ports
 
 from .connection import SerialConnection
 from .experiments import ExperimentInteractor, ExperimentView, PropertyItem
@@ -26,6 +27,7 @@ class MainGui(QMainWindow):
         self.connection = None
         self.inputQueue = Queue()
         self.outputQueue = Queue()
+        self.port = ''
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.updateData)
@@ -237,6 +239,10 @@ class MainGui(QMainWindow):
 
         # experiment
         self.expMenu = self.menuBar().addMenu('&Experiment')
+
+        self.comMenu = self.expMenu.addMenu('Verbindungsport')
+        self.comMenu.aboutToShow.connect(self.getComPorts)
+        self.expMenu.addSeparator()
         self.actConnect = QAction('Versuchsaufbau verbinden')
         self.actConnect.setIcon(QIcon(get_resource("connected.png")))
         self.actConnect.setShortcut(QKeySequence("F9"))
@@ -269,6 +275,31 @@ class MainGui(QMainWindow):
         self.exp.parameterItemChanged.connect(self.parameterItemChangedHandler)
 
         # event functions
+
+
+    def getComPorts(self):
+        def setPort(port):
+            def fn():
+                self.port = port
+            return fn
+
+        self.comMenu.clear()
+        comPorts = serial.tools.list_ports.comports()
+        if comPorts:
+            if self.port == '':
+                arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
+                if len(arduinoPorts) != 0:
+                    self.port = arduinoPorts[0]
+            for p in comPorts:
+                portaction = QAction(p.device,self)
+                portaction.setCheckable(True)
+                portaction.setChecked(True if p.device in self.port else False)
+                portaction.triggered.connect(setPort(p.device))
+                self.comMenu.addAction(portaction)
+        else:
+            noaction = QAction("(None)",self)
+            noaction.setEnabled(False)
+            self.comMenu.addAction(noaction)
 
     def addPlotTreeItem(self):
         name, ok = QInputDialog.getText(self, "Plottitel", "Plottitel:")
@@ -664,7 +695,7 @@ class MainGui(QMainWindow):
         super().closeEvent(QCloseEvent)
 
     def connect(self):
-        self.connection = SerialConnection(self.inputQueue, self.outputQueue)
+        self.connection = SerialConnection(self.inputQueue, self.outputQueue, self.port)
         if self.connection.connect():
             self._logger.info("Mit Arduino auf " + self.connection.port + " verbunden.")
             self.actConnect.setEnabled(False)
