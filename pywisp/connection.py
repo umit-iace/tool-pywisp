@@ -121,5 +121,8 @@ class SerialConnection(QtCore.QThread):
         data : str
             Readable string that will send over serial interface
         """
-        self.serial.write(data.encode('ascii'))
+        try:
+            self.serial.write(data.encode('ascii'))
+        except serial.SerialTimeoutException:
+            self._logger.error("Connection seems to have died. Try reconnecting.")
         time.sleep(0.1)
