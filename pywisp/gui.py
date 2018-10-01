@@ -177,6 +177,9 @@ class MainGui(QMainWindow):
             "Add the selected data set from the left to the selected plot "
             "on the right.")
         self.dataPointRightButton.clicked.connect(self.addDatapointToTree)
+        self.dataPointLabel = QLabel('Datenpunkt', self)
+        self.dataPointLabel.setAlignment(Qt.AlignCenter)
+        self.dataPointManipulationLayout.addWidget(self.dataPointLabel)
         self.dataPointManipulationLayout.addWidget(self.dataPointRightButton)
         self.dataPointLeftButtonWidget = QWidget()
         self.dataPointLeftButtonLayout = QVBoxLayout()
@@ -194,6 +197,9 @@ class MainGui(QMainWindow):
             "Create a new plot window."
         )
         self.dataPointPlotAddButton.clicked.connect(self.addPlotTreeItem)
+        self.plotLabel = QLabel('Plots', self)
+        self.plotLabel.setAlignment(Qt.AlignCenter)
+        self.dataPointManipulationLayout.addWidget(self.plotLabel)
         self.dataPointManipulationLayout.addWidget(self.dataPointPlotAddButton)
         self.dataPointPlotRemoveButtonWidget = QWidget()
         self.dataPointPlotRemoveButtonLayout = QVBoxLayout()
