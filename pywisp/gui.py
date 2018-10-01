@@ -2,12 +2,12 @@
 import os
 import serial.tools.list_ports
 import yaml
-from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QRectF, QTimer
+from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QRectF, QTimer, QSettings
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from copy import deepcopy
 from operator import itemgetter
-from pyqtgraph import PlotWidget, exporters
+from pyqtgraph import PlotWidget, exporters, TextItem
 from pyqtgraph.dockarea import *
 from queue import Queue
 
@@ -35,6 +35,10 @@ class MainGui(QMainWindow):
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
 
+        # load settings
+        self._settings = QSettings()
+        self._readSettings()
+
         # create experiment backend
         self.exp = ExperimentInteractor(moduleList, self.inputQueue, self)
         self.runExp.connect(self.exp.runExperiment)
@@ -49,10 +53,12 @@ class MainGui(QMainWindow):
         self.setWindowTitle('Visualisierung')
 
         # status bar
-        self.statusBar = QStatusBar()
+        self.statusBar = QStatusBar(self)
         self.setStatusBar(self.statusBar)
         self.statusbarLabel = QLabel("Nicht Verbunden")
         self.statusBar.addPermanentWidget(self.statusbarLabel, 1)
+        self.coordLabel = QLabel("x=0.0 y=0.0")
+        self.statusBar.addPermanentWidget(self.coordLabel)
 
         # the docking area allows to rearrange the user interface at runtime
         self.area = DockArea()
@@ -69,10 +75,10 @@ class MainGui(QMainWindow):
         # arrange docks
         self.area.addDock(self.animationDock, "right")
         self.area.addDock(self.lastMeasDock, "left", self.animationDock)
-        self.area.addDock(self.experimentDock, "above", self.lastMeasDock)
-        self.area.addDock(self.propertyDock, "bottom", self.experimentDock)
+        self.area.addDock(self.propertyDock, "bottom", self.lastMeasDock)
         self.area.addDock(self.dataDock, "bottom", self.propertyDock)
         self.area.addDock(self.logDock, "bottom", self.dataDock)
+        self.area.addDock(self.experimentDock, "left", self.lastMeasDock)
         self.nonPlottingDocks = list(self.area.findAll()[1].keys())
 
         self.standardDockState = self.area.saveState()
@@ -117,15 +123,8 @@ class MainGui(QMainWindow):
         self.actLadeExperiments.setText("&Lade Experimente aus Datei")
         self.actLadeExperiments.setIcon(QIcon(get_resource("load.png")))
         self.actLadeExperiments.setDisabled(False)
-        self.actLadeExperiments.setShortcut(QKeySequence.Open)
+        self.actLadeExperiments.setShortcut(QKeySequence("Ctrl+L"))
         self.actLadeExperiments.triggered.connect(self.loadExpDialog)
-
-        self.actSpeichereExperiments = QAction(self)
-        self.actSpeichereExperiments.setText("&Speichere Experimente in Datei")
-        self.actSpeichereExperiments.setIcon(QIcon(get_resource("save.png")))
-        self.actSpeichereExperiments.setDisabled(False)
-        self.actSpeichereExperiments.setShortcut(QKeySequence.Save)
-        self.actSpeichereExperiments.triggered.connect(self.saveExpDialog)
 
         self.actStartExperiment = QAction(self)
         self.actStartExperiment.setDisabled(True)
@@ -228,28 +227,34 @@ class MainGui(QMainWindow):
         # menu bar
         dateiMenu = self.menuBar().addMenu("&Datei")
         dateiMenu.addAction(self.actLadeExperiments)
-        dateiMenu.addAction(self.actSpeichereExperiments)
         dateiMenu.addAction("&Quit", self.close, QKeySequence(Qt.CTRL + Qt.Key_W))
 
         # view
         self.viewMenu = self.menuBar().addMenu('&Ansicht')
-        self.actLoadStandardState = QAction('Lade Standarddockansicht')
+        self.actLoadStandardState = QAction('&Lade Standarddockansicht')
         self.viewMenu.addAction(self.actLoadStandardState)
         self.actLoadStandardState.triggered.connect(self.loadStandardDockState)
+        self.actShowCoords = QAction("&Zeige Koordinaten", self)
+        self.actShowCoords.setCheckable(True)
+        self.actShowCoords.setChecked(
+            self._settings.value("view/show_coordinates") == "True"
+        )
+        self.viewMenu.addAction(self.actShowCoords)
+        self.actShowCoords.changed.connect(self.updateShowCoordsSetting)
 
         # experiment
         self.expMenu = self.menuBar().addMenu('&Experiment')
 
-        self.comMenu = self.expMenu.addMenu('Verbindungsport')
+        self.comMenu = self.expMenu.addMenu('&Verbindungsport')
         self.comMenu.aboutToShow.connect(self.getComPorts)
         self.expMenu.addSeparator()
-        self.actConnect = QAction('Versuchsaufbau verbinden')
+        self.actConnect = QAction('&Versuchsaufbau verbinden')
         self.actConnect.setIcon(QIcon(get_resource("connected.png")))
         self.actConnect.setShortcut(QKeySequence("F9"))
         self.expMenu.addAction(self.actConnect)
         self.actConnect.triggered.connect(self.connect)
 
-        self.actDisconnect = QAction('Versuchsaufbau trennen')
+        self.actDisconnect = QAction('&Versuchsaufbau trennen')
         self.actDisconnect.setEnabled(False)
         self.actDisconnect.setIcon(QIcon(get_resource("disconnected.png")))
         self.actDisconnect.setShortcut(QKeySequence("F10"))
@@ -263,7 +268,6 @@ class MainGui(QMainWindow):
         self.toolbarExp.setIconSize(icon_size)
         self.addToolBar(self.toolbarExp)
         self.toolbarExp.addAction(self.actLadeExperiments)
-        self.toolbarExp.addAction(self.actSpeichereExperiments)
         self.toolbarExp.addSeparator()
         self.toolbarExp.addAction(self.actConnect)
         self.toolbarExp.addAction(self.actDisconnect)
@@ -271,8 +275,28 @@ class MainGui(QMainWindow):
         self.toolbarExp.addAction(self.actStartExperiment)
         self.toolbarExp.addAction(self.actStopExperiment)
 
-        self.expSettingsChanged = False
-        self.exp.parameterItemChanged.connect(self.parameterItemChangedHandler)
+    def _readSettings(self):
+        # add default settings if none are present
+        if not self._settings.contains("view/show_coordinates"):
+            self._settings.setValue("view/show_coordinates", "True")
+
+    def _writeSettings(self):
+        """ Store the application state. """
+        pass
+
+    def updateCoordInfo(self, pos, widget, coordItem):
+        mouseCoords = widget.getPlotItem().vb.mapSceneToView(pos)
+        coordItem.setPos(mouseCoords.x(), mouseCoords.y())
+        coord_text = "x={:.3e} y={:.3e}".format(mouseCoords.x(),
+                                                mouseCoords.y())
+        self.coordLabel.setText(coord_text)
+
+        show_info = self._settings.value("view/show_coordinates") == "True"
+        if widget.sceneBoundingRect().contains(pos) and show_info:
+            coordItem.setText(coord_text.replace(" ", "\n"))
+            coordItem.show()
+        else:
+            coordItem.hide()
 
     # event functions
     def getComPorts(self):
@@ -478,6 +502,15 @@ class MainGui(QMainWindow):
             return
 
         chart.updatePlot()
+
+        coordItem = TextItem(text='', anchor=(0, 1))
+        widget.getPlotItem().addItem(coordItem, ignoreBounds=True)
+
+        def info_wrapper(pos):
+            self.update_coord_info(pos, widget, coordItem)
+
+        widget.scene().sigMouseMoved.connect(info_wrapper)
+
         widget.scene().contextMenu = [QAction("Export png", self),
                                       QAction("Export csv", self)]
         widget.scene().contextMenu[0].triggered.connect(lambda: self.exportPng(widget.getPlotItem(), title))
@@ -535,6 +568,10 @@ class MainGui(QMainWindow):
         self.targetView.resizeColumnToContents(0)
 
     @pyqtSlot()
+    def updateShowCoordsSetting(self):
+        self._settings.setValue("view/show_coordinates", str(self.actShowCoords.isChecked()))
+
+    @pyqtSlot()
     def startExperiment(self):
         """
         start the experiment and disable start button
@@ -585,14 +622,6 @@ class MainGui(QMainWindow):
         else:
             return False
 
-    def saveExpDialog(self):
-        filename = QFileDialog.getSaveFileName(self, "Experiment file speichern", "", "Experiment files (*.sreg)")
-        if filename[0]:
-            self.saveExpToFile(filename[0])
-            return True
-        else:
-            return False
-
     def loadExpFromFile(self, fileName):
         """
         load experiments from file
@@ -608,39 +637,6 @@ class MainGui(QMainWindow):
         self._logger.info("Lade {} Experimente".format(len(self._experiments)))
         return
 
-    def saveExpToFile(self, filePath):
-        """
-        save experiments to file
-        :param file_name:
-        """
-        fileName = os.path.split(filePath)[-1][:-5]
-        self._logger.info("Speichere Experimentedatei: {0}".format(fileName))
-
-        for row in range(self.exp.targetModel.rowCount()):
-            index = self.exp.targetModel.index(row, 0)
-            parent = index.model().itemFromIndex(index)
-            child = index.model().item(index.row(), 1)
-            moduleName = parent.data(role=PropertyItem.RawDataRole)
-            subModuleName = child.data(role=PropertyItem.RawDataRole)
-
-            if subModuleName is None:
-                continue
-
-            settings = self.exp.getSettings(self.exp.targetModel, moduleName)
-            for key, val in settings.items():
-                if val is not None:
-                    self._experiments[self._currentExperimentIndex][moduleName][key] = val
-
-        with open(filePath.encode(), "w") as f:
-            yaml.dump(self._experiments, f, default_flow_style=False)
-
-        self.expSettingsChanged = False
-
-        return
-
-    def parameterItemChangedHandler(self, item):
-        self.expSettingsChanged = True
-
     def _updateExperimentsList(self):
         self.experimentList.clear()
         for exp in self._experiments:
@@ -652,12 +648,10 @@ class MainGui(QMainWindow):
         """
         Apply the selected experiment to the current target and set it bold.
         """
-        self.exp.applayingExperiment = True
-        sucess = self._applyExperimentByIdx(self.experimentList.row(item))
-        self.exp.applayingExperiment = False
+        success = self._applyExperimentByIdx(self.experimentList.row(item))
 
-        self.setQListItemBold(self.experimentList, item, [sucess])
-        self.setQListItemBold(self.lastMeasList, item, [sucess])
+        self.setQListItemBold(self.experimentList, item, success)
+        self.setQListItemBold(self.lastMeasList, item, success)
 
     def applyExperimentByName(self, experimentName):
         """
@@ -701,14 +695,6 @@ class MainGui(QMainWindow):
         return self.exp.setExperiment(self._experiments[index])
 
     def closeEvent(self, QCloseEvent):
-        if self.expSettingsChanged:
-            buttonReply = QMessageBox.warning(self, "Experiment geändert",
-                                              "Sie haben ein Experiment geändert, möchten Sie Ihre Änderungen speichern?",
-                                              QMessageBox.Yes | QMessageBox.No)
-            if buttonReply == QMessageBox.Yes:
-                if not self.saveExpDialog():
-                    QCloseEvent.ignore()
-                    return
         if self.connection:
             self.disconnect()
         self._logger.info("Close Event received, shutting down.")
@@ -828,33 +814,39 @@ class MainGui(QMainWindow):
             QListWidgetItem(str(self.lastMeasList.count() + 1) + ": " + self._currentExperimentName))
 
     def loadLastMeas(self, item):
-        measurement = self.lastMeasurements[self.lastMeasList.row(item)]
+        expName = str(item.text())
+        try:
+            idx = self.lastMeasList.row(item)
+        except ValueError:
+            self._logger.error("loadLastMeas(): No measurement called '{0}".format(expName))
+            return False
 
-        self.exp.applayingExperiment = True
-        sucess = self.exp.setExperiment(measurement['exp'])
-        self.exp.applayingExperiment = False
+        if idx >= len(self.lastMeasurements):
+            self._logger.error("loadLastMeas(): Invalid index '{}')".format(idx))
+            return False
 
-        self.setQListItemBold(self.lastMeasList, item, [sucess])
-        self.setQListItemBold(self.experimentList, item, [sucess])
+        self._logger.info("Wiederherstellung der Messung '{}'".format(expName))
+
+        measurement = self.lastMeasurements[idx]
+
+        success = self.exp.restoreExperiment(measurement['exp'])
+
+        self.setQListItemBold(self.lastMeasList, item, success)
+        self.setQListItemBold(self.experimentList, item, success)
 
         self.dataPointBuffers = measurement['datapointbuffers']
 
         for i in range(self.dataPointTreeWidget.topLevelItemCount()):
             self.updatePlot(self.dataPointTreeWidget.topLevelItem(i))
 
-        self._logger.info("Letzte Messung '{}' übernommen".format(measurement['exp']['Name']))
+        self._logger.info("Messung '{}' übernommen".format(measurement['exp']['Name']))
 
-    def setQListItemBold(self, QList=None, item=None, args=[]):
-        sucess = True
-        for arg in args:
-            if arg == False:
-                sucess = False
-                break
-        for i in range(QList.count()):
-            newfont = QList.item(i).font()
-            if QList.item(i) == item and sucess:
+    def setQListItemBold(self, qList=None, item=None, state=True):
+        for i in range(qList.count()):
+            newfont = qList.item(i).font()
+            if qList.item(i) == item and state:
                 newfont.setBold(1)
             else:
                 newfont.setBold(0)
-            QList.item(i).setFont(newfont)
-        QList.repaint()
+            qList.item(i).setFont(newfont)
+        qList.repaint()

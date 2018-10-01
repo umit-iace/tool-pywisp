@@ -187,7 +187,6 @@ class ExperimentInteractor(QObject):
     Class that interacts between the gui which controls the programs execution
     and the Experiment
     """
-    parameterItemChanged = pyqtSignal(object)
     expFinished = pyqtSignal()
 
     def __init__(self, moduleList, inputQueue, parent=None):
@@ -196,7 +195,6 @@ class ExperimentInteractor(QObject):
         self.setupList = moduleList
         self.inputQueue = inputQueue
         self._setup_model()
-        self.applayingExperiment = False
 
     def _setup_model(self):
         # create model
@@ -250,17 +248,16 @@ class ExperimentInteractor(QObject):
 
     def itemChanged(self, item):
         if item.parent():
-            if not self.applayingExperiment:
-                self.parameterItemChanged.emit(item)
-        else:
-            idx = item.index()
-            moduleItem = idx.model().item(idx.row())
+            return
 
-            # delete all old settings
-            moduleItem.removeRows(0, moduleItem.rowCount())
+        idx = item.index()
+        moduleItem = idx.model().item(idx.row())
 
-            # insert new settings
-            self._addSettings(moduleItem.index())
+        # delete all old settings
+        moduleItem.removeRows(0, moduleItem.rowCount())
+
+        # insert new settings
+        self._addSettings(moduleItem.index())
 
         return
 
@@ -291,7 +288,22 @@ class ExperimentInteractor(QObject):
 
         return self._applyExperiment(exp)
 
-    def _applyExperiment(self, exp):
+    def restoreExperiment(self, exp):
+        """
+        Restore the given generated experiment settings into the target model.
+
+        Returns:
+            bool: `True` if successful, `False` if errors occurred.
+        """
+        if exp is None:
+            return
+        if isinstance(exp, list):
+            self._logger.error("restoreExperiment(): only scalar input allowed!")
+            return False
+
+        return self._apply_regime(exp, True)
+
+    def _applyExperiment(self, exp, ignore_is_public):
         """
         Set all module settings to those provided in the experiment.
         Returns:
@@ -346,23 +358,20 @@ class ExperimentInteractor(QObject):
                 if key == "type":
                     continue
 
-                found = False
                 for row in range(moduleItem.rowCount()):
                     if self.targetModel.data(
                             moduleItem.child(row, 0).index()) == key:
-                        # if str(moduleItem.child(row, 0).text()) == key:
                         value_idx = self.targetModel.index(row, 1, moduleIndex)
                         self.targetModel.setData(value_idx,
                                                  val,
                                                  role=PropertyItem.RawDataRole)
-                        found = True
                         break
-
-                if not found:
-                    self._logger.error("_applyExperiment(): Setting: '{0}' not "
-                                       "available for Module: '{1}'".format(
-                        key, moduleType))
-                    return False
+                    else:
+                        if not ignore_is_public:
+                            self._logger.error("_applyExperiment(): Setting: '{0}' not "
+                                               "available for Module: '{1}'".format(
+                                key, moduleType))
+                            return False
 
         return True
 
