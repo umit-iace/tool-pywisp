@@ -513,7 +513,7 @@ class MainGui(QMainWindow):
         widget.getPlotItem().addItem(coordItem, ignoreBounds=True)
 
         def info_wrapper(pos):
-            self.update_coord_info(pos, widget, coordItem)
+            self.updateCoordInfo(pos, widget, coordItem)
 
         widget.scene().sigMouseMoved.connect(info_wrapper)
 

@@ -286,7 +286,7 @@ class ExperimentInteractor(QObject):
             self._logger.error("setExperiment(): only scalar input allowed!")
             return False
 
-        return self._applyExperiment(exp)
+        return self._applyExperiment(exp, False)
 
     def restoreExperiment(self, exp):
         """
