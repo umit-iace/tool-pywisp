@@ -56,4 +56,4 @@ if __name__ == "__main__":
             elif frame.min_id == 0x33:
                 print("(Time = {})".format(bytes_to_int32(frame.payload, big_endian=False)))  # SAMD21 is little-endian
         # Wait a little bit so we don't flood the other end
-        sleep(1)
+        sleep(0.5)

@@ -1,12 +1,16 @@
+#define ISMEGA 0
+
 //#define NO_TRANSPORT_PROTOCOL
+#if ISMEGA
+//#define MIN_DEBUG_PRINTING
+#endif
+
 #include "min.h"
 #include "min.c"
 
-#define ISMEGA 0
-
-#define BUFLEN (50)
+#define BUFLEN (64)
 struct min_context ctx;
-char serialBuf[BUFLEN];
+uint8_t serialBuf[BUFLEN];
 uint8_t buflen;
 
 #define TOGGLETIME (2000)
@@ -32,12 +36,25 @@ void min_tx_finished(uint8_t port)
 {
 
 }
-// only if using transport protocol
+
+#ifdef TRANSPORT_PROTOCOL
 uint32_t min_time_ms(void)
 {
   return millis();
 }
+#endif
 
+#ifdef MIN_DEBUG_PRINTING
+void min_debug_print(const char *msg, ...)
+{
+  char dbgbuf[100];
+  va_list args;
+  va_start(args, msg);
+  vsnprintf(dbgbuf,100,msg,args);
+  va_end(args);
+  Serial1.print(dbgbuf);
+}
+#endif
 
 void min_application_handler(uint8_t min_id, uint8_t *min_payload, uint8_t len_payload, uint8_t port)
 {
@@ -49,10 +66,11 @@ void min_application_handler(uint8_t min_id, uint8_t *min_payload, uint8_t len_p
 }
 
 /*** Handle Serial Data coming in ***/
-void SerialEvent()
+void serialEvent()
 {
-  buflen = Serial.readBytes(serialBuf, BUFLEN);
+  buflen = Serial.readBytes(serialBuf, Serial.available());
 #if ISMEGA
+  Serial1.print("incoming Serialbuf: ");
   Serial1.println(serialBuf);
 #endif
 }
@@ -77,17 +95,15 @@ void setup() {
   pinMode(13, OUTPUT);
 
   min_init_context(&ctx, 0);
-#if ISMEGA
-  Serial1.print("Serial.availableforwrite: ");
-  Serial1.println(Serial.availableForWrite());
-#endif
 }
 
 void loop() {
-  min_poll(&ctx, (uint8_t *)serialBuf, buflen);
+  // make sure MIN protocol runs
+  min_poll(&ctx, serialBuf, buflen);
   buflen = 0;
-
-  static char msg[18] = "Turned LED off ";
+  //
+  
+  static char msg[18] = "Toggled LED ##:";
   static byte n = 0;
 
   uint32_t now = millis();
