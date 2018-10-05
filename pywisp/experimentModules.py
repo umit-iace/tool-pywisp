@@ -65,7 +65,7 @@ class Trajectory(ExperimentModule):
     Args:
         settings (dict): Dictionary holding the config options for this module.
     """
-    dataPoints = ['Referenz']
+    dataPoints = []
 
     def __init__(self):
         ExperimentModule.__init__(self)
