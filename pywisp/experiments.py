@@ -303,7 +303,7 @@ class ExperimentInteractor(QObject):
 
         return self._apply_regime(exp, True)
 
-    def _applyExperiment(self, exp, ignore_is_public):
+    def _applyExperiment(self, exp, ignoreIsPublic):
         """
         Set all module settings to those provided in the experiment.
         Returns:
@@ -366,12 +366,12 @@ class ExperimentInteractor(QObject):
                                                  val,
                                                  role=PropertyItem.RawDataRole)
                         break
-                    else:
-                        if not ignore_is_public:
-                            self._logger.error("_applyExperiment(): Setting: '{0}' not "
-                                               "available for Module: '{1}'".format(
-                                key, moduleType))
-                            return False
+                else:
+                    if not ignoreIsPublic:
+                        self._logger.error("_applyExperiment(): Setting: '{0}' not "
+                                           "available for Module: '{1}'".format(
+                            key, moduleType))
+                        return False
 
         return True
 
