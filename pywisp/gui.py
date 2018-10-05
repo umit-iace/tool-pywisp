@@ -281,6 +281,8 @@ class MainGui(QMainWindow):
         self.toolbarExp.addAction(self.actStartExperiment)
         self.toolbarExp.addAction(self.actStopExperiment)
 
+        self.setDefaultComPort()
+
     def _readSettings(self):
         # add default settings if none are present
         if not self._settings.contains("view/show_coordinates"):
@@ -305,6 +307,18 @@ class MainGui(QMainWindow):
             coordItem.hide()
 
     # event functions
+    def setDefaultComPort(self):
+        comPorts = serial.tools.list_ports.comports()
+        if comPorts:
+            arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
+
+            if len(arduinoPorts) != 0:
+                self.port = arduinoPorts[0]
+            else:
+                self._logger.warning("Can't set comport for arduino automatically! Set the port manually!")
+        else:
+            self._logger.warning("No ComPorts avaiable, connect device!")
+
     def getComPorts(self):
         def setPort(port):
             def fn():
