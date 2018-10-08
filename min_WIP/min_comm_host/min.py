@@ -566,32 +566,11 @@ class MINTransportSerial(MINTransport):
     """
     Bound to Pyserial driver. But not thread safe: must not call poll() and send() at the same time.
     """
-    def _corrupted_data(self, data):
-        """
-        Randomly perturb a bit in one in 1000 bytes
-        :param data: 
-        :return: 
-        """
-        corrupted_data = []
-        for byte in data:
-            r = randomizer.random()
-            if r < 0.00005:
-                print("r={}". format(r))
-                new_byte = byte ^ (1 << randomizer.randrange(8))
-                print("Corrupted (={:02x}, was={:02x})".format(byte, new_byte))
-                corrupted_data.append(new_byte)
-            else:
-                corrupted_data.append(byte)
-        return bytes(corrupted_data)
-
     def _now_ms(self):
         now = int(time() * 1000.0)
         return now
 
     def _serial_write(self, data):
-        if self.fake_errors:
-            data = self._corrupted_data(data)
-
         min_logger.debug("_serial_write: {}".format(bytes_to_hexstr(data)))
         self._serial.write(data)
 
@@ -599,23 +578,19 @@ class MINTransportSerial(MINTransport):
         return self._serial.in_waiting > 0
 
     def _serial_read_all(self):
-        data = self._serial.read_all()
-        if self.fake_errors:
-            data = self._corrupted_data(data)
-        return data
+        return self._serial.read_all()
 
     def _serial_close(self):
         self._serial.close()
 
-    def __init__(self, port, loglevel=ERROR):
+    def __init__(self, port, baud=115200, loglevel=ERROR):
         """
         Open MIN connection on a given port.
         :param port: serial port
         :param debug:
         """
-        self.fake_errors = False
         try:
-            self._serial = Serial(port=port,baudrate=115200, timeout=0.1, write_timeout=1.0)
+            self._serial = Serial(port=port,baudrate=baud, timeout=0.1, write_timeout=1.0)
             self._serial.reset_input_buffer()
             self._serial.reset_output_buffer()
         except SerialException:
