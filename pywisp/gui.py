@@ -134,7 +134,7 @@ class MainGui(QMainWindow):
         self.actStartExperiment.triggered.connect(self.startExperiment)
 
         self.actStopExperiment = QAction(self)
-        self.actStopExperiment.setText("&Stope Experiment")
+        self.actStopExperiment.setText("&Stoppe Experiment")
         self.actStopExperiment.setDisabled(True)
         self.actStopExperiment.setIcon(QIcon(get_resource("stop.png")))
         self.actStopExperiment.setShortcut(QKeySequence("F6"))

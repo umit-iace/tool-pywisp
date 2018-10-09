@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-import time
-
 import logging
 import serial
 import serial.tools.list_ports
+import time
 from PyQt5 import QtCore
+
 from min_WIP.min_comm_host.min import MINTransportSerial
 
 
@@ -42,7 +42,7 @@ class SerialConnection(QtCore.QThread):
             if not self.inputQueue.empty():
                 self.writeData(self.inputQueue.get())
             if frames and self.doRead:
-                 self.readData(frames)
+                self.readData(frames)
 
     def connect(self):
         """ Checks of an arduino port is avaiable and connect to these one.
@@ -76,14 +76,16 @@ class SerialConnection(QtCore.QThread):
         time.sleep(1)
         while not self.inputQueue.empty():
             self.writeData(self.inputQueue.get())
+        # TODO muss noch implementiert werden, es wird keine terminierung durchgeführt, RESET frame schicken
         self.min.close()
         self.min = None
 
-    def readData(self,frames):
+    def readData(self, frames):
         """ Reads and emits the data, that comes over the serial interface.
         """
         for frame in frames:
-            self.outputQueue.put(format(frame.payload))
+            print(str(frame.min_id) + ": " + str(int.from_bytes(frame.payload, byteorder='little', signed=False)))
+            # self.outputQueue.put(format(frame.payload))
 
     def writeData(self, data):
         """ Writes the given data to the serial inferface.
@@ -92,4 +94,4 @@ class SerialConnection(QtCore.QThread):
         data : str
             Readable string that will send over serial interface
         """
-        self.min.queue_frame(1, data.encode('ascii'))
+        self.min.queue_frame(min_id=0x01, payload=bytes(data, encoding='ascii'))

@@ -194,6 +194,7 @@ class ExperimentInteractor(QObject):
         self._logger = logging.getLogger(self.__class__.__name__)
         self.setupList = moduleList
         self.inputQueue = inputQueue
+        self.runningExperiment = False
         self._setup_model()
 
     def _setup_model(self):
@@ -387,6 +388,7 @@ class ExperimentInteractor(QObject):
 
     def runExperiment(self):
         data = []
+        self.runningExperiment = True
         for row in range(self.targetModel.rowCount()):
             index = self.targetModel.index(row, 0)
             parent = index.model().itemFromIndex(index)
@@ -413,13 +415,18 @@ class ExperimentInteractor(QObject):
                 data += params
 
         # start experiment
-        data.append('exp------1\n')
-        for _data in data:
-            self.inputQueue.put(_data)
+        self.inputQueue.put('1')
+        # data.append('exp------1\n')
+        # for _data in data:
+        #     self.inputQueue.put(_data)
 
     def stopExperiment(self):
         data = []
 
+        if not self.runningExperiment:
+            return
+
+        self.runningExperiment = False
         for row in range(self.targetModel.rowCount()):
             index = self.targetModel.index(row, 0)
             parent = index.model().itemFromIndex(index)
@@ -436,8 +443,9 @@ class ExperimentInteractor(QObject):
             if stopParams is not None:
                 data += stopParams
 
-        data.append('exp------0\n')
-        for _data in data:
-            self.inputQueue.put(_data)
+        # data.append('exp------0\n')
+        # for _data in data:
+        #     self.inputQueue.put(_data)
+        self.inputQueue.put('0')
 
         self.expFinished.emit()
