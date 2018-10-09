@@ -2,6 +2,7 @@
 import os
 import serial.tools.list_ports
 import yaml
+import struct
 from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QRectF, QTimer, QSettings
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
@@ -758,42 +759,52 @@ class MainGui(QMainWindow):
 
         return list
 
+    def handleFrame(self, frame):
+        fid = frame.min_id
+        if fid == 8:
+            # data = int.from_bytes(frame.payload, byteorder='little', signed=False)
+            data = struct.unpack('I', frame.payload)[0]
+            print(str(fid) + ": " + str(data))
+        elif fid == 9:
+            data = struct.unpack('i', frame.payload)[0]
+            print(str(fid) + ": " + str(data))
+        elif fid == 10:
+            data = struct.unpack('f', frame.payload)[0]
+            print(str(fid) + ": " + str(data))
+        elif fid == 11:
+            data = struct.unpack('d', frame.payload)[0]
+            print(str(fid) + ": " + str(data))
+
     def updateData(self):
-        try:
-            dataList = []
+        if self.outputQueue.empty():
+            return
 
-            if self.outputQueue.empty():
-                return
+        for i in range(0, self.outputQueue.qsize()):
+            self.handleFrame(self.outputQueue.get())
 
-            for i in range(0, self.outputQueue.qsize()):
-                dataList.append(self.outputQueue.get())
+        # for data in dataList:
+        #     if len(data.split(';')) != len(self.dataPointBuffers) + 1:
+        #         self._logger.warning("Fehler bei der Datenübertragung: " + str(data))
+        #         continue
+        #
+        #     for value in data.split(';'):
+        #         _val = value.split(': ')
+        #         name = _val[0]
+        #         value = float(_val[1])
+        #         if name == 'Zeit':
+        #             time = value
+        #             continue
+        #         for buffer in self.dataPointBuffers:
+        #             if name == buffer.name:
+        #                 buffer.addValue(time, value)
+        #                 if self.visualizer:
+        #                     for dataPoint in self.visualizer.dataPoints:
+        #                         if buffer.name == dataPoint:
+        #                             self.visualizer.update({dataPoint: value})
+        #                 break
 
-            for data in dataList:
-                if len(data.split(';')) != len(self.dataPointBuffers) + 1:
-                    self._logger.warning("Fehler bei der Datenübertragung: " + str(data))
-                    continue
-
-                for value in data.split(';'):
-                    _val = value.split(': ')
-                    name = _val[0]
-                    value = float(_val[1])
-                    if name == 'Zeit':
-                        time = value
-                        continue
-                    for buffer in self.dataPointBuffers:
-                        if name == buffer.name:
-                            buffer.addValue(time, value)
-                            if self.visualizer:
-                                for dataPoint in self.visualizer.dataPoints:
-                                    if buffer.name == dataPoint:
-                                        self.visualizer.update({dataPoint: value})
-                            break
-
-            for chart in self.plotCharts:
-                chart.updatePlot()
-        # TODO probably don't do this
-        except Exception as err:
-            self._logger.error("Unknown exception in updateData: " + repr(err))
+        for chart in self.plotCharts:
+            chart.updatePlot()
 
     def loadStandardDockState(self):
         self.plotCharts.clear()

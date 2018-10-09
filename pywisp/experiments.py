@@ -415,7 +415,7 @@ class ExperimentInteractor(QObject):
                 data += params
 
         # start experiment
-        self.inputQueue.put('1')
+        self.inputQueue.put({'id': 0x01, 'msg': 1})
         # data.append('exp------1\n')
         # for _data in data:
         #     self.inputQueue.put(_data)
@@ -446,6 +446,6 @@ class ExperimentInteractor(QObject):
         # data.append('exp------0\n')
         # for _data in data:
         #     self.inputQueue.put(_data)
-        self.inputQueue.put('0')
+        self.inputQueue.put({'id': 0x01, 'msg': 0})
 
         self.expFinished.emit()

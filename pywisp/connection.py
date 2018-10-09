@@ -76,22 +76,22 @@ class SerialConnection(QtCore.QThread):
         time.sleep(1)
         while not self.inputQueue.empty():
             self.writeData(self.inputQueue.get())
-        # TODO muss noch implementiert werden, es wird keine terminierung durchgeführt, RESET frame schicken
-        self.min.close()
-        self.min = None
+
+        resetFrame = {'id': 0xfe, 'msg': 0}
+        self.writeData(resetFrame)
+        del self.min
 
     def readData(self, frames):
         """ Reads and emits the data, that comes over the serial interface.
         """
         for frame in frames:
-            print(str(frame.min_id) + ": " + str(int.from_bytes(frame.payload, byteorder='little', signed=False)))
-            # self.outputQueue.put(format(frame.payload))
+            self.outputQueue.put(frame)
 
     def writeData(self, data):
         """ Writes the given data to the serial inferface.
         Parameters
         ----------
-        data : str
+        data : dict
             Readable string that will send over serial interface
         """
-        self.min.queue_frame(min_id=0x01, payload=bytes(data, encoding='ascii'))
+        self.min.queue_frame(min_id=data.id, payload=bytes(data.msg, encoding='ascii'))
