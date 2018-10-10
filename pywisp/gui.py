@@ -772,8 +772,14 @@ class MainGui(QMainWindow):
             data = struct.unpack('>f', frame.payload)[0]
             print(str(fid) + ": " + str(data))
         elif fid == 11:
-            data = struct.unpack('d', frame.payload)[0]
+            data = struct.unpack('>f', frame.payload)[0]
             print(str(fid) + ": " + str(data))
+        elif fid == 12:
+            data = struct.unpack('>h', frame.payload)[0]
+            print(str(fid) + ": " + str(data))
+        elif fid == 13:
+            data = struct.unpack('>bhf', frame.payload)
+            print (str(fid) + ": " + str(data))
 
     def updateData(self):
         if self.outputQueue.empty():

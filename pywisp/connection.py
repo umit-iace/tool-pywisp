@@ -93,4 +93,4 @@ class SerialConnection(QtCore.QThread):
         data : dict
             Readable string that will send over serial interface
         """
-        self.min.queue_frame(min_id=data['id'], payload=bytes([data['msg']]))
+        self.min.queue_frame(min_id=data['id'], payload=bytes(data['msg']))
