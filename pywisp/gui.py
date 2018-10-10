@@ -763,13 +763,13 @@ class MainGui(QMainWindow):
         fid = frame.min_id
         if fid == 8:
             # data = int.from_bytes(frame.payload, byteorder='little', signed=False)
-            data = struct.unpack('I', frame.payload)[0]
+            data = struct.unpack('B', frame.payload)[0]
             print(str(fid) + ": " + str(data))
         elif fid == 9:
-            data = struct.unpack('i', frame.payload)[0]
+            data = struct.unpack('b', frame.payload)[0]
             print(str(fid) + ": " + str(data))
         elif fid == 10:
-            data = struct.unpack('f', frame.payload)[0]
+            data = struct.unpack('>f', frame.payload)[0]
             print(str(fid) + ": " + str(data))
         elif fid == 11:
             data = struct.unpack('d', frame.payload)[0]

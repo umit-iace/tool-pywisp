@@ -77,8 +77,7 @@ class SerialConnection(QtCore.QThread):
         while not self.inputQueue.empty():
             self.writeData(self.inputQueue.get())
 
-        resetFrame = {'id': 0xfe, 'msg': 0}
-        self.writeData(resetFrame)
+        self.min.transport_reset()
         del self.min
 
     def readData(self, frames):
@@ -94,4 +93,4 @@ class SerialConnection(QtCore.QThread):
         data : dict
             Readable string that will send over serial interface
         """
-        self.min.queue_frame(min_id=data.id, payload=bytes(data.msg, encoding='ascii'))
+        self.min.queue_frame(min_id=data['id'], payload=bytes([data['msg']]))
