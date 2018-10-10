@@ -761,24 +761,17 @@ class MainGui(QMainWindow):
 
     def handleFrame(self, frame):
         fid = frame.min_id
-        if fid == 8:
-            # data = int.from_bytes(frame.payload, byteorder='little', signed=False)
-            data = struct.unpack('B', frame.payload)[0]
-            print(str(fid) + ": " + str(data))
-        elif fid == 9:
-            data = struct.unpack('b', frame.payload)[0]
-            print(str(fid) + ": " + str(data))
-        elif fid == 10:
-            data = struct.unpack('>f', frame.payload)[0]
+        if fid == 10:
+            data = struct.unpack('>Lffff', frame.payload)
             print(str(fid) + ": " + str(data))
         elif fid == 11:
-            data = struct.unpack('>f', frame.payload)[0]
+            data = struct.unpack('>Lffff', frame.payload)
             print(str(fid) + ": " + str(data))
         elif fid == 12:
-            data = struct.unpack('>h', frame.payload)[0]
+            data = struct.unpack('>Lffff', frame.payload)
             print(str(fid) + ": " + str(data))
         elif fid == 13:
-            data = struct.unpack('>bhf', frame.payload)
+            data = struct.unpack('>Lff', frame.payload)
             print (str(fid) + ": " + str(data))
 
     def updateData(self):
