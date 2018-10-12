@@ -2,7 +2,6 @@
 import os
 import serial.tools.list_ports
 import yaml
-import struct
 from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QRectF, QTimer, QSettings
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
@@ -620,7 +619,7 @@ class MainGui(QMainWindow):
             self.outputQueue.get()
 
         self.connection.doRead = True
-        self.timer.start(1)
+        self.timer.start(100)
         self.exp.runExperiment()
 
     @pyqtSlot()
@@ -759,48 +758,23 @@ class MainGui(QMainWindow):
 
         return list
 
-    def handleFrame(self, frame):
-        fid = frame.min_id
-        if fid == 10:
-            data = struct.unpack('>Lffff', frame.payload)
-            print(str(fid) + ": " + str(data))
-        elif fid == 11:
-            data = struct.unpack('>Lffff', frame.payload)
-            print(str(fid) + ": " + str(data))
-        elif fid == 12:
-            data = struct.unpack('>Lffff', frame.payload)
-            print(str(fid) + ": " + str(data))
-        elif fid == 13:
-            data = struct.unpack('>Lff', frame.payload)
-            print (str(fid) + ": " + str(data))
-
     def updateData(self):
         if self.outputQueue.empty():
             return
 
+        frames = []
         for i in range(0, self.outputQueue.qsize()):
-            self.handleFrame(self.outputQueue.get())
+            frames.append(self.outputQueue.get())
 
-        # for data in dataList:
-        #     if len(data.split(';')) != len(self.dataPointBuffers) + 1:
-        #         self._logger.warning("Fehler bei der Datenübertragung: " + str(data))
-        #         continue
-        #
-        #     for value in data.split(';'):
-        #         _val = value.split(': ')
-        #         name = _val[0]
-        #         value = float(_val[1])
-        #         if name == 'Zeit':
-        #             time = value
-        #             continue
-        #         for buffer in self.dataPointBuffers:
-        #             if name == buffer.name:
-        #                 buffer.addValue(time, value)
-        #                 if self.visualizer:
-        #                     for dataPoint in self.visualizer.dataPoints:
-        #                         if buffer.name == dataPoint:
-        #                             self.visualizer.update({dataPoint: value})
-        #                 break
+        for frame in frames:
+            data = self.exp.handleFrame(frame)
+            time = data['Zeit'] / 1000.0
+            datapoints = data['Punkte']
+            for buffer in self.dataPointBuffers:
+                try:
+                    buffer.addValue(time, datapoints[buffer.name])
+                except:
+                    continue
 
         for chart in self.plotCharts:
             chart.updatePlot()

@@ -386,6 +386,16 @@ class ExperimentInteractor(QObject):
 
         return dataPoints
 
+    def handleFrame(self, frame):
+        dataPoints = []
+        for expModule in self.setupList:
+            moduleCls = getattr(experimentModules, expModule)
+            regExpModules = getRegisteredExperimentModules(moduleCls)
+            # only first module used
+            dataPoints = regExpModules[0][0].handleFrame(frame)
+
+        return dataPoints
+
     def runExperiment(self):
         data = []
         self.runningExperiment = True
@@ -415,10 +425,9 @@ class ExperimentInteractor(QObject):
                 data += params
 
         # start experiment
-        self.inputQueue.put({'id': 0x01, 'msg': [1]})
-        # data.append('exp------1\n')
-        # for _data in data:
-        #     self.inputQueue.put(_data)
+        data.append({'id': 0x01, 'msg': [1]})
+        for _data in data:
+            self.inputQueue.put(_data)
 
     def stopExperiment(self):
         data = []
@@ -443,9 +452,8 @@ class ExperimentInteractor(QObject):
             if stopParams is not None:
                 data += stopParams
 
-        # data.append('exp------0\n')
-        # for _data in data:
-        #     self.inputQueue.put(_data)
-        self.inputQueue.put({'id': 0x01, 'msg': [0]})
+        data.append({'id': 0x01, 'msg': [0]})
+        for _data in data:
+            self.inputQueue.put(_data)
 
         self.expFinished.emit()

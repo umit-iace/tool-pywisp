@@ -25,6 +25,11 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
     def dataPoints(self):
         pass
 
+    @staticmethod
+    @abstractmethod
+    def handleFrame(frame):
+        pass
+
     @abstractmethod
     def getStartParams(self):
         pass
