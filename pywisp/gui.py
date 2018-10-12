@@ -770,11 +770,10 @@ class MainGui(QMainWindow):
             data = self.exp.handleFrame(frame)
             time = data['Zeit'] / 1000.0
             datapoints = data['Punkte']
+            names = data['Names']
             for buffer in self.dataPointBuffers:
-                try:
+                if buffer.name in names:
                     buffer.addValue(time, datapoints[buffer.name])
-                except:
-                    continue
 
         for chart in self.plotCharts:
             chart.updatePlot()
