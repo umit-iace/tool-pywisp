@@ -117,13 +117,11 @@ class PlotChart(object):
         Updates all curves of the plot with the actual data in the buffers
         """
         if self.plotWidget:
-            interpx = []
             for indx, curve in enumerate(self.plotCurves):
                 datax = self.dataPoints[indx].time
                 datay = self.dataPoints[indx].values
                 if datax:
-                    if not interpx:
-                        interpx = list(np.linspace(datax[0], datax[-1], 100))
+                    interpx = np.linspace(datax[0], datax[-1], 100)
                     interpy = np.interp(interpx, datax, datay)
                     curve.setData(interpx, interpy)
 
@@ -132,3 +130,47 @@ class PlotChart(object):
             self.plotWidget.getPlotItem().clear()
             self.dataPoints = []
             self.plotCurves = []
+
+
+class CSVExporter(object):
+    def __init__(self, chart):
+        self.chart = chart
+        self.sep = ','
+
+    def export(self, fileName):
+
+        if not isinstance(self.chart, PlotChart):
+            raise Exception("Must have a chart selected for CSV export.")
+
+        fd = open(fileName, 'w')
+        data = []
+        header = []
+
+        for dataPoint in self.chart.dataPoints:
+            if dataPoint.time:
+                header.append('Zeit')
+                header.append(dataPoint.name)
+                data.append(dataPoint.time)
+                data.append(dataPoint.value)
+
+        numColumns = len(header)
+        if data:
+            numRows = len(max(data, key=len))
+        else:
+            fd.close()
+            return
+
+        fd.write(self.sep.join(header) + '\n')
+
+        for i in range(numRows):
+            for j in range(numColumns):
+                if i < len(data[j]):
+                    fd.write(data[j][i])
+                else:
+                    fd.write(np.nan)
+
+                if j < len(numColumns):
+                    fd.write(self.sep)
+
+            fd.write('\n')
+        fd.close()

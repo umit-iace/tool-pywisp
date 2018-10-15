@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
 import os
+from copy import deepcopy
+from operator import itemgetter
+from queue import Queue
+
 import serial.tools.list_ports
 import yaml
 from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QRectF, QTimer, QSettings
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from copy import deepcopy
-from operator import itemgetter
-from pyqtgraph import PlotWidget, exporters, TextItem
+from pyqtgraph import PlotWidget, exporters, TextItem, mkBrush
 from pyqtgraph.dockarea import *
-from queue import Queue
 
 from .connection import SerialConnection
 from .experiments import ExperimentInteractor, ExperimentView, PropertyItem
 from .registry import *
-from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart
+from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, CSVExporter
 from .visualization import MplVisualizer
 
 
@@ -533,8 +534,8 @@ class MainGui(QMainWindow):
 
         widget.scene().contextMenu = [QAction("Export png", self),
                                       QAction("Export csv", self)]
-        widget.scene().contextMenu[0].triggered.connect(lambda: self.exportPng(widget.getPlotItem(), title))
-        widget.scene().contextMenu[1].triggered.connect(lambda: self.exportCsv(widget.getPlotItem(), title))
+        widget.scene().contextMenu[0].triggered.connect(lambda: self.exportPng(widget.getPlotItem(), title, coordItem))
+        widget.scene().contextMenu[1].triggered.connect(lambda: self.exportCsv(chart, title))
 
         # create dock container and add it to dock area
         dock = Dock(title, closable=True)
@@ -560,27 +561,35 @@ class MainGui(QMainWindow):
             if not plot.title in openDocks:
                 self.plotCharts.pop(indx)
 
-    def exportCsv(self, plotItem, name):
-        exporter = exporters.CSVExporter(plotItem)
+    def exportCsv(self, chart, name):
+        exporter = CSVExporter(chart)
         filename = QFileDialog.getSaveFileName(self, "CSV export", name + ".csv", "CSV Data (*.csv)")
         if filename[0]:
             exporter.export(filename[0])
 
-    def exportPng(self, plotItem, name):
+    def exportPng(self, plotItem, name, coordItem):
         # Notwendig da Fehler in PyQtGraph
         exporter = exporters.ImageExporter(plotItem)
         oldGeometry = plotItem.geometry()
         plotItem.setGeometry(QRectF(0, 0, 1920, 1080))
-        # TODO Farben ändern Background, grid und pen
-        # exporter.parameters()['background'] = QColor(255, 255, 255)
+
+        bgBrush = mkBrush('w')
+        exporter.params.param('background').setValue(bgBrush.color())
         exporter.params.param('width').setValue(1920, blockSignal=exporter.widthChanged)
         exporter.params.param('height').setValue(1080, blockSignal=exporter.heightChanged)
+
+        flag = 0
+        if coordItem.isVisible():
+            coordItem.hide()
+            flag = 1
 
         filename = QFileDialog.getSaveFileName(self, "PNG export", name + ".png", "PNG Image (*.png)")
         if filename[0]:
             exporter.export(filename[0])
 
         # restore old state
+        if flag == 1:
+            coordItem.show()
         plotItem.setGeometry(QRectF(oldGeometry))
 
     @pyqtSlot(QModelIndex)
