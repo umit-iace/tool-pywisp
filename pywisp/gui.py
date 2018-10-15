@@ -770,7 +770,7 @@ class MainGui(QMainWindow):
             data = self.exp.handleFrame(frame)
             time = data['Zeit'] / 1000.0
             datapoints = data['Punkte']
-            names = data['Names']
+            names = data['Punkte'].keys()
             for buffer in self.dataPointBuffers:
                 if buffer.name in names:
                     buffer.addValue(time, datapoints[buffer.name])
