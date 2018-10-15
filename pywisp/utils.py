@@ -4,6 +4,7 @@ import os
 
 from PyQt5.QtGui import QColor
 from pyqtgraph import mkPen
+import numpy as np
 
 
 def get_resource(res_name, res_type="icons"):
@@ -116,8 +117,15 @@ class PlotChart(object):
         Updates all curves of the plot with the actual data in the buffers
         """
         if self.plotWidget:
+            interpx = []
             for indx, curve in enumerate(self.plotCurves):
-                curve.setData(self.dataPoints[indx].time, self.dataPoints[indx].values)
+                datax = self.dataPoints[indx].time
+                datay = self.dataPoints[indx].values
+                if datax:
+                    if not interpx:
+                        interpx = list(np.linspace(datax[0], datax[-1], 100))
+                    interpy = np.interp(interpx, datax, datay)
+                    curve.setData(interpx, interpy)
 
     def clear(self):
         if self.plotWidget:
