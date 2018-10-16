@@ -167,7 +167,7 @@ class CSVExporter(object):
                 if i < len(data[j]):
                     fd.write(str(data[j][i]))
                 else:
-                    fd.write(np.nan)
+                    fd.write(str(np.nan))
 
                 if j < numColumns:
                     fd.write(self.sep)
