@@ -151,7 +151,7 @@ class CSVExporter(object):
                 header.append('Zeit')
                 header.append(dataPoint.name)
                 data.append(dataPoint.time)
-                data.append(dataPoint.value)
+                data.append(dataPoint.values)
 
         numColumns = len(header)
         if data:
@@ -165,11 +165,11 @@ class CSVExporter(object):
         for i in range(numRows):
             for j in range(numColumns):
                 if i < len(data[j]):
-                    fd.write(data[j][i])
+                    fd.write(str(data[j][i]))
                 else:
                     fd.write(np.nan)
 
-                if j < len(numColumns):
+                if j < numColumns:
                     fd.write(self.sep)
 
             fd.write('\n')
