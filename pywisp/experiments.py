@@ -424,7 +424,10 @@ class ExperimentInteractor(QObject):
                 data.append(params)
 
         # start experiment
-        data.append({'id': 0x01, 'msg': [1]})
+        payload = bytes([1])
+
+        data.append({'id': 1,
+                     'msg': payload})
         for _data in data:
             self.inputQueue.put(_data)
 
@@ -452,7 +455,10 @@ class ExperimentInteractor(QObject):
                 data.append(stopParams)
 
         # stop experiment
-        data.append({'id': 0x01, 'msg': [0]})
+        payload = bytes([0])
+
+        data.append({'id': 1,
+                     'msg': payload})
         for _data in data:
             self.inputQueue.put(_data)
 

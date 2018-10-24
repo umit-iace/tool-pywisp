@@ -39,7 +39,6 @@ class SerialConnection(QtCore.QThread):
         """
         while True and self.isConnected:
             frames = self.min.poll()
-            print(frames)
             if not self.inputQueue.empty():
                 self.writeData(self.inputQueue.get())
             if frames and self.doRead:
@@ -94,5 +93,4 @@ class SerialConnection(QtCore.QThread):
         data : dict
             Readable string that will send over serial interface
         """
-        # TODO bytes nicht möglich für floats
-        self.min.queue_frame(min_id=data['id'], payload=bytes(data['msg']))
+        self.min.queue_frame(min_id=data['id'], payload=data['msg'])

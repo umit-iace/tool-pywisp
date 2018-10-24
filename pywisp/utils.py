@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 import logging
+import numpy as np
 import os
-
 from PyQt5.QtGui import QColor
 from pyqtgraph import mkPen
-import numpy as np
+
+from pywisp import TABLEAU_COLORS
 
 
 def get_resource(res_name, res_type="icons"):
@@ -80,18 +81,6 @@ class PlotChart(object):
     """
     Object containing the plot widgets and the associated plot curves
     """
-    TABLEAU_COLORS = (
-        ('blue', '#1f77b4'),
-        ('orange', '#ff7f0e'),
-        ('green', '#2ca02c'),
-        ('red', '#d62728'),
-        ('purple', '#9467bd'),
-        ('brown', '#8c564b'),
-        ('pink', '#e377c2'),
-        ('gray', '#7f7f7f'),
-        ('olive', '#bcbd22'),
-        ('cyan', '#17becf'),
-    )
 
     def __init__(self, title):
         self.title = title
@@ -107,8 +96,8 @@ class PlotChart(object):
         """
         self.dataPoints.append(dataPoint)
 
-        colorIdxItem = len(self.plotCurves) % len(self.TABLEAU_COLORS)
-        colorItem = QColor(self.TABLEAU_COLORS[colorIdxItem][1])
+        colorIdxItem = len(self.plotCurves) % len(TABLEAU_COLORS)
+        colorItem = QColor(TABLEAU_COLORS[colorIdxItem][1])
 
         self.plotCurves.append(self.plotWidget.plot(name=dataPoint.name, pen=mkPen(colorItem, width=2)))
 

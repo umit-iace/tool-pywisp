@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
 import os
-from copy import deepcopy
-from operator import itemgetter
-from queue import Queue
-
 import serial.tools.list_ports
 import yaml
 from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QRectF, QTimer, QSettings
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
+from copy import deepcopy
+from operator import itemgetter
 from pyqtgraph import PlotWidget, exporters, TextItem, mkBrush
 from pyqtgraph.dockarea import *
+from queue import Queue
 
 from .connection import SerialConnection
 from .experiments import ExperimentInteractor, ExperimentView, PropertyItem
 from .registry import *
 from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, CSVExporter
 from .visualization import MplVisualizer
+from pywisp import TABLEAU_COLORS
 
 
 class MainGui(QMainWindow):
@@ -421,10 +421,15 @@ class MainGui(QMainWindow):
         for i in range(toplevelItem.childCount()):
             topLevelItemList.append(toplevelItem.child(i).text(1))
 
-        for dataPoint in dataPoints:
+        for idx, dataPoint in enumerate(dataPoints):
             if dataPoint.name not in topLevelItemList:
                 child = QTreeWidgetItem()
                 child.setText(1, dataPoint.name)
+
+                colorIdxItem = toplevelItem.childCount() % len(TABLEAU_COLORS)
+                colorItem = QColor(TABLEAU_COLORS[colorIdxItem][1])
+                child.setBackground(0, colorItem)
+
                 toplevelItem.addChild(child)
 
         self.plots(toplevelItem)
