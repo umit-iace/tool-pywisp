@@ -5,7 +5,7 @@ import serial.tools.list_ports
 import time
 from PyQt5 import QtCore
 
-from min_WIP.min_comm_host.min import MINTransportSerial
+from . import MINTransportSerial
 
 
 class SerialConnection(QtCore.QThread):
