@@ -687,23 +687,6 @@ class MainGui(QMainWindow):
         self.setQListItemBold(self.experimentList, item, success)
         self.setQListItemBold(self.lastMeasList, item, success)
 
-    def applyExperimentByName(self, experimentName):
-        """
-        Apply the experiment given by `experimentName` and update the experiment index.
-        Returns:
-            bool: `True` if successful, `False` if errors occurred.
-        """
-        # get regime idx
-        try:
-            idx = list(map(itemgetter("Name"), self._experiments)).index(experimentName)
-        except ValueError as e:
-            self._logger.error("apply_regime_by_name(): Error no regime called "
-                               "'{0}'".format(experimentName))
-            return False
-
-        # apply
-        return self._applyExperimentByIdx(idx)
-
     def _applyExperimentByIdx(self, index=0):
         """
         Apply the given experiment.
@@ -712,6 +695,12 @@ class MainGui(QMainWindow):
         Returns:
             bool: `True` if successful, `False` if errors occurred.
         """
+        if self.connection is not None:
+            # check if experiment runs
+            if not self.actStopExperiment.isEnabled():
+                self.actStartExperiment.setDisabled(False)
+                return False
+
         if index >= len(self._experiments):
             self._logger.error("applyExperiment: index error! ({})".format(index))
             return False
@@ -722,10 +711,6 @@ class MainGui(QMainWindow):
         self._currentExperimentIndex = index
         self._currentExperimentName = exp_name
 
-        if self.connection is not None:
-            # check if experiment runs
-            if not self.actStopExperiment.isEnabled():
-                self.actStartExperiment.setDisabled(False)
         return self.exp.setExperiment(self._experiments[index])
 
     def closeEvent(self, QCloseEvent):
