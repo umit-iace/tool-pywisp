@@ -426,11 +426,12 @@ class MainGui(QMainWindow):
                 child = QTreeWidgetItem()
                 child.setText(1, dataPoint.name)
 
-                colorIdxItem = toplevelItem.childCount() % len(TABLEAU_COLORS)
-                colorItem = QColor(TABLEAU_COLORS[colorIdxItem][1])
-                child.setBackground(0, colorItem)
-
                 toplevelItem.addChild(child)
+
+        for i in range(toplevelItem.childCount()):
+            colorIdxItem = i % len(TABLEAU_COLORS)
+            colorItem = QColor(TABLEAU_COLORS[colorIdxItem][1])
+            toplevelItem.child(i).setBackground(0, colorItem)
 
         self.plots(toplevelItem)
 
