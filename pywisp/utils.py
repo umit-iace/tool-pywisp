@@ -111,6 +111,7 @@ class PlotChart(object):
                 datay = self.dataPoints[indx].values
                 if datax:
                     interpx = np.linspace(datax[0], datax[-1], 100)
+                    # TODO _currentInterpolationPoints
                     interpy = np.interp(interpx, datax, datay)
                     curve.setData(interpx, interpy)
 

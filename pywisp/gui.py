@@ -249,6 +249,17 @@ class MainGui(QMainWindow):
         self.viewMenu.addAction(self.actShowCoords)
         self.actShowCoords.changed.connect(self.updateShowCoordsSetting)
 
+        # options
+        self.optMenu = self.menuBar().addMenu('&Optionen')
+        self.actIntTime = QAction("&Interpolationszeit", self)
+        self.actIntTime.setCheckable(True)
+#        self.actIntTime.setChecked(
+#            self._settings.value("opt/interpolation_points") == "True"
+#        )
+        self.optMenu.addAction(self.actIntTime)
+        # TODO funktionlätät
+#        self.actIntTime.changed.connect()
+
         # experiment
         self.expMenu = self.menuBar().addMenu('&Experiment')
 
@@ -288,6 +299,8 @@ class MainGui(QMainWindow):
         # add default settings if none are present
         if not self._settings.contains("view/show_coordinates"):
             self._settings.setValue("view/show_coordinates", "True")
+        if not self._settings.contains("opt/interpolation_points"):
+            self._settings.setValue("opt/interpolation_points", 100)
 
     def _writeSettings(self):
         """ Store the application state. """
@@ -611,6 +624,9 @@ class MainGui(QMainWindow):
         """
         start the experiment and disable start button
         """
+        self._currentExperimentIndex = self.experimentList.row(self._currentItemitem)
+        self._currentExperimentName = self._experiments[self._currentExperimentIndex]["Name"]
+
         if self._currentExperimentIndex is None:
             expName = ""
         else:
@@ -633,6 +649,10 @@ class MainGui(QMainWindow):
         while not self.outputQueue.empty():
             self.outputQueue.get()
 
+        # TODO
+        # set interpolations punkte
+        # set timer zeit
+        # self._currentInterpolationPoints
         self.connection.doRead = True
         self.timer.start(100)
         self.exp.runExperiment()
@@ -684,6 +704,7 @@ class MainGui(QMainWindow):
         Apply the selected experiment to the current target and set it bold.
         """
         success = self._applyExperimentByIdx(self.experimentList.row(item))
+        self._currentItem = item
 
         self.setQListItemBold(self.experimentList, item, success)
         self.setQListItemBold(self.lastMeasList, item, success)
@@ -696,21 +717,17 @@ class MainGui(QMainWindow):
         Returns:
             bool: `True` if successful, `False` if errors occurred.
         """
-        if self.connection is not None:
-            # check if experiment runs
-            if not self.actStopExperiment.isEnabled():
-                self.actStartExperiment.setDisabled(False)
-                return False
-
         if index >= len(self._experiments):
             self._logger.error("applyExperiment: index error! ({})".format(index))
             return False
 
-        exp_name = self._experiments[index]["Name"]
+        exp_name = self._experiments[self.experimentList.row(index)]["Name"]
         self._logger.info("Experiment '{}' übernommen".format(exp_name))
 
-        self._currentExperimentIndex = index
-        self._currentExperimentName = exp_name
+        if self.connection is not None:
+            # check if experiment runs
+            if not self.actStopExperiment.isEnabled():
+                self.actStartExperiment.setDisabled(False)
 
         return self.exp.setExperiment(self._experiments[index])
 
