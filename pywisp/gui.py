@@ -183,7 +183,7 @@ class MainGui(QMainWindow):
         self.dataPointManipulationLayout.addWidget(self.dataPointRightButton)
         self.dataPointLeftButtonWidget = QWidget()
         self.dataPointLeftButtonLayout = QVBoxLayout()
-        self.dataPointLeftButton = QPushButton(chr(0x226a), self)
+        self.dataPointLeftButton = QPushButton(chr(0x03A7), self)
         self.dataPointLeftButton.setToolTip(
             "Remove the selected data set from the plot on the right."
         )
