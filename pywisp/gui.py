@@ -6,17 +6,16 @@ from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QRectF, Q
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from copy import deepcopy
-from operator import itemgetter
 from pyqtgraph import PlotWidget, exporters, TextItem, mkBrush
 from pyqtgraph.dockarea import *
 from queue import Queue
 
+from pywisp import TABLEAU_COLORS
 from .connection import SerialConnection
 from .experiments import ExperimentInteractor, ExperimentView, PropertyItem
 from .registry import *
-from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, CSVExporter
+from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, CSVExporter, DataIntDialog
 from .visualization import MplVisualizer
-from pywisp import TABLEAU_COLORS
 
 
 class MainGui(QMainWindow):
@@ -251,14 +250,12 @@ class MainGui(QMainWindow):
 
         # options
         self.optMenu = self.menuBar().addMenu('&Optionen')
-        self.actIntTime = QAction("&Interpolationszeit", self)
-        self.actIntTime.setCheckable(True)
-#        self.actIntTime.setChecked(
-#            self._settings.value("opt/interpolation_points") == "True"
-#        )
-        self.optMenu.addAction(self.actIntTime)
-        # TODO funktionlätät
-#        self.actIntTime.changed.connect()
+        self.actIntPoints = QAction("&Interpolationspunkte", self)
+        self.actIntPoints.triggered.connect(self.setIntPoints)
+        self.optMenu.addAction(self.actIntPoints)
+        self.actTimerTime = QAction("&Timer Zeit", self)
+        self.optMenu.addAction(self.actTimerTime)
+        self.actTimerTime.triggered.connect(self.setTimerTime)
 
         # experiment
         self.expMenu = self.menuBar().addMenu('&Experiment')
@@ -295,12 +292,35 @@ class MainGui(QMainWindow):
 
         self.setDefaultComPort()
 
+        self._currentTimerTime = 10
+        self._currentInterpolationPoints = 10
+
+        self._currentItem = None
+
+    def setIntPoints(self):
+        intPoints, ok = DataIntDialog.getData(min=1, max=500, current=self._settings.value("opt/interpolation_points"))
+
+        if ok:
+            self._settings.setValue("opt/interpolation_points", int(intPoints))
+            self._logger.info("Set interpolation points to {}".format(intPoints))
+
+    def setTimerTime(self):
+        timerTime, ok = DataIntDialog.getData(min=1, max=10000, current=self._settings.value("opt/timer_time"))
+
+        if ok:
+            self._settings.setValue("opt/timer_timer", int(timerTime))
+            self._logger.info("Set timer time to {}".format(timerTime))
+
     def _readSettings(self):
         # add default settings if none are present
         if not self._settings.contains("view/show_coordinates"):
             self._settings.setValue("view/show_coordinates", "True")
+
         if not self._settings.contains("opt/interpolation_points"):
             self._settings.setValue("opt/interpolation_points", 100)
+
+        if not self._settings.contains("opt/timer_time"):
+            self._settings.setValue("opt/timer_time", 100)
 
     def _writeSettings(self):
         """ Store the application state. """
@@ -454,12 +474,18 @@ class MainGui(QMainWindow):
             self._logger.error("Kann Datenset nicht löschen: Kein Datenset ausgewählt")
             return
 
-        toplevelitem = items[0]
-        while toplevelitem.parent():
-            toplevelitem = toplevelitem.parent()
+        toplevelItem = items[0]
+        while toplevelItem.parent():
+            toplevelItem = toplevelItem.parent()
 
-        toplevelitem.takeChild(toplevelitem.indexOfChild(self.dataPointTreeWidget.selectedItems()[0]))
-        self.plots(toplevelitem)
+        toplevelItem.takeChild(toplevelItem.indexOfChild(self.dataPointTreeWidget.selectedItems()[0]))
+
+        for i in range(toplevelItem.childCount()):
+            colorIdxItem = i % len(TABLEAU_COLORS)
+            colorItem = QColor(TABLEAU_COLORS[colorIdxItem][1])
+            toplevelItem.child(i).setBackground(0, colorItem)
+
+        self.plots(toplevelItem)
 
     def plots(self, item):
         title = item.text(0)
@@ -624,8 +650,11 @@ class MainGui(QMainWindow):
         """
         start the experiment and disable start button
         """
-        self._currentExperimentIndex = self.experimentList.row(self._currentItemitem)
+        self._currentExperimentIndex = self.experimentList.row(self._currentItem)
         self._currentExperimentName = self._experiments[self._currentExperimentIndex]["Name"]
+
+        self._currentInterpolationPoints = self._settings.value("opt/interpolation_points")
+        self._currentTimerTime = self._settings.value("opt/timer_time")
 
         if self._currentExperimentIndex is None:
             expName = ""
@@ -644,17 +673,15 @@ class MainGui(QMainWindow):
             buffer.clearBuffer()
 
         for chart in self.plotCharts:
+            chart.setInterpolationPoints(self._currentInterpolationPoints)
             chart.updatePlot()
 
         while not self.outputQueue.empty():
             self.outputQueue.get()
 
-        # TODO
-        # set interpolations punkte
-        # set timer zeit
-        # self._currentInterpolationPoints
         self.connection.doRead = True
-        self.timer.start(100)
+
+        self.timer.start(int(self._currentTimerTime))
         self.exp.runExperiment()
 
     @pyqtSlot()
@@ -721,8 +748,8 @@ class MainGui(QMainWindow):
             self._logger.error("applyExperiment: index error! ({})".format(index))
             return False
 
-        exp_name = self._experiments[self.experimentList.row(index)]["Name"]
-        self._logger.info("Experiment '{}' übernommen".format(exp_name))
+        expName = self._experiments[index]["Name"]
+        self._logger.info("Experiment '{}' übernommen".format(expName))
 
         if self.connection is not None:
             # check if experiment runs
@@ -744,7 +771,7 @@ class MainGui(QMainWindow):
             self._logger.info("Mit Arduino auf " + self.connection.port + " verbunden.")
             self.actConnect.setEnabled(False)
             self.actDisconnect.setEnabled(True)
-            if self._currentExperimentIndex is not None:
+            if self._currentItem is not None:
                 self.actStartExperiment.setEnabled(True)
             self.actStopExperiment.setEnabled(False)
             self.statusbarLabel.setText("Verbunden")

@@ -2,7 +2,9 @@
 import logging
 import numpy as np
 import os
-from PyQt5.QtGui import QColor
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor, QIntValidator
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout
 from pyqtgraph import mkPen
 
 from pywisp import TABLEAU_COLORS
@@ -87,6 +89,7 @@ class PlotChart(object):
         self.dataPoints = []
         self.plotWidget = None
         self.plotCurves = []
+        self.interpolationPoints = 100
 
     def addPlotCurve(self, dataPoint):
         """
@@ -101,6 +104,9 @@ class PlotChart(object):
 
         self.plotCurves.append(self.plotWidget.plot(name=dataPoint.name, pen=mkPen(colorItem, width=2)))
 
+    def setInterpolationPoints(self, interpolationPoints):
+        self.interpolationPoints = interpolationPoints
+
     def updatePlot(self):
         """
         Updates all curves of the plot with the actual data in the buffers
@@ -110,8 +116,7 @@ class PlotChart(object):
                 datax = self.dataPoints[indx].time
                 datay = self.dataPoints[indx].values
                 if datax:
-                    interpx = np.linspace(datax[0], datax[-1], 100)
-                    # TODO _currentInterpolationPoints
+                    interpx = np.linspace(datax[0], datax[-1], self.interpolationPoints)
                     interpy = np.interp(interpx, datax, datay)
                     curve.setData(interpx, interpy)
 
@@ -164,3 +169,50 @@ class CSVExporter(object):
 
             fd.write('\n')
         fd.close()
+
+
+class DataIntDialog(QDialog):
+    def __init__(self, **kwargs):
+        parent = kwargs.get('parent', None)
+        super(DataIntDialog, self).__init__(parent)
+
+        self.minValue = kwargs.get("min", 1)
+        self.maxValue = kwargs.get("max", 1000)
+        self.currentValue = kwargs.get("current", 0)
+
+        mainLayout = QVBoxLayout(self)
+        labelLayout = QHBoxLayout()
+
+        minLabel = QLabel(self)
+        minLabel.setText("min. Wert: {}".format(self.minValue))
+        labelLayout.addWidget(minLabel)
+        maxLabel = QLabel(self)
+        maxLabel.setText("max. Wert: {}".format(self.maxValue))
+        labelLayout.addWidget(maxLabel)
+        mainLayout.addLayout(labelLayout)
+
+        # nice widget for editing the date
+        self.data = QLineEdit(self)
+        self.data.setText(str(self.currentValue))
+        self.data.setValidator(QIntValidator(self.minValue, self.maxValue, self))
+
+        mainLayout.addWidget(self.data)
+
+        # OK and Cancel buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
+            Qt.Horizontal, self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        mainLayout.addWidget(buttons)
+
+    def _getData(self):
+        return self.data.text()
+
+    @staticmethod
+    def getData(**kwargs):
+        dialog = DataIntDialog(**kwargs)
+        result = dialog.exec_()
+        data = dialog._getData()
+
+        return data, result == QDialog.Accepted
