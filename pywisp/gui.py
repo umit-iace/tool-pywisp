@@ -819,6 +819,14 @@ class MainGui(QMainWindow):
                 if buffer.name in names:
                     buffer.addValue(time, datapoints[buffer.name])
 
+            if self.visualizer:
+                dps = {}
+                for dataPoint in self.visualizer.dataPoints:
+                    if dataPoint in names:
+                        dps[dataPoint] = datapoints[dataPoint]
+                if dps:
+                    self.visualizer.update(dps)
+
         for chart in self.plotCharts:
             chart.updatePlot()
 
