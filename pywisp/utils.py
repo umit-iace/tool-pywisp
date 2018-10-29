@@ -4,24 +4,24 @@ import numpy as np
 import os
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QIntValidator
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout
+from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout
 from pyqtgraph import mkPen
 
 from pywisp import TABLEAU_COLORS
 
 
-def get_resource(res_name, res_type="icons"):
+def get_resource(resName, resType="icons"):
     """
     Build absolute path to specified resource within the package
     Args:
-        res_name (str): name of the resource
-        res_type (str): subdir
+        resName (str): name of the resource
+        resType (str): subdir
     Return:
         str: path to resource
     """
     own_path = os.path.dirname(__file__)
-    resource_path = os.path.abspath(os.path.join(own_path, "resources", res_type))
-    return os.path.join(resource_path, res_name)
+    resource_path = os.path.abspath(os.path.join(own_path, "resources", resType))
+    return os.path.join(resource_path, resName)
 
 
 class PlainTextLogger(logging.Handler):
