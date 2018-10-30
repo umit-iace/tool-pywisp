@@ -2,10 +2,11 @@
 import os
 import serial.tools.list_ports
 import yaml
-from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QRectF, QTimer, QSettings
+from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QRectF, QTimer, QSettings, QCoreApplication
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from copy import deepcopy
+import pkg_resources
 from pyqtgraph import PlotWidget, exporters, TextItem, mkBrush
 from pyqtgraph.dockarea import *
 from queue import Queue
@@ -24,6 +25,13 @@ class MainGui(QMainWindow):
 
     def __init__(self, moduleList, parent=None):
         super(MainGui, self).__init__(parent)
+
+        QCoreApplication.setOrganizationName("IACE")
+        QCoreApplication.setOrganizationDomain("https://umit.at/iace")
+        QCoreApplication.setApplicationVersion(
+            pkg_resources.require("PyWisp")[0].version)
+        QCoreApplication.setApplicationName(globals()["__package__"])
+
         self.connection = None
         self.inputQueue = Queue()
         self.outputQueue = Queue()
