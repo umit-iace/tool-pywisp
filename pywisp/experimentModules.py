@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import logging
 from abc import ABCMeta, abstractmethod
 
@@ -23,6 +24,11 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
     @property
     @abstractmethod
     def dataPoints(self):
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def handleFrame(frame):
         pass
 
     @abstractmethod

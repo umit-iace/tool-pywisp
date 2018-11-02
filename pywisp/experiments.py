@@ -194,6 +194,7 @@ class ExperimentInteractor(QObject):
         self._logger = logging.getLogger(self.__class__.__name__)
         self.setupList = moduleList
         self.inputQueue = inputQueue
+        self.runningExperiment = False
         self._setup_model()
 
     def _setup_model(self):
@@ -301,7 +302,7 @@ class ExperimentInteractor(QObject):
             self._logger.error("restoreExperiment(): only scalar input allowed!")
             return False
 
-        return self._apply_regime(exp, True)
+        return self._applyExperiment(exp, True)
 
     def _applyExperiment(self, exp, ignoreIsPublic):
         """
@@ -385,8 +386,18 @@ class ExperimentInteractor(QObject):
 
         return dataPoints
 
+    def handleFrame(self, frame):
+        for expModule in self.setupList:
+            moduleCls = getattr(experimentModules, expModule)
+            regExpModules = getRegisteredExperimentModules(moduleCls)
+            # only first module used
+            dataPoints = regExpModules[0][0].handleFrame(frame)
+            if dataPoints is not None:
+                return dataPoints
+
     def runExperiment(self):
         data = []
+        self.runningExperiment = True
         for row in range(self.targetModel.rowCount()):
             index = self.targetModel.index(row, 0)
             parent = index.model().itemFromIndex(index)
@@ -401,7 +412,7 @@ class ExperimentInteractor(QObject):
             subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
             startParams = subModuleClass.getStartParams(self)
             if startParams is not None:
-                data += startParams
+                data.append(startParams)
 
             settings = self.getSettings(self.targetModel, moduleName)
             vals = []
@@ -410,16 +421,23 @@ class ExperimentInteractor(QObject):
                     vals.append(val)
             params = subModuleClass.getParams(self, vals)
             if params is not None:
-                data += params
+                data.append(params)
 
         # start experiment
-        data.append('exp------1\n')
+        payload = bytes([1])
+
+        data.append({'id': 1,
+                     'msg': payload})
         for _data in data:
             self.inputQueue.put(_data)
 
     def stopExperiment(self):
         data = []
 
+        if not self.runningExperiment:
+            return
+
+        self.runningExperiment = False
         for row in range(self.targetModel.rowCount()):
             index = self.targetModel.index(row, 0)
             parent = index.model().itemFromIndex(index)
@@ -434,9 +452,13 @@ class ExperimentInteractor(QObject):
             subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
             stopParams = subModuleClass.getStopParams(self)
             if stopParams is not None:
-                data += stopParams
+                data.append(stopParams)
 
-        data.append('exp------0\n')
+        # stop experiment
+        payload = bytes([0])
+
+        data.append({'id': 1,
+                     'msg': payload})
         for _data in data:
             self.inputQueue.put(_data)
 
