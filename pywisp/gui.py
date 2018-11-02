@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+    # -*- coding: utf-8 -*-
 import os
 import serial.tools.list_ports
 import yaml
@@ -250,9 +250,29 @@ class MainGui(QMainWindow):
 
         # experiment
         self.expMenu = self.menuBar().addMenu('&Experiment')
-
+        self.comMenu = self.expMenu.addMenu('&Verbindungsart')
+        self.actConnTcp = QAction('&TCP/IP', self)
+        self.actConnTcp.setCheckable(True)
+        self.actConnTcp.setEnabled(
+            self._settings.value("tcp_connection_active") == "True"
+        )
+        self.actConnTcp.setChecked(
+            self._settings.value("tcp_connection_active") == "True"
+        )
+        self.comMenu.addAction(self.actConnTcp)
+        self.actConnTcp.changed.connect(self.updateConnType)
+        self.actConnSerial = QAction('&Serial', self)
+        self.actConnSerial.setCheckable(True)
+        self.actConnSerial.setEnabled(
+            self._settings.value("serial_connection_active") == "True"
+        )
+        self.actConnSerial.setChecked(
+            self._settings.value("serial_connection_active") == "True"
+        )
+        self.comMenu.addAction(self.actConnSerial)
+        self.actConnSerial.changed.connect(self.updateConnType)
         self.comMenu = self.expMenu.addMenu('&Verbindungsport')
-        self.comMenu.aboutToShow.connect(self.getComPorts)
+        self.comMenu.aboutToShow.connect(self.getConnPorts)
         self.expMenu.addSeparator()
         self.actConnect = QAction('&Versuchsaufbau verbinden')
         self.actConnect.setIcon(QIcon(get_resource("connected.png")))
@@ -287,6 +307,9 @@ class MainGui(QMainWindow):
         # add default settings if none are present
         if not self._settings.contains("view/show_coordinates"):
             self._settings.setValue("view/show_coordinates", "True")
+        # set default communication to serial
+        self._settings.setValue("tcp_connection_active", "False")
+        self._settings.setValue("serial_connection_active", "True")
 
     def _writeSettings(self):
         """ Store the application state. """
@@ -319,28 +342,41 @@ class MainGui(QMainWindow):
         else:
             self._logger.warning("No ComPorts avaiable, connect device!")
 
-    def getComPorts(self):
-        def setPort(port):
-            def fn():
-                self.port = port
-
-            return fn
-
+    def getConnPorts(self):
+        # Check what communication is active
+        serial_active = self._settings.value("serial_connection_active") == "True"
+        tcp_active = self._settings.value("tcp_connection_active") == "True"
         self.comMenu.clear()
-        comPorts = serial.tools.list_ports.comports()
-        if comPorts:
-            if self.port == '':
-                arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
-                if len(arduinoPorts) != 0:
-                    self.port = arduinoPorts[0]
-            for p in comPorts:
-                portAction = QAction(p.device, self)
-                portAction.setCheckable(True)
-                portAction.setChecked(True if p.device in self.port else False)
-                portAction.triggered.connect(setPort(p.device))
-                self.comMenu.addAction(portAction)
+        if serial_active:
+            def setPort(port):
+                def fn():
+                    self.port = port
+
+                return fn
+
+            comPorts = serial.tools.list_ports.comports()
+            if comPorts:
+                if self.port == '':
+                    arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
+                    if len(arduinoPorts) != 0:
+                        self.port = arduinoPorts[0]
+                for p in comPorts:
+                    portAction = QAction(p.device, self)
+                    portAction.setCheckable(True)
+                    portAction.setChecked(True if p.device in self.port else False)
+                    portAction.triggered.connect(setPort(p.device))
+                    self.comMenu.addAction(portAction)
+            else:
+                noAction = QAction("(None)", self)
+                noAction.setEnabled(False)
+                self.comMenu.addAction(noAction)
+        elif tcp_active:
+            # todo
+            tcpAction = QAction("Todo Tcp", self)
+            tcpAction.setEnabled(False)
+            self.comMenu.addAction(tcpAction)
         else:
-            noAction = QAction("(None)", self)
+            noAction = QAction("Wähle Verbindungsart", self)
             noAction.setEnabled(False)
             self.comMenu.addAction(noAction)
 
@@ -590,6 +626,24 @@ class MainGui(QMainWindow):
     @pyqtSlot()
     def updateShowCoordsSetting(self):
         self._settings.setValue("view/show_coordinates", str(self.actShowCoords.isChecked()))
+
+    @pyqtSlot()
+    def updateConnType(self):
+        if self.actConnSerial.isChecked():
+            self.actConnTcp.setChecked(False)
+            self._settings.setValue("tcp_connection_active", "False")
+            self.actConnTcp.setEnabled(False)
+            self._settings.setValue("serial_connection_active", "True")
+        elif self.actConnTcp.isChecked():
+            self.actConnSerial.setChecked(False)
+            self._settings.setValue("serial_connection_active", "False")
+            self.actConnSerial.setEnabled(False)
+            self._settings.setValue("tcp_connection_active", "True")
+        else:
+            self._settings.setValue("serial_connection_active", "False")
+            self._settings.setValue("tcp_connection_active", "False")
+            self.actConnSerial.setEnabled(True)
+            self.actConnTcp.setEnabled(True)
 
     @pyqtSlot()
     def startExperiment(self):
