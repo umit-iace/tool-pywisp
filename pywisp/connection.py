@@ -6,6 +6,7 @@ import time
 from PyQt5 import QtCore
 
 from . import MINTransportSerial
+# TODO create base class for Connection and make new Tcp Connection class
 
 
 class SerialConnection(QtCore.QThread):

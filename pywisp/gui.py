@@ -63,7 +63,7 @@ class MainGui(QMainWindow):
         # status bar
         self.statusBar = QStatusBar(self)
         self.setStatusBar(self.statusBar)
-        self.statusbarLabel = QLabel("Nicht Verbunden")
+        self.statusbarLabel = QLabel(self.getStatusBarInfo())
         self.statusBar.addPermanentWidget(self.statusbarLabel, 1)
         self.coordLabel = QLabel("x=0.0 y=0.0")
         self.statusBar.addPermanentWidget(self.coordLabel)
@@ -384,6 +384,7 @@ class MainGui(QMainWindow):
         else:
             self._logger.warning("No ComPorts avaiable, connect device!")
 
+    @pyqtSlot()
     def getConnPorts(self):
         # Check what communication is active
         serial_active = self._settings.value("serial_connection_active") == "True"
@@ -413,14 +414,49 @@ class MainGui(QMainWindow):
                 noAction.setEnabled(False)
                 self.comMenu.addAction(noAction)
         elif tcp_active:
-            # todo
-            tcpAction = QAction("Todo Tcp", self)
-            tcpAction.setEnabled(False)
-            self.comMenu.addAction(tcpAction)
+            # TODO tcp settings for connection to server and connecting
+            tcpHostIp = QAction("Host IP...", self)
+            tcpHostIp.setEnabled(True)
+            self.comMenu.addAction(tcpHostIp)
+            tcpHostIp.triggered.connect(self.setTcpIp)
+            tcpHostPort = QAction("Host Port...", self)
+            tcpHostPort.setEnabled(True)
+            self.comMenu.addAction(tcpHostPort)
+            tcpHostPort.triggered.connect(self.setTcpPort)
         else:
             noAction = QAction("Wähle Verbindungsart", self)
             noAction.setEnabled(False)
             self.comMenu.addAction(noAction)
+
+    @pyqtSlot()
+    def setTcpIp(self):
+        ipadress, okPressed = QInputDialog.getText(self, 'Eingabe der Host-IP',
+                                                   'Beachten Sie dass die IP im gleichen Netzwerk liegt!')
+        if okPressed:
+            print(ipadress)
+
+    @pyqtSlot()
+    def setTcpPort(self):
+        portnr, okPressed = QInputDialog.getInt(self, "Eingabe des Host-Ports",
+                                                "Bitte Port des Host angeben:",
+                                                0, 0, 65535, 1)
+        if okPressed:
+            print(portnr)
+
+    def getStatusBarInfo(self):
+        serial_active = self._settings.value("serial_connection_active") == "True"
+        tcp_active = self._settings.value("tcp_connection_active") == "True"
+        if serial_active:
+            strinfo = "Serielle Verbindung: "
+            if (self.connection == None):
+                strinfo += "Nicht verbunden!"
+            else:
+                strinfo += "Verbunden auf Port " + self.connection.port
+            return strinfo
+        elif tcp_active:
+            return "Tcp Verbindung: "
+        else:
+            return "Keine Verbindungsart ausgewählt!"
 
     def addPlotTreeItem(self, default=False):
         text = "plot_{:03d}".format(self.dataPointTreeWidget.topLevelItemCount())
@@ -706,6 +742,7 @@ class MainGui(QMainWindow):
             self._settings.setValue("tcp_connection_active", "False")
             self.actConnSerial.setEnabled(True)
             self.actConnTcp.setEnabled(True)
+        self.statusbarLabel.setText(self.getStatusBarInfo())
 
     @pyqtSlot()
     def startExperiment(self):
@@ -827,6 +864,7 @@ class MainGui(QMainWindow):
         logging.getLogger().removeHandler(self.textLogger)
         super().closeEvent(QCloseEvent)
 
+    @pyqtSlot()
     def connect(self):
         self.connection = SerialConnection(self.inputQueue, self.outputQueue, self.port)
         if self.connection.connect():
@@ -836,13 +874,14 @@ class MainGui(QMainWindow):
             if self._currentItem is not None:
                 self.actStartExperiment.setEnabled(True)
             self.actStopExperiment.setEnabled(False)
-            self.statusbarLabel.setText("Verbunden")
+            self.statusbarLabel.setText(self.getStatusBarInfo())
             self.connection.start()
         else:
             self.connection = None
             self._logger.warning("Keinen Arduino gefunden. Erneut Verbinden!")
-            self.statusbarLabel.setText("Nicht Verbunden")
+            self.statusbarLabel.setText(self.getStatusBarInfo())
 
+    @pyqtSlot()
     def disconnect(self):
         self.stopExperiment()
         self.connection.disconnect()
@@ -852,7 +891,7 @@ class MainGui(QMainWindow):
         self.actDisconnect.setEnabled(False)
         self.actStartExperiment.setEnabled(False)
         self.actStopExperiment.setEnabled(False)
-        self.statusbarLabel.setText("Nicht Verbunden")
+        self.statusbarLabel.setText(self.getStatusBarInfo())
 
     def findAllPlotDocks(self):
         list = []
