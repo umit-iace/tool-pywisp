@@ -1,4 +1,4 @@
-    # -*- coding: utf-8 -*-
+            # -*- coding: utf-8 -*-
 import os
 import serial.tools.list_ports
 import yaml
@@ -12,7 +12,7 @@ from pyqtgraph.dockarea import *
 from queue import Queue
 
 from pywisp import TABLEAU_COLORS
-from .connection import SerialConnection
+from .connection import SerialConnection, TcpConnection
 from .experiments import ExperimentInteractor, ExperimentView, PropertyItem
 from .registry import *
 from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, CSVExporter, DataIntDialog
@@ -33,9 +33,11 @@ class MainGui(QMainWindow):
         QCoreApplication.setApplicationName(globals()["__package__"])
 
         self.connection = None
+        self.connection_tcp = None
         self.inputQueue = Queue()
         self.outputQueue = Queue()
         self.port = ''
+        self.tcp_ip = ''
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.updateData)
@@ -414,7 +416,6 @@ class MainGui(QMainWindow):
                 noAction.setEnabled(False)
                 self.comMenu.addAction(noAction)
         elif tcp_active:
-            # TODO tcp settings for connection to server and connecting
             tcpHostIp = QAction("Host IP...", self)
             tcpHostIp.setEnabled(True)
             self.comMenu.addAction(tcpHostIp)
@@ -430,18 +431,42 @@ class MainGui(QMainWindow):
 
     @pyqtSlot()
     def setTcpIp(self):
-        ipadress, okPressed = QInputDialog.getText(self, 'Eingabe der Host-IP',
-                                                   'Beachten Sie dass die IP im gleichen Netzwerk liegt!')
-        if okPressed:
-            print(ipadress)
+        client_ip = TcpConnection.getIP()
+        self.tcp_ip, okPressed = QInputDialog.getText(self, 'Eingabe der Host-IP',
+                                 'Beachten Sie dass die IP im gleichen\n' +
+                                 'Netzwerk liegt wie Ihre IP: ' + client_ip,
+                                 QLineEdit.Normal, self.tcp_ip)
+        ip_int = self.tcp_ip.split('.')
+        if len(ip_int) != 4:
+            self._logger.error("IP Adresse '{}' ist keine gültige Adresse"
+                               .format(self.tcp_ip))
+            self.tcp_ip = None
+            return
+        for i in ip_int:
+            if not i.isdigit():
+                self._logger.error("IP Adresse '{}' enhält Buchstaben oder "
+                                   "andere Zeichen".format(self.tcp_ip))
+                self.tcp_ip = None
+                return
+            if int(i) < 0 or int(i) > 255:
+                self._logger.error("IP Adresse '{}' Werte nicht im definierten "
+                                   "Bereich (0 <= x <= 255)".format(self.tcp_ip))
+                self.tcp_ip = None
+                return
 
     @pyqtSlot()
     def setTcpPort(self):
-        portnr, okPressed = QInputDialog.getInt(self, "Eingabe des Host-Ports",
+        if self.port == '':
+            self.port, okPressed = QInputDialog.getInt(self,
+                                                "Eingabe des Host-Ports",
                                                 "Bitte Port des Host angeben:",
                                                 0, 0, 65535, 1)
-        if okPressed:
-            print(portnr)
+        else:
+            self.port, okPressed = QInputDialog.getInt(self,
+                                                "Eingabe des Host-Ports",
+                                                "Bitte Port des Host angeben:",
+                                                int(self.port), 0, 65535, 1)
+
 
     def getStatusBarInfo(self):
         serial_active = self._settings.value("serial_connection_active") == "True"
@@ -454,7 +479,12 @@ class MainGui(QMainWindow):
                 strinfo += "Verbunden auf Port " + self.connection.port
             return strinfo
         elif tcp_active:
-            return "Tcp Verbindung: "
+            strinfo = "Tcp Verbindung: "
+            if (self.connection_tcp == None):
+                strinfo += "Nicht verbunden!"
+            else:
+                strinfo += "Verbunden mit Server '{0}/{1}'".format(self.tcp_ip, self.port)
+            return strinfo
         else:
             return "Keine Verbindungsart ausgewählt!"
 
@@ -790,8 +820,9 @@ class MainGui(QMainWindow):
         for i in range(self.experimentList.count()):
             self.experimentList.item(i).setBackground(QBrush(Qt.white))
         self.experimentList.repaint()
-
-        self.connection.doRead = False
+        serial_active = self._settings.value("serial_connection_active") == "True"
+        if serial_active:
+            self.connection.doRead = False
         self.timer.stop()
         self.exp.stopExperiment()
 
@@ -866,27 +897,56 @@ class MainGui(QMainWindow):
 
     @pyqtSlot()
     def connect(self):
-        self.connection = SerialConnection(self.inputQueue, self.outputQueue, self.port)
-        if self.connection.connect():
-            self._logger.info("Mit Arduino auf " + self.connection.port + " verbunden.")
-            self.actConnect.setEnabled(False)
-            self.actDisconnect.setEnabled(True)
-            if self._currentItem is not None:
-                self.actStartExperiment.setEnabled(True)
-            self.actStopExperiment.setEnabled(False)
+        serial_active = self._settings.value("serial_connection_active") == "True"
+        tcp_active = self._settings.value("tcp_connection_active") == "True"
+        if serial_active:
+            self.connection = SerialConnection(self.inputQueue, self.outputQueue, self.port)
+            if self.connection.connect():
+                self._logger.info("Mit Arduino auf " + self.connection.port + " verbunden.")
+                self.actConnect.setEnabled(False)
+                self.actDisconnect.setEnabled(True)
+                if self._currentItem is not None:
+                    self.actStartExperiment.setEnabled(True)
+                self.actStopExperiment.setEnabled(False)
+                self.connection.start()
+            else:
+                self.connection = None
+                self._logger.warning("Keinen Arduino gefunden. Erneut Verbinden!")
             self.statusbarLabel.setText(self.getStatusBarInfo())
-            self.connection.start()
-        else:
-            self.connection = None
-            self._logger.warning("Keinen Arduino gefunden. Erneut Verbinden!")
+        elif tcp_active:
+            if self.tcp_ip == None:
+                self._logger.warning("Bitte IP Adresse des Servers eingeben!")
+                self.connection_tcp = None
+                return
+            self.connection_tcp = TcpConnection(self.inputQueue, self.outputQueue, self.port, self.tcp_ip)
+            if self.connection_tcp.connect():
+                self._logger.info("Mit Server '{0}/{1}' verbunden."
+                                  .format(self.tcp_ip, self.port))
+                self.actConnect.setEnabled(False)
+                self.actDisconnect.setEnabled(True)
+                if self._currentItem is not None:
+                    self.actStartExperiment.setEnabled(True)
+                self.actStopExperiment.setEnabled(False)
+                self.connection_tcp.start()
+            else:
+                self.connection_tcp = None
+                self._logger.error("Verbindung mit Server '{0}/{1}' nicht möglich"
+                                   .format(self.tcp_ip, self.port))
             self.statusbarLabel.setText(self.getStatusBarInfo())
 
     @pyqtSlot()
     def disconnect(self):
+        serial_active = self._settings.value("serial_connection_active") == "True"
+        tcp_active = self._settings.value("tcp_connection_active") == "True"
         self.stopExperiment()
-        self.connection.disconnect()
-        self.connection = None
-        self._logger.info("Arduino getrennt.")
+        if serial_active:
+            self.connection.disconnect()
+            self.connection = None
+            self._logger.info("Arduino getrennt.")
+        elif tcp_active:
+            self.connection_tcp.disconnect()
+            self.connection_tcp = None
+            self._logger.info("Verbindung mit Server getrennt.")
         self.actConnect.setEnabled(True)
         self.actDisconnect.setEnabled(False)
         self.actStartExperiment.setEnabled(False)

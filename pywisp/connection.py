@@ -2,14 +2,27 @@
 import logging
 import serial
 import serial.tools.list_ports
+import socket
 import time
 from PyQt5 import QtCore
 
 from . import MINTransportSerial
 # TODO create base class for Connection and make new Tcp Connection class
 
+class Connection(QtCore.QThread):
+    """ Base class for serial and tcp connection
 
-class SerialConnection(QtCore.QThread):
+    """
+    def __init__(self, inputQueue, outputQueue, port):
+        QtCore.QThread.__init__(self)
+        self.isConnected = False
+        self.port = port
+        self.inputQueue = inputQueue
+        self.outputQueue = outputQueue
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+
+class SerialConnection(Connection):
     """ A class for a serial interface connection implemented as a QThread
 
     """
@@ -19,32 +32,11 @@ class SerialConnection(QtCore.QThread):
                  outputQueue,
                  port,
                  baud=115200):
-        QtCore.QThread.__init__(self)
         self.min = None
         self.baud = baud
-        self.port = port
-
-        self.isConnected = False
-        self.inputQueue = inputQueue
-        self.outputQueue = outputQueue
-
-        self.moveToThread(self)
+        super(SerialConnection, self).__init__(inputQueue, outputQueue, port)
 
         self.doRead = False
-
-        # initialize logger
-        self._logger = logging.getLogger(self.__class__.__name__)
-
-    def run(self):
-        """ Starts the timer and thread
-        """
-        while True and self.isConnected:
-            frames = self.min.poll()
-            if not self.inputQueue.empty():
-                self.writeData(self.inputQueue.get())
-            if frames and self.doRead:
-                self.readData(frames)
-            time.sleep(0.001)
 
     def connect(self):
         """ Checks of an arduino port is avaiable and connect to these one.
@@ -69,6 +61,17 @@ class SerialConnection(QtCore.QThread):
                 return False
             self.isConnected = True
             return True
+
+    def run(self):
+        """ Starts the timer and thread
+        """
+        while True and self.isConnected:
+            frames = self.min.poll()
+            if not self.inputQueue.empty():
+                self.writeData(self.inputQueue.get())
+            if frames and self.doRead:
+                self.readData(frames)
+            time.sleep(0.001)
 
     def disconnect(self):
         """ Close the serial interface connection
@@ -96,3 +99,60 @@ class SerialConnection(QtCore.QThread):
             Readable string that will send over serial interface
         """
         self.min.queue_frame(min_id=data['id'], payload=data['msg'])
+
+class TcpConnection(Connection):
+    """ A Class for a tcp client which connects a server
+
+    """
+    def __init__(self,
+                 inputQueue,
+                 outputQueue,
+                 port,
+                 ipadr):
+        self.client_ip = ipadr
+        super(TcpConnection, self).__init__(inputQueue, outputQueue, port)
+
+    def disconnect(self):
+        self.isConnected = False
+        time.sleep(1)
+        while not self.inputQueue.empty():
+            self.writeData(self.inputQueue.get())
+        self.sock.close()
+
+    def connect(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            self.sock.connect((self.client_ip, self.port))
+        except socket.error:
+            self.sock.close()
+            self.sock = None
+            return False
+        self.isConnected = True
+        return True
+
+    def getIP():
+        """
+        get the IP adress of host and return it
+        """
+        hostname = socket.gethostname()
+        own_ip = socket.gethostbyname(hostname)
+        return own_ip
+
+    def run(self):
+        """ Starts the timer and thread
+        """
+        while True and self.isConnected:
+            # frames = self.min.poll()
+            if not self.inputQueue.empty():
+                self.writeData(self.inputQueue.get())
+            self.readData()
+            time.sleep(0.001)
+
+    def readData(self):
+        self.outputQueue.put(self.sock.recv(16))
+
+    def writeData(self, data):
+        self.sock.sendall(data)
+
+
+# TODO write testclass to test the tcp connection over the local host
