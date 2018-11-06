@@ -128,20 +128,17 @@ class PlotChart(object):
 
 
 class CSVExporter(object):
-    def __init__(self, chart):
-        self.chart = chart
+    def __init__(self, dataPoints):
+        self.dataPoints = dataPoints
         self.sep = ','
 
     def export(self, fileName):
-
-        if not isinstance(self.chart, PlotChart):
-            raise Exception("Must have a chart selected for CSV export.")
 
         fd = open(fileName, 'w')
         data = []
         header = []
 
-        for dataPoint in self.chart.dataPoints:
+        for dataPoint in self.dataPoints:
             if dataPoint.time:
                 header.append('Zeit')
                 header.append(dataPoint.name)

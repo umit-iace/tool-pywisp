@@ -177,7 +177,8 @@ class MainGui(QMainWindow):
 
         self.dataPointManipulationWidget = QWidget()
         self.dataPointManipulationLayout = QVBoxLayout()
-        self.dataPointManipulationLayout.addStretch(0)
+        self.dataPointManipulationLayout.addStretch()
+        self.dataPointManipulationLayout.setSpacing(5)
         self.dataPointRightButtonWidget = QWidget()
         self.dataPointRightButtonLayout = QVBoxLayout()
         self.dataPointRightButton = QPushButton(chr(0x226b), self)
@@ -197,7 +198,13 @@ class MainGui(QMainWindow):
         )
         self.dataPointLeftButton.clicked.connect(self.removeDatapointFromTree)
         self.dataPointManipulationLayout.addWidget(self.dataPointLeftButton)
-        self.dataPointManipulationLayout.addStretch(0)
+        self.dataPointExportButton = QPushButton(chr(0x25BC), self)
+        self.dataPointExportButton.setToolTip(
+            "Export the selected data set from the left to the selected plot "
+            "on the right."
+        )
+        self.dataPointExportButton.clicked.connect(self.exportDatapointFromTree)
+        self.dataPointManipulationLayout.addWidget(self.dataPointExportButton)
         self.dataPointPlotAddButtonWidget = QWidget()
         self.dataPointPlotAddButtonLayout = QVBoxLayout()
         self.dataPointPlotAddButton = QPushButton("+", self)
@@ -476,6 +483,24 @@ class MainGui(QMainWindow):
 
         self.plots(toplevelItem)
 
+    def exportDatapointFromTree(self):
+        if not self.dataPointListWidget.selectedIndexes():
+            self._logger.error("Can't export data set: no data set selected.")
+            return
+
+        dataPoints = []
+        for item in self.dataPointListWidget.selectedItems():
+            for data in self.dataPointBuffers:
+                if data.name == item.text():
+                    dataPoints.append(data)
+                    continue
+
+        exporter = CSVExporter(dataPoints)
+        filename = QFileDialog.getSaveFileName(self, "CSV export", ".csv", "CSV Data (*.csv)")
+        if filename[0]:
+            exporter.export(filename[0])
+            self._logger.info("Export successful.")
+
     def removeDatapointFromTree(self):
         items = self.dataPointTreeWidget.selectedItems()
         if not items:
@@ -615,7 +640,7 @@ class MainGui(QMainWindow):
                 self.plotCharts.pop(indx)
 
     def exportCsv(self, chart, name):
-        exporter = CSVExporter(chart)
+        exporter = CSVExporter(chart.dataPoints)
         filename = QFileDialog.getSaveFileName(self, "CSV export", name + ".csv", "CSV Data (*.csv)")
         if filename[0]:
             exporter.export(filename[0])
