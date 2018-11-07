@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 import os
+from copy import deepcopy
+from queue import Queue
+
+import pkg_resources
 import serial.tools.list_ports
 import yaml
 from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QRectF, QTimer, QSettings, QCoreApplication
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from copy import deepcopy
-import pkg_resources
 from pyqtgraph import PlotWidget, exporters, TextItem, mkBrush
 from pyqtgraph.dockarea import *
-from queue import Queue
 
 from pywisp import TABLEAU_COLORS
 from .connection import SerialConnection
@@ -290,6 +291,12 @@ class MainGui(QMainWindow):
         self.actDisconnect.setShortcut(QKeySequence("F10"))
         self.expMenu.addAction(self.actDisconnect)
         self.actDisconnect.triggered.connect(self.disconnect)
+        self.expMenu.addSeparator()
+        self.actSendParameter = QAction('&Parameter senden')
+        self.actSendParameter.setEnabled(False)
+        self.actSendParameter.setShortcut(QKeySequence("F8"))
+        self.expMenu.addAction(self.actSendParameter)
+        self.actSendParameter.triggered.connect(self.sendParameter)
 
         # toolbar
         self.toolbarExp = QToolBar("Experiment")
@@ -698,6 +705,7 @@ class MainGui(QMainWindow):
 
         self.actStartExperiment.setDisabled(True)
         self.actStopExperiment.setDisabled(False)
+        self.actSendParameter.setDisabled(False)
         if self._currentExperimentIndex is not None:
             self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.darkGreen))
             self.experimentList.repaint()
@@ -721,6 +729,7 @@ class MainGui(QMainWindow):
     def stopExperiment(self):
         self.actStartExperiment.setDisabled(False)
         self.actStopExperiment.setDisabled(True)
+        self.actSendParameter.setDisabled(True)
         for i in range(self.experimentList.count()):
             self.experimentList.item(i).setBackground(QBrush(Qt.white))
         self.experimentList.repaint()
@@ -736,6 +745,14 @@ class MainGui(QMainWindow):
             return True
         else:
             return False
+
+    def sendParameter(self):
+        if self._currentExperimentIndex == self.experimentList.row(self._currentItem):
+            self.exp.sendParameterExperiment()
+        else:
+            self._logger.warning("Selected Experiment '{}' doesn't match current running Experiment '{}'!".format(
+                self._currentExperimentName,
+                self._experiments[self.experimentList.row(self._currentItem)]["Name"]))
 
     def loadExpFromFile(self, fileName):
         """

@@ -431,6 +431,36 @@ class ExperimentInteractor(QObject):
         for _data in data:
             self.inputQueue.put(_data)
 
+    def sendParameterExperiment(self):
+        data = []
+        for row in range(self.targetModel.rowCount()):
+            index = self.targetModel.index(row, 0)
+            parent = index.model().itemFromIndex(index)
+            child = index.model().item(index.row(), 1)
+            moduleName = parent.data(role=PropertyItem.RawDataRole)
+            subModuleName = child.data(role=PropertyItem.RawDataRole)
+
+            if subModuleName is None:
+                continue
+
+            moduleClass = getattr(experimentModules, moduleName, None)
+            subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
+            startParams = subModuleClass.getStartParams(self)
+            if startParams is not None:
+                data.append(startParams)
+
+            settings = self.getSettings(self.targetModel, moduleName)
+            vals = []
+            for key, val in settings.items():
+                if val is not None:
+                    vals.append(val)
+            params = subModuleClass.getParams(self, vals)
+            if params is not None:
+                data.append(params)
+
+        for _data in data:
+            self.inputQueue.put(_data)
+
     def stopExperiment(self):
         data = []
 
