@@ -1,23 +1,27 @@
 # -*- coding: utf-8 -*-
 import logging
+import numpy as np
 import os
-
-from PyQt5.QtGui import QColor
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor, QIntValidator
+from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout
 from pyqtgraph import mkPen
 
+from pywisp import TABLEAU_COLORS
 
-def get_resource(res_name, res_type="icons"):
+
+def get_resource(resName, resType="icons"):
     """
     Build absolute path to specified resource within the package
     Args:
-        res_name (str): name of the resource
-        res_type (str): subdir
+        resName (str): name of the resource
+        resType (str): subdir
     Return:
         str: path to resource
     """
     own_path = os.path.dirname(__file__)
-    resource_path = os.path.abspath(os.path.join(own_path, "resources", res_type))
-    return os.path.join(resource_path, res_name)
+    resource_path = os.path.abspath(os.path.join(own_path, "resources", resType))
+    return os.path.join(resource_path, resName)
 
 
 class PlainTextLogger(logging.Handler):
@@ -79,24 +83,13 @@ class PlotChart(object):
     """
     Object containing the plot widgets and the associated plot curves
     """
-    TABLEAU_COLORS = (
-        ('blue', '#1f77b4'),
-        ('orange', '#ff7f0e'),
-        ('green', '#2ca02c'),
-        ('red', '#d62728'),
-        ('purple', '#9467bd'),
-        ('brown', '#8c564b'),
-        ('pink', '#e377c2'),
-        ('gray', '#7f7f7f'),
-        ('olive', '#bcbd22'),
-        ('cyan', '#17becf'),
-    )
 
     def __init__(self, title):
         self.title = title
         self.dataPoints = []
         self.plotWidget = None
         self.plotCurves = []
+        self.interpolationPoints = 100
 
     def addPlotCurve(self, dataPoint):
         """
@@ -106,10 +99,13 @@ class PlotChart(object):
         """
         self.dataPoints.append(dataPoint)
 
-        colorIdxItem = len(self.plotCurves) % len(self.TABLEAU_COLORS)
-        colorItem = QColor(self.TABLEAU_COLORS[colorIdxItem][1])
+        colorIdxItem = len(self.plotCurves) % len(TABLEAU_COLORS)
+        colorItem = QColor(TABLEAU_COLORS[colorIdxItem][1])
 
         self.plotCurves.append(self.plotWidget.plot(name=dataPoint.name, pen=mkPen(colorItem, width=2)))
+
+    def setInterpolationPoints(self, interpolationPoints):
+        self.interpolationPoints = interpolationPoints
 
     def updatePlot(self):
         """
@@ -117,10 +113,103 @@ class PlotChart(object):
         """
         if self.plotWidget:
             for indx, curve in enumerate(self.plotCurves):
-                curve.setData(self.dataPoints[indx].time, self.dataPoints[indx].values)
+                datax = self.dataPoints[indx].time
+                datay = self.dataPoints[indx].values
+                if datax:
+                    interpx = np.linspace(datax[0], datax[-1], self.interpolationPoints)
+                    interpy = np.interp(interpx, datax, datay)
+                    curve.setData(interpx, interpy)
 
     def clear(self):
         if self.plotWidget:
             self.plotWidget.getPlotItem().clear()
             self.dataPoints = []
             self.plotCurves = []
+
+
+class CSVExporter(object):
+    def __init__(self, dataPoints):
+        self.dataPoints = dataPoints
+        self.sep = ','
+
+    def export(self, fileName):
+
+        fd = open(fileName, 'w')
+        data = []
+        header = []
+
+        for dataPoint in self.dataPoints:
+            if dataPoint.time:
+                header.append('Zeit')
+                header.append(dataPoint.name)
+                data.append(dataPoint.time)
+                data.append(dataPoint.values)
+
+        numColumns = len(header)
+        if data:
+            numRows = len(max(data, key=len))
+        else:
+            fd.close()
+            return
+
+        fd.write(self.sep.join(header) + '\n')
+
+        for i in range(numRows):
+            for j in range(numColumns):
+                if i < len(data[j]):
+                    fd.write(str(data[j][i]))
+                else:
+                    fd.write(str(np.nan))
+
+                if j < numColumns:
+                    fd.write(self.sep)
+
+            fd.write('\n')
+        fd.close()
+
+
+class DataIntDialog(QDialog):
+    def __init__(self, **kwargs):
+        parent = kwargs.get('parent', None)
+        super(DataIntDialog, self).__init__(parent)
+
+        self.minValue = kwargs.get("min", 1)
+        self.maxValue = kwargs.get("max", 1000)
+        self.currentValue = kwargs.get("current", 0)
+
+        mainLayout = QVBoxLayout(self)
+        labelLayout = QHBoxLayout()
+
+        minLabel = QLabel(self)
+        minLabel.setText("min. Wert: {}".format(self.minValue))
+        labelLayout.addWidget(minLabel)
+        maxLabel = QLabel(self)
+        maxLabel.setText("max. Wert: {}".format(self.maxValue))
+        labelLayout.addWidget(maxLabel)
+        mainLayout.addLayout(labelLayout)
+
+        # nice widget for editing the date
+        self.data = QLineEdit(self)
+        self.data.setText(str(self.currentValue))
+        self.data.setValidator(QIntValidator(self.minValue, self.maxValue, self))
+
+        mainLayout.addWidget(self.data)
+
+        # OK and Cancel buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
+            Qt.Horizontal, self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        mainLayout.addWidget(buttons)
+
+    def _getData(self):
+        return self.data.text()
+
+    @staticmethod
+    def getData(**kwargs):
+        dialog = DataIntDialog(**kwargs)
+        result = dialog.exec_()
+        data = dialog._getData()
+
+        return data, result == QDialog.Accepted
