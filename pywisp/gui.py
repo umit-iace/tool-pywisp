@@ -1,4 +1,4 @@
-            # -*- coding: utf-8 -*-
+                # -*- coding: utf-8 -*-
 import os
 import serial.tools.list_ports
 import yaml
@@ -375,16 +375,18 @@ class MainGui(QMainWindow):
 
     # event functions
     def setDefaultComPort(self):
-        comPorts = serial.tools.list_ports.comports()
-        if comPorts:
-            arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
+        serial_active = self._settings.value("serial_connection_active") == "True"
+        if serial_active:
+            comPorts = serial.tools.list_ports.comports()
+            if comPorts:
+                arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
 
-            if len(arduinoPorts) != 0:
-                self.port = arduinoPorts[0]
+                if len(arduinoPorts) != 0:
+                    self.port = arduinoPorts[0]
+                else:
+                    self._logger.warning("Can't set comport for arduino automatically! Set the port manually!")
             else:
-                self._logger.warning("Can't set comport for arduino automatically! Set the port manually!")
-        else:
-            self._logger.warning("No ComPorts avaiable, connect device!")
+                self._logger.warning("No ComPorts avaiable, connect device!")
 
     @pyqtSlot()
     def getConnPorts(self):

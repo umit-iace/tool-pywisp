@@ -414,7 +414,7 @@ class ExperimentInteractor(QObject):
             if startParams is not None:
                 data.append(startParams)
 
-            settings = self.getSettings(self.targetModel, moduleName)
+            settings = self.getSettings(self.targetModel, moduleName)(data['id'] == 1) and (data['msg'] == 1)
             vals = []
             for key, val in settings.items():
                 if val is not None:

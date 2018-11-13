@@ -7,7 +7,6 @@ import time
 from PyQt5 import QtCore
 
 from . import MINTransportSerial
-# TODO create base class for Connection and make new Tcp Connection class
 
 class Connection(QtCore.QThread):
     """ Base class for serial and tcp connection
@@ -110,20 +109,37 @@ class TcpConnection(Connection):
                  port,
                  ipadr):
         self.client_ip = ipadr
+        self.sock = None
         super(TcpConnection, self).__init__(inputQueue, outputQueue, port)
+        self.controlword = 0x0000
+        # Lookuptable to get the right controlword for the tcp host
+        # (data['id'] << 8) + data['msg'] => (controlword & 0xZZFF) + (1 << X)
+        # where X stands for the bit which should get actuated and ZZ is the mask for the flags
+        self.lookupTable = {
+            (1 << 8) + 1: (self.controlword & 0xFC0F) + (1 << 4) + (1 << 8), # start experiment
+            (1 << 8) + 0: (self.controlword & 0xFC0F) + (0 << 4) + (1 << 9), # stop experiment
+            (10 << 8) + 0: (self.controlword & 0xFF0F) + (10 << 4), # send relevent input data to device
+            (30 << 8) + 0: (self.controlword & 0xFF0F) + (30 << 4), # send params to device
+            (40 << 8) + 0: (self.controlword & 0xF30F) + (40 << 4) + (0 << 10), # stop command for traj
+            (40 << 8) + 3: (self.controlword & 0xF30F) + (40 << 4) + (3 << 10), # start command for const traj
+            (41 << 8) + 0: (self.controlword & 0xFF0F) + (41 << 4), # send params to device for traj
+            (43 << 8) + 0: (self.controlword & 0xFF0F) + (43 << 4), #
+        }
 
     def disconnect(self):
         self.isConnected = False
         time.sleep(1)
         while not self.inputQueue.empty():
             self.writeData(self.inputQueue.get())
-        self.sock.close()
+        if not (self.sock == None):
+            self.sock.close()
 
     def connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             self.sock.connect((self.client_ip, self.port))
         except socket.error:
+            self._logger.error("Verbinden zum Server nicht möglich!")
             self.sock.close()
             self.sock = None
             return False
@@ -142,17 +158,36 @@ class TcpConnection(Connection):
         """ Starts the timer and thread
         """
         while True and self.isConnected:
-            # frames = self.min.poll()
             if not self.inputQueue.empty():
                 self.writeData(self.inputQueue.get())
             self.readData()
             time.sleep(0.001)
 
     def readData(self):
-        self.outputQueue.put(self.sock.recv(16))
+        try:
+            inputdata = self.sock.recv(18)
+            if inputdata == b'\x32':
+                self.isConnected = False
+                self.writeData({'id': 1, 'msg': b'\x32'})
+            else:
+                self.outputQueue.put(inputdata)
+        except:
+            self._logger.error("Lesen vom Host nicht möglich!")
+            self.isConnected = False
 
     def writeData(self, data):
-        self.sock.sendall(data)
+        if (data['id'] == 1) and (data['msg'] == 1):
+            # implement start command
+            pass
+        elif (data['id'] == 1) and (data['msg'] == 0):
+            # implement stop command
+            pass
+        try:
+            self.sock.send(data['msg'])
+        except:
+            self._logger.error("Schreiben an Host nicht möglich!")
+            self.isConnected = False
 
+# TODO create a communication protocoll to start/end experiments and to close conn
 
-# TODO write testclass to test the tcp connection over the local host
+# TODO -> testbench.py, trajectory.py, controller.py
