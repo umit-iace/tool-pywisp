@@ -714,6 +714,8 @@ class MainGui(QMainWindow):
             buffer.clearBuffer()
 
         for chart in self.plotCharts:
+            for dataPoint in chart.dataPoints:
+                dataPoint.clearBuffer()
             chart.setInterpolationPoints(self._currentInterpolationPoints)
             chart.updatePlot()
 
