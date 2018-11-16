@@ -33,7 +33,6 @@ class MainGui(QMainWindow):
         QCoreApplication.setApplicationName(globals()["__package__"])
 
         self.connection = None
-        self.connection_tcp = None
         self.inputQueue = Queue()
         self.outputQueue = Queue()
         self.port = ''
@@ -482,7 +481,7 @@ class MainGui(QMainWindow):
             return strinfo
         elif tcp_active:
             strinfo = "Tcp Verbindung: "
-            if (self.connection_tcp == None):
+            if (self.connection == None):
                 strinfo += "Nicht verbunden!"
             else:
                 strinfo += "Verbunden mit Server '{0}/{1}'".format(self.tcp_ip, self.port)
@@ -918,10 +917,10 @@ class MainGui(QMainWindow):
         elif tcp_active:
             if self.tcp_ip == None:
                 self._logger.warning("Bitte IP Adresse des Servers eingeben!")
-                self.connection_tcp = None
+                self.connection = None
                 return
-            self.connection_tcp = TcpConnection(self.inputQueue, self.outputQueue, self.port, self.tcp_ip)
-            if self.connection_tcp.connect():
+            self.connection = TcpConnection(self.inputQueue, self.outputQueue, self.port, self.tcp_ip)
+            if self.connection.connect():
                 self._logger.info("Mit Server '{0}/{1}' verbunden."
                                   .format(self.tcp_ip, self.port))
                 self.actConnect.setEnabled(False)
@@ -929,9 +928,9 @@ class MainGui(QMainWindow):
                 if self._currentItem is not None:
                     self.actStartExperiment.setEnabled(True)
                 self.actStopExperiment.setEnabled(False)
-                self.connection_tcp.start()
+                self.connection.start()
             else:
-                self.connection_tcp = None
+                self.connection = None
                 self._logger.error("Verbindung mit Server '{0}/{1}' nicht möglich"
                                    .format(self.tcp_ip, self.port))
             self.statusbarLabel.setText(self.getStatusBarInfo())
@@ -941,13 +940,11 @@ class MainGui(QMainWindow):
         serial_active = self._settings.value("serial_connection_active") == "True"
         tcp_active = self._settings.value("tcp_connection_active") == "True"
         self.stopExperiment()
+        self.connection.disconnect()
+        self.connection = None
         if serial_active:
-            self.connection.disconnect()
-            self.connection = None
             self._logger.info("Arduino getrennt.")
         elif tcp_active:
-            self.connection_tcp.disconnect()
-            self.connection_tcp = None
             self._logger.info("Verbindung mit Server getrennt.")
         self.actConnect.setEnabled(True)
         self.actDisconnect.setEnabled(False)

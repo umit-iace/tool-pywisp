@@ -5,6 +5,7 @@ import serial.tools.list_ports
 import socket
 import time
 from PyQt5 import QtCore
+import struct
 
 from . import MINTransportSerial
 
@@ -112,19 +113,6 @@ class TcpConnection(Connection):
         self.sock = None
         super(TcpConnection, self).__init__(inputQueue, outputQueue, port)
         self.controlword = 0x0000
-        # Lookuptable to get the right controlword for the tcp host
-        # (data['id'] << 8) + data['msg'] => (controlword & 0xZZFF) + (1 << X)
-        # where X stands for the bit which should get actuated and ZZ is the mask for the flags
-        self.lookupTable = {
-            (1 << 8) + 1: (self.controlword & 0xFC0F) + (1 << 4) + (1 << 8), # start experiment
-            (1 << 8) + 0: (self.controlword & 0xFC0F) + (0 << 4) + (1 << 9), # stop experiment
-            (10 << 8) + 0: (self.controlword & 0xFF0F) + (10 << 4), # send relevent input data to device
-            (30 << 8) + 0: (self.controlword & 0xFF0F) + (30 << 4), # send params to device
-            (40 << 8) + 0: (self.controlword & 0xF30F) + (40 << 4) + (0 << 10), # stop command for traj
-            (40 << 8) + 3: (self.controlword & 0xF30F) + (40 << 4) + (3 << 10), # start command for const traj
-            (41 << 8) + 0: (self.controlword & 0xFF0F) + (41 << 4), # send params to device for traj
-            (43 << 8) + 0: (self.controlword & 0xFF0F) + (43 << 4), #
-        }
 
     def disconnect(self):
         self.isConnected = False
@@ -169,6 +157,8 @@ class TcpConnection(Connection):
             if inputdata == b'\x32':
                 self.isConnected = False
                 self.writeData({'id': 1, 'msg': b'\x32'})
+            elif inputdata == b'':
+                pass
             else:
                 self.outputQueue.put(inputdata)
         except:
@@ -176,17 +166,31 @@ class TcpConnection(Connection):
             self.isConnected = False
 
     def writeData(self, data):
+        self.controlword = (self.controlword & 0xFF0F) + (data['id'] << 4)
         if (data['id'] == 1) and (data['msg'] == 1):
-            # implement start command
-            pass
+            # start experiment
+            self.controlword = (self.controlword & 0xFCFF) + (1 << 8)
         elif (data['id'] == 1) and (data['msg'] == 0):
-            # implement stop command
-            pass
+            # stop experiment
+            self.controlword = (self.controlword & 0xFCFF) + (1 << 9)
+        elif (data['id'] == 40) and (data['msg'] == 3):
+            # start trajectory
+            self.controlword = (self.controlword & 0xF3FF) + (3 << 10)
+        elif (data['id'] == 40) and (data['msg'] == 0):
+            # stop trajectory
+            self.controlword = (self.controlword & 0xF3FF)
+        elif (data['id'] == 50) and (data['msg'] == 1):
+            # start controller
+            self.controlword = (self.controlword & 0xEFFF) + (1 << 12)
+        elif (data['id'] == 50) and (data['msg'] == 0):
+            # stop controller
+            self.controlword = (self.controlword & 0xEFFF)
         try:
-            self.sock.send(data['msg'])
+            self.sock.send(struct.pack('>H', self.controlword) + data['msg'])
         except:
             self._logger.error("Schreiben an Host nicht möglich!")
             self.isConnected = False
+
 
 # TODO create a communication protocoll to start/end experiments and to close conn
 
