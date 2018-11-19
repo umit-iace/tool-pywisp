@@ -75,8 +75,11 @@ class DataPointBuffer(object):
         """
         Clears all the buffers of the data point
         """
+        # TODO test if erase runs better than without
         self.values.clear()
+        del self.values[:]
         self.time.clear()
+        del self.time[:]
 
 
 class PlotChart(object):
@@ -116,15 +119,21 @@ class PlotChart(object):
                 datax = self.dataPoints[indx].time
                 datay = self.dataPoints[indx].values
                 if datax:
-                    interpx = np.linspace(datax[0], datax[-1], self.interpolationPoints)
-                    interpy = np.interp(interpx, datax, datay)
-                    curve.setData(interpx, interpy)
+                    if len(datax) < self.interpolationPoints:
+                        curve.setData(datax, datay)
+                    else:
+                        interpx = np.linspace(datax[0], datax[-1], self.interpolationPoints)
+                        interpy = np.interp(interpx, datax, datay)
+                        curve.setData(interpx, interpy)
 
     def clear(self):
         if self.plotWidget:
+            # TODO test if erase runs better than without
             self.plotWidget.getPlotItem().clear()
-            self.dataPoints = []
-            self.plotCurves = []
+            self.dataPoints.clear()
+            del self.dataPoints[:]
+            self.plotCurves.clear()
+            del self.plotCurves[:]
 
 
 class CSVExporter(object):

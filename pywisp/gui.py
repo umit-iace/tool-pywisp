@@ -320,14 +320,14 @@ class MainGui(QMainWindow):
         self._currentItem = None
 
     def setIntPoints(self):
-        intPoints, ok = DataIntDialog.getData(min=1, max=500, current=self._settings.value("opt/interpolation_points"))
+        intPoints, ok = DataIntDialog.getData(min=2, max=500, current=self._settings.value("opt/interpolation_points"))
 
         if ok:
             self._settings.setValue("opt/interpolation_points", int(intPoints))
             self._logger.info("Set interpolation points to {}".format(intPoints))
 
     def setTimerTime(self):
-        timerTime, ok = DataIntDialog.getData(min=1, max=10000, current=self._settings.value("opt/timer_time"))
+        timerTime, ok = DataIntDialog.getData(min=2, max=10000, current=self._settings.value("opt/timer_time"))
 
         if ok:
             self._settings.setValue("opt/timer_timer", int(timerTime))
