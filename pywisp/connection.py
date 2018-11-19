@@ -113,6 +113,7 @@ class TcpConnection(Connection):
         self.sock = None
         super(TcpConnection, self).__init__(inputQueue, outputQueue, port)
         self.controlword = 0x0000
+        self.doRead = False
 
     def disconnect(self):
         self.isConnected = False
@@ -152,6 +153,8 @@ class TcpConnection(Connection):
             time.sleep(0.001)
 
     def readData(self):
+        if not self.doRead:
+            return
         try:
             inputdata = self.sock.recv(18)
             if inputdata == b'\x32':
@@ -160,33 +163,48 @@ class TcpConnection(Connection):
             elif inputdata == b'':
                 pass
             else:
+                print("Recv: ", inputdata)
                 self.outputQueue.put(inputdata)
         except:
             self._logger.error("Lesen vom Host nicht möglich!")
             self.isConnected = False
 
     def writeData(self, data):
-        self.controlword = (self.controlword & 0xFF0F) + (data['id'] << 4)
-        if (data['id'] == 1) and (data['msg'] == 1):
+        self.controlword = (self.controlword & 0xFF00) + (data['id'])
+        if (data['id'] == 1) and (data['msg'] == b'\x01'):
             # start experiment
+            self.doRead = True
             self.controlword = (self.controlword & 0xFCFF) + (1 << 8)
-        elif (data['id'] == 1) and (data['msg'] == 0):
+            data['msg'] = None
+        elif (data['id'] == 1) and (data['msg'] == b'\x00'):
             # stop experiment
+            self.doRead = False
             self.controlword = (self.controlword & 0xFCFF) + (1 << 9)
-        elif (data['id'] == 40) and (data['msg'] == 3):
+            data['msg'] = None
+        elif (data['id'] == 40) and (data['msg'] == b'\x03'):
             # start trajectory
+            self.doRead = True
             self.controlword = (self.controlword & 0xF3FF) + (3 << 10)
-        elif (data['id'] == 40) and (data['msg'] == 0):
+            data['msg'] = None
+        elif (data['id'] == 40) and (data['msg'] == b'\x00'):
             # stop trajectory
             self.controlword = (self.controlword & 0xF3FF)
-        elif (data['id'] == 50) and (data['msg'] == 1):
+            data['msg'] = None
+        elif (data['id'] == 50) and (data['msg'] == b'\x01'):
             # start controller
             self.controlword = (self.controlword & 0xEFFF) + (1 << 12)
-        elif (data['id'] == 50) and (data['msg'] == 0):
+            data['msg'] = None
+        elif (data['id'] == 50) and (data['msg'] == b'\x00'):
             # stop controller
             self.controlword = (self.controlword & 0xEFFF)
+            data['msg'] = None
         try:
-            self.sock.send(struct.pack('>H', self.controlword) + data['msg'])
+            if (data['msg'] == None):
+                outputdata = struct.pack('>H', self.controlword)
+            else:
+                outputdata = struct.pack('>H', self.controlword) + data['msg']
+            self.sock.send(outputdata)
+            print("send: ", outputdata, " with ", (self.controlword & 0x00FF), " and ", ((self.controlword & 0x0300) >> 8))
         except:
             self._logger.error("Schreiben an Host nicht möglich!")
             self.isConnected = False

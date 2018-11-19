@@ -425,6 +425,10 @@ class MainGui(QMainWindow):
             tcpHostPort.setEnabled(True)
             self.comMenu.addAction(tcpHostPort)
             tcpHostPort.triggered.connect(self.setTcpPort)
+
+            # TODO delte this, only for testing purpose
+            self.tcp_ip = str("10.4.13.210")
+            self.port = 50007
         else:
             noAction = QAction("Wähle Verbindungsart", self)
             noAction.setEnabled(False)
