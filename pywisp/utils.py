@@ -46,7 +46,27 @@ class PlainTextLogger(logging.Handler):
     def emit(self, record):
         msg = self.format(record)
         if self.cb:
-            self.cb(msg)
+            if self.cb:
+                if record.levelname == 'INFO':
+                    # green
+                    self.cb.setTextColor(QColor('#2ca02c'))
+                elif record.levelname == 'DEBUG':
+                    # cyan
+                    self.cb.setTextColor(QColor('#17becf'))
+                elif record.levelname == 'ERROR':
+                    # red
+                    self.cb.setTextColor(QColor('#d62728'))
+                elif record.levelname == 'WARNING':
+                    # purple
+                    self.cb.setTextColor(QColor('#9467bd'))
+                elif record.levelname == 'CRITICAL':
+                    # red
+                    self.cb.setTextColor(QColor('#d62728'))
+                else:
+                    # black
+                    self.cb.setTextColor(QColor('#000000'))
+
+                self.cb.append(msg)
         else:
             logging.getLogger().error("No callback configured!")
 

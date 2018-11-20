@@ -157,8 +157,10 @@ class MainGui(QMainWindow):
         self.lastMeasurements = []
 
         # log dock
-        self.logBox = QPlainTextEdit(self)
+        self.logBox = QTextEdit(self)
         self.logBox.setReadOnly(True)
+        self.logBox.setLineWrapMode(QTextEdit.NoWrap)
+        self.logBox.ensureCursorVisible()
         self.logDock.addWidget(self.logBox)
 
         # daten dock
@@ -241,8 +243,8 @@ class MainGui(QMainWindow):
         self.dataDock.addWidget(self.dataWidget)
 
         # init logger for logging box
-        self.textLogger = PlainTextLogger()
-        self.textLogger.set_target_cb(self.logBox.appendPlainText)
+        self.textLogger = PlainTextLogger(logging.INFO)
+        self.textLogger.set_target_cb(self.logBox)
         logging.getLogger().addHandler(self.textLogger)
         self._logger.info('Laborvisualisierung')
 
