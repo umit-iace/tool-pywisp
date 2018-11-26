@@ -17,13 +17,14 @@ from .experiments import ExperimentInteractor, ExperimentView, PropertyItem
 from .registry import *
 from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, CSVExporter, DataIntDialog
 from .visualization import MplVisualizer
+from operator import itemgetter
 
 
 class MainGui(QMainWindow):
     runExp = pyqtSignal()
     stopExp = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, fileName=None, parent=None):
         super(MainGui, self).__init__(parent)
 
         QCoreApplication.setOrganizationName("IACE")
@@ -48,7 +49,20 @@ class MainGui(QMainWindow):
         self._initSettings()
 
         # create experiment backend
-        moduleList = getRegisteredExpModules()
+        self._experiments = []
+        if fileName is None:
+            # check if defaults.sreg exists
+            if os.path.isfile('default.sreg'):
+                fileName = 'default.sreg'
+            else:
+                self._logger.error('No default.sreg found!')
+                return
+        else:
+            if not os.path.isfile(fileName):
+                self._logger.error('Config file {} does not exists!'.format(fileName))
+                return
+
+        moduleList = self.loadExpFromFile(fileName)
         self.exp = ExperimentInteractor(moduleList, self.inputQueue, self)
         self.runExp.connect(self.exp.runExperiment)
         self.stopExp.connect(self.exp.stopExperiment)
@@ -122,18 +136,10 @@ class MainGui(QMainWindow):
         self.experimentList.setSelectionMode(QAbstractItemView.SingleSelection)
         self.experimentDock.addWidget(self.experimentList)
         self.experimentList.itemDoubleClicked.connect(self.experimentDclicked)
-        self._experiments = []
         self._experimentsFileName = ""
         self._currentExperimentIndex = None
         self._currentExperimentName = None
         self._experimentStartTime = 0
-
-        self.actLadeExperiments = QAction(self)
-        self.actLadeExperiments.setText("&Lade Experimente aus Datei")
-        self.actLadeExperiments.setIcon(QIcon(get_resource("load.png")))
-        self.actLadeExperiments.setDisabled(False)
-        self.actLadeExperiments.setShortcut(QKeySequence("Ctrl+L"))
-        self.actLadeExperiments.triggered.connect(self.loadExpDialog)
 
         self.actStartExperiment = QAction(self)
         self.actStartExperiment.setDisabled(True)
@@ -251,7 +257,6 @@ class MainGui(QMainWindow):
 
         # menu bar
         dateiMenu = self.menuBar().addMenu("&Datei")
-        dateiMenu.addAction(self.actLadeExperiments)
         dateiMenu.addAction("&Quit", self.close, QKeySequence(Qt.CTRL + Qt.Key_W))
 
         # view
@@ -307,8 +312,6 @@ class MainGui(QMainWindow):
         self.toolbarExp.setMovable(False)
         self.toolbarExp.setIconSize(icon_size)
         self.addToolBar(self.toolbarExp)
-        self.toolbarExp.addAction(self.actLadeExperiments)
-        self.toolbarExp.addSeparator()
         self.toolbarExp.addAction(self.actConnect)
         self.toolbarExp.addAction(self.actDisconnect)
         self.toolbarExp.addSeparator()
@@ -322,19 +325,32 @@ class MainGui(QMainWindow):
 
         self._currentItem = None
 
+        # update experiment list mit loaded defaults.sreg
+        self._updateExperimentsList()
+
+        if not self._applyExperimentByName(self._experiments[0]['Name']):
+            self._logger.error('Can not apply experiment {}!'.format(self._experiments[0]['Name']))
+            return
+
     def setIntPoints(self):
-        intPoints, ok = DataIntDialog.getData(min=2, max=500, current=self._settings.value("opt/interpolation_points"))
+        self._settings.beginGroup('plot')
+        intPoints, ok = DataIntDialog.getData(min=2, max=500, current=self._settings.value("interpolation_points"))
 
         if ok:
-            self._settings.setValue("opt/interpolation_points", int(intPoints))
+            self._settings.setValue("interpolation_points", int(intPoints))
             self._logger.info("Set interpolation points to {}".format(intPoints))
 
+        self._settings.endGroup()
+
     def setTimerTime(self):
-        timerTime, ok = DataIntDialog.getData(min=2, max=10000, current=self._settings.value("opt/timer_time"))
+        self._settings.beginGroup('plot')
+        timerTime, ok = DataIntDialog.getData(min=2, max=10000, current=self._settings.value("timer_time"))
 
         if ok:
-            self._settings.setValue("opt/timer_timer", int(timerTime))
+            self._settings.setValue("timer_timer", int(timerTime))
             self._logger.info("Set timer time to {}".format(timerTime))
+
+        self._settings.endGroup()
 
     def _addSetting(self, group, setting, value):
         """
@@ -633,7 +649,7 @@ class MainGui(QMainWindow):
 
         # create plot widget
         widget = PlotWidget()
-        chart = PlotChart(title)
+        chart = PlotChart(title, self._settings)
         chart.plotWidget = widget
         widget.showGrid(True, True)
         widget.getPlotItem().getAxis("bottom").setLabel(text="Time", units="s")
@@ -735,8 +751,10 @@ class MainGui(QMainWindow):
         self._currentExperimentIndex = self.experimentList.row(self._currentItem)
         self._currentExperimentName = self._experiments[self._currentExperimentIndex]["Name"]
 
-        self._currentInterpolationPoints = self._settings.value("opt/interpolation_points")
-        self._currentTimerTime = self._settings.value("opt/timer_time")
+        self._settings.beginGroup('plot')
+        self._currentInterpolationPoints = self._settings.value("interpolation_points")
+        self._currentTimerTime = self._settings.value("timer_time")
+        self._settings.endGroup()
 
         if self._currentExperimentIndex is None:
             expName = ""
@@ -782,14 +800,6 @@ class MainGui(QMainWindow):
         self.timer.stop()
         self.exp.stopExperiment()
 
-    def loadExpDialog(self):
-        filename = QFileDialog.getOpenFileName(self, "Experiment file öffnen", "", "Experiment files (*.sreg)")
-        if filename[0]:
-            self.loadExpFromFile(filename[0])
-            return True
-        else:
-            return False
-
     def sendParameter(self):
         if self._currentExperimentIndex == self.experimentList.row(self._currentItem):
             self.exp.sendParameterExperiment()
@@ -803,15 +813,21 @@ class MainGui(QMainWindow):
         load experiments from file
         :param file_name:
         """
+        moduleList = []
         self._experimentsFileName = os.path.split(fileName)[-1][:-5]
         self._logger.info("Lade Experimentedatei: {0}".format(self._experimentsFileName))
         with open(fileName.encode(), "r") as f:
             self._experiments += yaml.load(f)
 
-        self._updateExperimentsList()
-
         self._logger.info("Lade {} Experimente".format(len(self._experiments)))
-        return
+
+        for key, value in self._experiments[0].items():
+            if key == 'Name':
+                continue
+
+            moduleList.append(value['type'])
+
+        return moduleList
 
     def _updateExperimentsList(self):
         self.experimentList.clear()
@@ -829,6 +845,29 @@ class MainGui(QMainWindow):
 
         self.setQListItemBold(self.experimentList, item, success)
         self.setQListItemBold(self.lastMeasList, item, success)
+
+    def _applyExperimentByName(self, expName):
+        """
+        Apply the experiment given by `expName` und update the experiment index.
+
+        Returns:
+            bool: `True` if successful, `False` if errors occurred.
+        """
+        try:
+            idx = list(map(itemgetter("Name"), self._experiments)).index(expName)
+        except ValueError as e:
+            self._logger.error("_applyExperimentByName(): Error no regime called "
+                               "'{0}'".format(expName))
+            return False
+
+        # apply
+        success = self._applyExperimentByIdx(idx)
+        self._currentItem = self.experimentList.item(idx)
+
+        self.setQListItemBold(self.experimentList, self._currentItem, success)
+        self.setQListItemBold(self.lastMeasList, self._currentItem, success)
+
+        return success
 
     def _applyExperimentByIdx(self, index=0):
         """
@@ -946,16 +985,15 @@ class MainGui(QMainWindow):
             index = self.exp.targetModel.index(row, 0)
             parent = index.model().itemFromIndex(index)
             child = index.model().item(index.row(), 1)
-            moduleName = parent.data(role=PropertyItem.RawDataRole)
             subModuleName = child.data(role=PropertyItem.RawDataRole)
 
             if subModuleName is None:
                 continue
 
-            settings = self.exp.getSettings(self.exp.targetModel, moduleName)
+            settings = self.exp.getSettings(parent)
             for key, val in settings.items():
                 if val is not None:
-                    experiment[moduleName][key] = val
+                    experiment[subModuleName][key] = val
         data.update({'exp': experiment})
 
         self.lastMeasurements.append(data)

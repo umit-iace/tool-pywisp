@@ -194,6 +194,7 @@ class ExperimentInteractor(QObject):
         QObject.__init__(self, parent)
         self._logger = logging.getLogger(self.__class__.__name__)
         self.setupList = moduleList
+        self.moduleList = list(OrderedDict.fromkeys(self.setupList))
         self.inputQueue = inputQueue
         self.runningExperiment = False
         self._setupModel()
@@ -263,9 +264,7 @@ class ExperimentInteractor(QObject):
 
         return
 
-    def getSettings(self, model, module_name):
-        # TODO schwierig
-        item = model.findItems(module_name).pop(0)
+    def getSettings(self, item):
 
         settings = OrderedDict()
         for row in range(item.rowCount()):
@@ -385,22 +384,23 @@ class ExperimentInteractor(QObject):
 
     def getDataPoints(self):
         dataPoints = []
-        for expModule in self.setupList:
+        for expModule in self.moduleList:
             moduleCls = getattr(experimentModules, expModule)
             regExpModules = getRegisteredExperimentModules(moduleCls)
-            # only first module used
-            dataPoints += regExpModules[0][0].dataPoints
+            for idx, regExpModule in enumerate(regExpModules):
+                dataPoints += regExpModule[0].dataPoints
 
         return dataPoints
 
     def handleFrame(self, frame):
-        for expModule in self.setupList:
+        for expModule in self.moduleList:
             moduleCls = getattr(experimentModules, expModule)
             regExpModules = getRegisteredExperimentModules(moduleCls)
-            # only first module used
-            dataPoints = regExpModules[0][0].handleFrame(frame)
-            if dataPoints is not None:
-                return dataPoints
+            # test all modules
+            for idx, regExpModule in enumerate(regExpModules):
+                dataPoints = regExpModule[0].handleFrame(frame)
+                if dataPoints is not None:
+                    return dataPoints
 
     def runExperiment(self):
         data = []
@@ -421,13 +421,13 @@ class ExperimentInteractor(QObject):
             if startParams is not None:
                 data.append(startParams)
 
-            settings = self.getSettings(self.targetModel, moduleName)
+            settings = self.getSettings(parent)
             vals = []
             for key, val in settings.items():
                 if val is not None:
                     vals.append(val)
             params = subModuleClass.getParams(self, vals)
-            if params is not None:
+            if params and not None:
                 data.append(params)
 
         # start experiment
@@ -456,13 +456,13 @@ class ExperimentInteractor(QObject):
             if startParams is not None:
                 data.append(startParams)
 
-            settings = self.getSettings(self.targetModel, moduleName)
+            settings = self.getSettings(parent)
             vals = []
             for key, val in settings.items():
                 if val is not None:
                     vals.append(val)
             params = subModuleClass.getParams(self, vals)
-            if params is not None:
+            if params and not None:
                 data.append(params)
 
         for _data in data:
@@ -487,9 +487,9 @@ class ExperimentInteractor(QObject):
 
             moduleClass = getattr(experimentModules, moduleName, None)
             subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
-            stopParams = subModuleClass.getStopParams(self)
-            if stopParams is not None:
-                data.append(stopParams)
+            params = subModuleClass.getStopParams(self)
+            if params and not None:
+                data.append(params)
 
         # stop experiment
         payload = bytes([0])

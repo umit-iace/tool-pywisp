@@ -84,21 +84,6 @@ def getExperimentModuleClassByName(module_type, module_name):
     return getModuleClassByName(ExperimentModule, module_type, module_name)
 
 
-def getRegisteredExpModules():
-    """
-    hook to retrieve registered exp modules
-    :return: list of class names
-    """
-    allModules = _registry.get(ExperimentModule, [])
-    modulesList = []
-    for key, value in allModules.items():
-        if isinstance(key, str):
-            for i in range(len(value)):
-                modulesList.append(key)
-
-    return modulesList
-
-
 def registerVisualizer(vis_cls):
     """
     hook to register a visualizer for the experiment GUI
