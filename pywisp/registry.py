@@ -7,7 +7,7 @@ _registry = {}
 
 def registerModule(module_cls, module_type, cls, type_check=True):
     """
-    Main hook to register a class (pymoskito module) in the pymoskito framework.
+    Main hook to register a class (pywisp module) in the pywisp framework.
     """
     if type_check:
         if not issubclass(cls, module_type):
@@ -17,9 +17,6 @@ def registerModule(module_cls, module_type, cls, type_check=True):
     cls_entry = _registry.get(module_cls, {})
     entry = cls_entry.get(module_type, [])
     increment = (cls, cls.__name__)
-    if increment in entry:
-        raise ValueError("class {} already registered for module "
-                         "{}!".format(cls, module_cls))
 
     entry.append(increment)
 
@@ -54,7 +51,7 @@ def getModuleClassByName(module_cls, module_type, module_name):
 
 def registerExperimentModule(moduleType, cls):
     """
-    main hook to register a module in the pymoskito framework
+    main hook to register a module in the pywisp framework
     :param moduleType:
     :param cls: class to be registered
     :return: None
@@ -67,7 +64,7 @@ def registerExperimentModule(moduleType, cls):
 
 def getRegisteredExperimentModules(moduleType):
     """
-    main hook to retrieve registered classes for a specific simulation module
+    main hook to retrieve registered classes for a specific experiment module
     :param moduleType:
     :return:
     """
@@ -76,7 +73,7 @@ def getRegisteredExperimentModules(moduleType):
 
 def getExperimentModuleClassByName(module_type, module_name):
     """
-    Return the class of a certain simulation module given its registered name.
+    Return the class of a certain experiment module given its registered name.
 
     Args:
         module_type (cls): Type of the module,
@@ -87,9 +84,24 @@ def getExperimentModuleClassByName(module_type, module_name):
     return getModuleClassByName(ExperimentModule, module_type, module_name)
 
 
+def getRegisteredExpModules():
+    """
+    hook to retrieve registered exp modules
+    :return: list of class names
+    """
+    allModules = _registry.get(ExperimentModule, [])
+    modulesList = []
+    for key, value in allModules.items():
+        if isinstance(key, str):
+            for i in range(len(value)):
+                modulesList.append(key)
+
+    return modulesList
+
+
 def registerVisualizer(vis_cls):
     """
-    hook to register a visualizer for the simulation GUI
+    hook to register a visualizer for the experiment GUI
     :param vis_cls: class to be registered
     """
     if not issubclass(vis_cls, Visualizer):

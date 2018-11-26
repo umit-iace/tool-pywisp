@@ -51,6 +51,7 @@ class PropertyItem(QStandardItem):
         self._logger = logging.getLogger(self.__class__.__name__)
         self._data = data
         self._text = self._getText(data)
+        self.isUsed = False
 
     def type(self):
         return QStandardItem.UserType
@@ -195,9 +196,9 @@ class ExperimentInteractor(QObject):
         self.setupList = moduleList
         self.inputQueue = inputQueue
         self.runningExperiment = False
-        self._setup_model()
+        self._setupModel()
 
-    def _setup_model(self):
+    def _setupModel(self):
         # create model
         self.targetModel = ExperimentModel(self)
         self.targetModel.itemChanged.connect(self.itemChanged)
@@ -263,6 +264,7 @@ class ExperimentInteractor(QObject):
         return
 
     def getSettings(self, model, module_name):
+        # TODO schwierig
         item = model.findItems(module_name).pop(0)
 
         settings = OrderedDict()
@@ -320,36 +322,41 @@ class ExperimentInteractor(QObject):
             if moduleName == "Name":
                 continue
 
+            moduleType = value['type']
+
             # sanity check
-            moduleCls = getattr(experimentModules, moduleName, None)
+            moduleCls = getattr(experimentModules, moduleType, None)
             if moduleCls is None:
                 self._logger.error("_applyExperiment(): No module called {0}"
                                    "".format(moduleName))
                 return False
 
-            items = self.targetModel.findItems(moduleName)
+            items = self.targetModel.findItems(moduleType)
             if not len(items):
                 self._logger.error("_applyExperiment(): No item in List called {0}"
                                    "".format(moduleName))
                 return False
 
-            moduleItem = items.pop(0)
-            moduleType = value["type"]
+            moduleItem = None
+            for idx, item in enumerate(items):
+                if not item.isUsed:
+                    item.isUsed = True
+                    moduleItem = items.pop(idx)
 
             # sanity check
             subModuleCls = getExperimentModuleClassByName(moduleCls,
-                                                          moduleType)
+                                                          moduleName)
 
             if not subModuleCls:
                 self._logger.error("_applyExperiment(): No sub-module called {0}"
-                                   "".format(moduleType))
+                                   "".format(moduleName))
                 return False
 
             moduleIndex = moduleItem.index()
             moduleTypeIndex = moduleIndex.model().index(moduleIndex.row(),
                                                         1)
             moduleIndex.model().setData(moduleTypeIndex,
-                                        moduleType,
+                                        moduleName,
                                         role=PropertyItem.RawDataRole)
             # due to signal connections, default settings are loaded
             # automatically in the back
@@ -371,7 +378,7 @@ class ExperimentInteractor(QObject):
                     if not ignoreIsPublic:
                         self._logger.error("_applyExperiment(): Setting: '{0}' not "
                                            "available for Module: '{1}'".format(
-                            key, moduleType))
+                            key, moduleName))
                         return False
 
         return True

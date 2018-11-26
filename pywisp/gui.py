@@ -23,7 +23,7 @@ class MainGui(QMainWindow):
     runExp = pyqtSignal()
     stopExp = pyqtSignal()
 
-    def __init__(self, moduleList, parent=None):
+    def __init__(self, parent=None):
         super(MainGui, self).__init__(parent)
 
         QCoreApplication.setOrganizationName("IACE")
@@ -48,6 +48,7 @@ class MainGui(QMainWindow):
         self._initSettings()
 
         # create experiment backend
+        moduleList = getRegisteredExpModules()
         self.exp = ExperimentInteractor(moduleList, self.inputQueue, self)
         self.runExp.connect(self.exp.runExperiment)
         self.stopExp.connect(self.exp.stopExperiment)
