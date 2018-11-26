@@ -7,8 +7,6 @@ from PyQt5.QtGui import QColor, QIntValidator
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout
 from pyqtgraph import mkPen
 
-from pywisp import TABLEAU_COLORS
-
 
 def get_resource(resName, resType="icons"):
     """
@@ -29,9 +27,10 @@ class PlainTextLogger(logging.Handler):
     Logging handler hat formats log data for line display
     """
 
-    def __init__(self, level=logging.NOTSET):
+    def __init__(self, settings, level=logging.NOTSET):
         logging.Handler.__init__(self, level)
         self.name = "PlainTextLogger"
+        self.settings = settings
 
         formatter = logging.Formatter(
             fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -47,24 +46,11 @@ class PlainTextLogger(logging.Handler):
         msg = self.format(record)
         if self.cb:
             if self.cb:
-                if record.levelname == 'INFO':
-                    # green
-                    self.cb.setTextColor(QColor('#2ca02c'))
-                elif record.levelname == 'DEBUG':
-                    # cyan
-                    self.cb.setTextColor(QColor('#17becf'))
-                elif record.levelname == 'ERROR':
-                    # red
-                    self.cb.setTextColor(QColor('#d62728'))
-                elif record.levelname == 'WARNING':
-                    # purple
-                    self.cb.setTextColor(QColor('#9467bd'))
-                elif record.levelname == 'CRITICAL':
-                    # red
-                    self.cb.setTextColor(QColor('#d62728'))
-                else:
-                    # black
-                    self.cb.setTextColor(QColor('#000000'))
+                self.settings.beginGroup('log_colors')
+                clr = QColor(self.settings.value(record.levelname,
+                                                 "#000000"))
+                self.settings.endGroup()
+                self.cb.setTextColor(clr)
 
                 self.cb.append(msg)
         else:
@@ -107,12 +93,13 @@ class PlotChart(object):
     Object containing the plot widgets and the associated plot curves
     """
 
-    def __init__(self, title):
+    def __init__(self, title, settings):
         self.title = title
         self.dataPoints = []
         self.plotWidget = None
         self.plotCurves = []
         self.interpolationPoints = 100
+        self.settings = settings
 
     def addPlotCurve(self, dataPoint):
         """
@@ -122,8 +109,11 @@ class PlotChart(object):
         """
         self.dataPoints.append(dataPoint)
 
-        colorIdxItem = len(self.plotCurves) % len(TABLEAU_COLORS)
-        colorItem = QColor(TABLEAU_COLORS[colorIdxItem][1])
+        self.settings.beginGroup('plot_colors')
+        cKeys = self.settings.childKeys()
+        colorIdxItem = len(self.plotCurves) % len(cKeys)
+        colorItem = QColor(self.settings.value(cKeys[colorIdxItem]))
+        self.settings.endGroup()
 
         self.plotCurves.append(self.plotWidget.plot(name=dataPoint.name, pen=mkPen(colorItem, width=2)))
 

@@ -12,7 +12,6 @@ from PyQt5.QtWidgets import *
 from pyqtgraph import PlotWidget, exporters, TextItem, mkBrush
 from pyqtgraph.dockarea import *
 
-from pywisp import TABLEAU_COLORS
 from .connection import SerialConnection
 from .experiments import ExperimentInteractor, ExperimentView, PropertyItem
 from .registry import *
@@ -46,7 +45,7 @@ class MainGui(QMainWindow):
 
         # load settings
         self._settings = QSettings()
-        self._readSettings()
+        self._initSettings()
 
         # create experiment backend
         self.exp = ExperimentInteractor(moduleList, self.inputQueue, self)
@@ -243,7 +242,8 @@ class MainGui(QMainWindow):
         self.dataDock.addWidget(self.dataWidget)
 
         # init logger for logging box
-        self.textLogger = PlainTextLogger(logging.INFO)
+        self.textLogger = PlainTextLogger(self._settings,
+                                          logging.INFO)
         self.textLogger.set_target_cb(self.logBox)
         logging.getLogger().addHandler(self.textLogger)
         self._logger.info('Laborvisualisierung')
@@ -335,16 +335,49 @@ class MainGui(QMainWindow):
             self._settings.setValue("opt/timer_timer", int(timerTime))
             self._logger.info("Set timer time to {}".format(timerTime))
 
-    def _readSettings(self):
-        # add default settings if none are present
-        if not self._settings.contains("view/show_coordinates"):
-            self._settings.setValue("view/show_coordinates", "True")
+    def _addSetting(self, group, setting, value):
+        """
+        Add a setting, if settings is present, no changes are made.
 
-        if not self._settings.contains("opt/interpolation_points"):
-            self._settings.setValue("opt/interpolation_points", 100)
+        :param setting (str): Setting to add.
+        :param value: Value to be set.
+        """
+        if not self._settings.contains(group + '/' + setting):
+            self._settings.beginGroup(group)
+            self._settings.setValue(setting, value)
+            self._settings.endGroup()
 
-        if not self._settings.contains("opt/timer_time"):
-            self._settings.setValue("opt/timer_time", 100)
+    def _initSettings(self):
+        """
+        Provide initial settings for the config file.
+
+        """
+        # view management
+        self._addSetting("view", "show_coordinates", "True")
+
+        # plot management
+        self._addSetting("plot", "interpolation_points", 100)
+        self._addSetting("plot", "timer_time", 100)
+
+        # log management
+        self._addSetting("log_colors", "CRITICAL", "#DC143C")
+        self._addSetting("log_colors", "ERROR", "#B22222")
+        self._addSetting("log_colors", "WARNING", "#DAA520")
+        self._addSetting("log_colors", "INFO", "#101010")
+        self._addSetting("log_colors", "DEBUG", "#4682B4")
+        self._addSetting("log_colors", "NOTSET", "#000000")
+
+        # plot management
+        self._addSetting("plot_colors", "blue", "#1f77b4")
+        self._addSetting("plot_colors", "orange", "#ff7f0e")
+        self._addSetting("plot_colors", "green", "#2ca02c")
+        self._addSetting("plot_colors", "red", "#d62728")
+        self._addSetting("plot_colors", "purple", "#9467bd")
+        self._addSetting("plot_colors", "brown", "#8c564b")
+        self._addSetting("plot_colors", "pink", "#e377c2")
+        self._addSetting("plot_colors", "gray", "#7f7f7f")
+        self._addSetting("plot_colors", "olive", "#bcbd22")
+        self._addSetting("plot_colors", "cyan", "#17becf")
 
     def _writeSettings(self):
         """ Store the application state. """
@@ -486,8 +519,11 @@ class MainGui(QMainWindow):
                 toplevelItem.addChild(child)
 
         for i in range(toplevelItem.childCount()):
-            colorIdxItem = i % len(TABLEAU_COLORS)
-            colorItem = QColor(TABLEAU_COLORS[colorIdxItem][1])
+            self._settings.beginGroup('plot_colors')
+            cKeys = self._settings.childKeys()
+            colorIdxItem = i % len(cKeys)
+            colorItem = QColor(self._settings.value(cKeys[colorIdxItem]))
+            self._settings.endGroup()
             toplevelItem.child(i).setBackground(0, colorItem)
 
         self.plots(toplevelItem)
@@ -523,8 +559,11 @@ class MainGui(QMainWindow):
         toplevelItem.takeChild(toplevelItem.indexOfChild(self.dataPointTreeWidget.selectedItems()[0]))
 
         for i in range(toplevelItem.childCount()):
-            colorIdxItem = i % len(TABLEAU_COLORS)
-            colorItem = QColor(TABLEAU_COLORS[colorIdxItem][1])
+            self._settings.beginGroup('plot_colors')
+            cKeys = self._settings.childKeys()
+            colorIdxItem = i % len(cKeys)
+            colorItem = QColor(self._settings.value(cKeys[colorIdxItem]))
+            self._settings.endGroup()
             toplevelItem.child(i).setBackground(0, colorItem)
 
         self.plots(toplevelItem)
