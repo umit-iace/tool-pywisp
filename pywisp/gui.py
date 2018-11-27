@@ -303,6 +303,7 @@ class MainGui(QMainWindow):
         # todo
         self._currentItem = None
         self.dataPointBuffers = None
+        self.plotCharts = []
 
         if not self.loadExpFromFile(fileName):
             return
@@ -312,15 +313,9 @@ class MainGui(QMainWindow):
         self.stopExp.connect(self.exp.stopExperiment)
         self.exp.expFinished.connect(self.saveLastMeas)
 
-        self._applyFirstExperiment()
-        dataPointNames = self.exp.getDataPoints()
-
         self._updateExperimentsList()
 
-        self.plotCharts = []
-        if dataPointNames:
-            dataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
-            self.updateDataPoints(dataPointNames, dataPointBuffers)
+        self._applyFirstExperiment()
 
     def _updateExperimentsList(self):
         self.experimentList.clear()
@@ -840,6 +835,12 @@ class MainGui(QMainWindow):
         self.setQListItemBold(self.experimentList, self._currentItem, success)
         self.setQListItemBold(self.lastMeasList, self._currentItem, success)
 
+        dataPointNames = self.exp.getDataPoints()
+
+        if dataPointNames:
+            dataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
+            self.updateDataPoints(dataPointNames, dataPointBuffers)
+
         return success
 
     @pyqtSlot(QListWidgetItem)
@@ -852,6 +853,12 @@ class MainGui(QMainWindow):
 
         self.setQListItemBold(self.experimentList, item, success)
         self.setQListItemBold(self.lastMeasList, item, success)
+
+        dataPointNames = self.exp.getDataPoints()
+
+        if dataPointNames:
+            dataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
+            self.updateDataPoints(dataPointNames, dataPointBuffers)
 
     def _applyExperimentByIdx(self, index=0):
         """
@@ -967,17 +974,16 @@ class MainGui(QMainWindow):
         # save actual parameter
         for row in range(self.exp.targetModel.rowCount()):
             index = self.exp.targetModel.index(row, 0)
+
             parent = index.model().itemFromIndex(index)
-            child = index.model().item(index.row(), 1)
-            subModuleName = child.data(role=PropertyItem.RawDataRole)
+            moduleName = parent.data(role=PropertyItem.RawDataRole)
 
-            if subModuleName is None:
-                continue
-
-            settings = self.exp.getSettings(parent)
-            for key, val in settings.items():
-                if val is not None:
-                    experiment[subModuleName][key] = val
+            for module in getRegisteredExperimentModules():
+                if module[1] == moduleName:
+                    settings = self.exp.getSettings(parent)
+                    for key, val in settings.items():
+                        if val is not None:
+                            experiment[moduleName][key] = val
         data.update({'exp': experiment})
 
         self.lastMeasurements.append(data)

@@ -149,8 +149,7 @@ class ExperimentInteractor(QObject):
         # create model
         self.targetModel = ExperimentModel(self)
         self.targetModel.itemChanged.connect(self.itemChanged)
-        # insert header
-        self.targetModel.setHorizontalHeaderLabels(['Property', 'Value'])
+
 
     def _addSettings(self, index):
         parent = index.model().itemFromIndex(index)
@@ -234,6 +233,8 @@ class ExperimentInteractor(QObject):
         """
         self.dataPoints = []
         self.targetModel.clear()
+        # insert header
+        self.targetModel.setHorizontalHeaderLabels(['Property', 'Value'])
         # insert main items
         for key, value in exp.items():
             if key == 'Name':
