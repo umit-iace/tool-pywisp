@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 from copy import deepcopy
+from operator import itemgetter
 from queue import Queue
 
 import pkg_resources
@@ -11,13 +12,13 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from pyqtgraph import PlotWidget, exporters, TextItem, mkBrush
 from pyqtgraph.dockarea import *
+from pyqtgraph.parametertree import ParameterTree, Parameter
 
 from .connection import SerialConnection
-from .experiments import ExperimentInteractor, ExperimentView, PropertyItem
+from .experiments import ExperimentInteractor, PropertyItem
 from .registry import *
 from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, CSVExporter, DataIntDialog
 from .visualization import MplVisualizer
-from operator import itemgetter
 
 
 class MainGui(QMainWindow):
@@ -48,24 +49,8 @@ class MainGui(QMainWindow):
         self._settings = QSettings()
         self._initSettings()
 
-        # create experiment backend
+        # create experiment
         self._experiments = []
-        if fileName is None:
-            # check if defaults.sreg exists
-            if os.path.isfile('default.sreg'):
-                fileName = 'default.sreg'
-            else:
-                self._logger.error('No default.sreg found!')
-                return
-        else:
-            if not os.path.isfile(fileName):
-                self._logger.error('Config file {} does not exists!'.format(fileName))
-                return
-
-        moduleList = self.loadExpFromFile(fileName)
-        self.exp = ExperimentInteractor(moduleList, self.inputQueue, self)
-        self.runExp.connect(self.exp.runExperiment)
-        self.stopExp.connect(self.exp.stopExperiment)
 
         # window properties
         icon_size = QSize(25, 25)
@@ -107,10 +92,8 @@ class MainGui(QMainWindow):
         self.standardDockState = self.area.saveState()
 
         # property dock
-        self.targetView = ExperimentView(self)
-        self.targetView.setModel(self.exp.targetModel)
-        self.targetView.expanded.connect(self.targetViewChanged)
-        self.targetView.collapsed.connect(self.targetViewChanged)
+        self.targetView = ParameterTree(self, showHeader=False)
+        self.targetView.setRootIsDecorated(False)
 
         self.propertyDock.addWidget(self.targetView)
 
@@ -136,7 +119,6 @@ class MainGui(QMainWindow):
         self.experimentList.setSelectionMode(QAbstractItemView.SingleSelection)
         self.experimentDock.addWidget(self.experimentList)
         self.experimentList.itemDoubleClicked.connect(self.experimentDclicked)
-        self._experimentsFileName = ""
         self._currentExperimentIndex = None
         self._currentExperimentName = None
         self._experimentStartTime = 0
@@ -159,7 +141,6 @@ class MainGui(QMainWindow):
         self.lastMeasList = QListWidget(self)
         self.lastMeasDock.addWidget(self.lastMeasList)
         self.lastMeasList.itemDoubleClicked.connect(self.loadLastMeas)
-        self.exp.expFinished.connect(self.saveLastMeas)
         self.lastMeasurements = []
 
         # log dock
@@ -175,11 +156,6 @@ class MainGui(QMainWindow):
 
         self.dataPointListWidget = QListWidget()
         self.dataPointListLayout = QVBoxLayout()
-        dataPointNames = self.exp.getDataPoints()
-        self.plotCharts = []
-        if dataPointNames:
-            self.dataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
-            self.dataPointListWidget.addItems(dataPointNames)
         self.dataPointListWidget.setLayout(self.dataPointListLayout)
         self.dataPointListWidget.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.dataLayout.addWidget(self.dataPointListWidget)
@@ -323,14 +299,31 @@ class MainGui(QMainWindow):
         self._currentTimerTime = 10
         self._currentInterpolationPoints = 10
 
-        self._currentItem = None
-
-        # update experiment list mit loaded defaults.sreg
-        self._updateExperimentsList()
-
-        if not self._applyExperimentByName(self._experiments[0]['Name']):
-            self._logger.error('Can not apply experiment {}!'.format(self._experiments[0]['Name']))
+        # todo
+        # read config file
+        if not self.loadExpFromFile(fileName):
             return
+
+
+        # das ganze interaktions zeug
+
+        # moduleList = self.loadExpFromFile(fileName)
+        # self.exp = ExperimentInteractor(moduleList, self.inputQueue, self)
+        # self.runExp.connect(self.exp.runExperiment)
+        # self.stopExp.connect(self.exp.stopExperiment)
+        #
+        # datenpunkte
+        # dataPointNames = self.exp.getDataPoints()
+        # self.plotCharts = []
+        # if dataPointNames:
+        #     self.dataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
+        #     self.dataPointListWidget.addItems(dataPointNames)
+        #
+        # self.exp.expFinished.connect(self.saveLastMeas)
+        #
+        # if not self._applyExperimentByName(self._experiments[0]['Name']):
+        #     self._logger.error('Can not apply experiment {}!'.format(self._experiments[0]['Name']))
+        #     return
 
     def setIntPoints(self):
         self._settings.beginGroup('plot')
@@ -395,10 +388,6 @@ class MainGui(QMainWindow):
         self._addSetting("plot_colors", "gray", "#7f7f7f")
         self._addSetting("plot_colors", "olive", "#bcbd22")
         self._addSetting("plot_colors", "cyan", "#17becf")
-
-    def _writeSettings(self):
-        """ Store the application state. """
-        pass
 
     def updateCoordInfo(self, pos, widget, coordItem):
         mouseCoords = widget.getPlotItem().vb.mapSceneToView(pos)
@@ -813,27 +802,44 @@ class MainGui(QMainWindow):
         load experiments from file
         :param file_name:
         """
-        moduleList = []
-        self._experimentsFileName = os.path.split(fileName)[-1][:-5]
-        self._logger.info("Lade Experimentedatei: {0}".format(self._experimentsFileName))
+        success = True
+        if fileName is None:
+            if os.path.isfile('default.sreg'):
+                fileName = 'default.sreg'
+            else:
+                self._logger.error('No default.sreg found!')
+                success = False
+        else:
+            if not os.path.isfile(fileName):
+                self._logger.error('Config file {} does not exists!'.format(fileName))
+                success = False
+
+        experimentsFileName = os.path.split(fileName)[0]
+        self._logger.info("Load config file: {0}".format(experimentsFileName))
         with open(fileName.encode(), "r") as f:
-            self._experiments += yaml.load(f)
+            experiments = yaml.load(f)
+
+        for experiment in experiments:
+            params = []
+            for key, val in experiment.items():
+                if key == 'Name':
+                    expName = val
+                    continue
+
+                subModule = {'name': key, 'type': 'group', 'children': list()}
+                for k, v in val.items():
+                    if k == 'Module':
+                        continue
+                    subModule['children'].append({'name': k, 'type': 'float', 'value': float(v)})
+                params.append(subModule)
+
+            self._experiments.append(Parameter.create(name=expName, type='group', children=params))
 
         self._logger.info("Lade {} Experimente".format(len(self._experiments)))
 
-        for key, value in self._experiments[0].items():
-            if key == 'Name':
-                continue
+        self.targetView.setParameters(self._experiments[0], showTop=False)
 
-            moduleList.append(value['type'])
-
-        return moduleList
-
-    def _updateExperimentsList(self):
-        self.experimentList.clear()
-        for exp in self._experiments:
-            self._logger.debug("Füge '{}' zur Experimentliste hinzu".format(exp["Name"]))
-            self.experimentList.addItem(exp["Name"])
+        return success
 
     @pyqtSlot(QListWidgetItem)
     def experimentDclicked(self, item):
@@ -1012,7 +1018,7 @@ class MainGui(QMainWindow):
             self._logger.error("loadLastMeas(): Invalid index '{}')".format(idx))
             return False
 
-        self._logger.info("Wiederherstellung der Messung '{}'".format(expName))
+        self._logger.info("Restore of measurement '{}'".format(expName))
 
         measurement = self.lastMeasurements[idx]
 
@@ -1026,7 +1032,7 @@ class MainGui(QMainWindow):
         for i in range(self.dataPointTreeWidget.topLevelItemCount()):
             self.updatePlot(self.dataPointTreeWidget.topLevelItem(i))
 
-        self._logger.info("Messung '{}' übernommen".format(measurement['exp']['Name']))
+        self._logger.info("Apply measurement '{}'".format(measurement['exp']['Name']))
 
     def setQListItemBold(self, qList=None, item=None, state=True):
         for i in range(qList.count()):
