@@ -983,11 +983,11 @@ class MainGui(QMainWindow):
                     settings = self.exp.getSettings(parent)
                     for key, val in settings.items():
                         if val is not None:
-                            # check if key is available
-                            if experiment[moduleName][key] is not None:
-                                experiment[moduleName][key] = val
-                            else:
+                            # check if module is available
+                            if experiment[moduleName] is None:
                                 experiment[moduleName] = {key: val}
+                            else:
+                                experiment[moduleName][key] = val
         data.update({'exp': experiment})
 
         self.lastMeasurements.append(data)
