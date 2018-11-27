@@ -2,12 +2,16 @@
 from collections import OrderedDict
 
 import ast
-from PyQt5.QtCore import Qt, pyqtSlot, QModelIndex, QSize, pyqtSignal
+from PyQt5.QtCore import Qt, QSize, pyqtSignal
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
-from PyQt5.QtWidgets import QItemDelegate, QComboBox, QTreeView
+from PyQt5.QtWidgets import QItemDelegate, QTreeView
 
 from . import experimentModules
 from .registry import *
+
+
+class ExperimentException(Exception):
+    pass
 
 
 class ExperimentModel(QStandardItemModel):
@@ -64,7 +68,6 @@ class PropertyItem(QStandardItem):
             try:
                 self._data = ast.literal_eval(Any)
             except (SyntaxError, ValueError) as e:
-                # print(e)
                 self._logger.exception(e)
                 return
             self._text = str(self._data)
@@ -102,73 +105,19 @@ class PropertyDelegate(QItemDelegate):
 
     def __init__(self, parent=None):
         QItemDelegate.__init__(self, parent)
-        self.comboDel = ComboDelegate()
 
     def createEditor(self, parent, option, index):
         if index.parent().isValid():
             return QItemDelegate.createEditor(self, parent, option, index)
         else:
             # no parent -> top of hierarchy
-            return self.comboDel.createEditor(parent, option, index)
+            return None
 
     def setEditorData(self, editor, index):
-        if isinstance(editor, QComboBox):
-            self.comboDel.setEditorData(editor, index)
-        else:
-            QItemDelegate.setEditorData(self, editor, index)
+        QItemDelegate.setEditorData(self, editor, index)
 
     def setModelData(self, editor, model, index):
-        if isinstance(editor, QComboBox):
-            self.comboDel.setModelData(editor, model, index)
-        else:
-            QItemDelegate.setModelData(self, editor, model, index)
-
-
-class ComboDelegate(QItemDelegate):
-    """
-    A delegate that adds a combobox to cells that lists
-    all available types of Subclasses of ExperimentModule
-    """
-
-    def __init__(self, parent=None):
-        QItemDelegate.__init__(self, parent)
-
-    def createEditor(self, parent, option, index):
-        editor = QComboBox(parent)
-        editor.addItems(self.extractEntries(index))
-        editor.currentIndexChanged.connect(self.currentIndexChanged)
-        return editor
-
-    def setEditorData(self, editor, index):
-        name = index.model().itemFromIndex(index).text()
-        editor.blockSignals(True)
-        editor.setCurrentIndex(editor.findText(name))
-        editor.blockSignals(False)
-
-    def setModelData(self, editor, model, index):
-        model.setData(
-            index,
-            editor.currentText() if editor.currentText() != "None" else None,
-            role=PropertyItem.RawDataRole)
-
-    @pyqtSlot(int)
-    def currentIndexChanged(self, idx):
-        self.commitData.emit(self.sender())
-
-    @staticmethod
-    def extractEntries(index):
-        """
-        extract all possible choices for the selected Experiment Module
-        """
-        entries = ["None"]
-        idx = index.model().index(index.row(), 0, QModelIndex())
-        simModuleName = str(index.model().itemFromIndex(idx).text())
-        simModule = getattr(experimentModules, simModuleName)
-        subModules = getRegisteredExperimentModules(simModule)
-        for subModule in subModules:
-            entries.append(subModule[1])
-
-        return entries
+        QItemDelegate.setModelData(self, editor, model, index)
 
 
 class ExperimentView(QTreeView):
@@ -190,64 +139,51 @@ class ExperimentInteractor(QObject):
     """
     expFinished = pyqtSignal()
 
-    def __init__(self, moduleList, inputQueue, parent=None):
+    def __init__(self, inputQueue, targetView, parent=None):
         QObject.__init__(self, parent)
         self._logger = logging.getLogger(self.__class__.__name__)
-        self.setupList = moduleList
-        self.moduleList = list(OrderedDict.fromkeys(self.setupList))
         self.inputQueue = inputQueue
+        self.targetView = targetView
+        self.dataPoints = None
         self.runningExperiment = False
-        self._setupModel()
-
-    def _setupModel(self):
         # create model
         self.targetModel = ExperimentModel(self)
         self.targetModel.itemChanged.connect(self.itemChanged)
-
         # insert header
         self.targetModel.setHorizontalHeaderLabels(['Property', 'Value'])
 
-        # insert items
-        self._setupModelItems()
-
-    def _setupModelItems(self):
-        """
-        fill model with items corresponding to all predefined SimulationModules
-        """
-        # insert main items
-        for simModule in self.setupList:
-            name = PropertyItem(simModule)
-            value = PropertyItem(None)
-            newItems = [name, value]
-            self.targetModel.appendRow(newItems)
-
-        # insert settings
-        for row in range(self.targetModel.rowCount()):
-            index = self.targetModel.index(row, 0)
-            self._addSettings(index)
-
     def _addSettings(self, index):
         parent = index.model().itemFromIndex(index)
-        child = index.model().item(index.row(), 1)
         moduleName = parent.data(role=PropertyItem.RawDataRole)
-        subModuleName = child.data(role=PropertyItem.RawDataRole)
-        if subModuleName is None:
-            return
 
-        settings = self._readSettings(moduleName, subModuleName)
+        settings = self._readSettings(moduleName)
         for key, val in settings.items():
             setting_name = PropertyItem(key)
             setting_value = PropertyItem(val)
             parent.appendRow([setting_name, setting_value])
 
-    def _readSettings(self, moduleName, subModuleName):
+    def _readSettings(self, moduleName):
         """
-        Read the public settings from a experiment module
+        Read the public settings from an experiment module
         """
-        moduleCls = getattr(experimentModules, moduleName)
-        subModuleCls = getExperimentModuleClassByName(moduleCls,
-                                                      subModuleName)
-        return subModuleCls.publicSettings
+        for module in getRegisteredExperimentModules():
+            if module[1] == moduleName:
+                return module[0].publicSettings
+
+        raise ExperimentException("_readSettings(): No module called {} found!".format(moduleName))
+
+    def _readDataPoints(self, index):
+        """
+        Read the data points from an experiment module
+        """
+        parent = index.model().itemFromIndex(index)
+        moduleName = parent.data(role=PropertyItem.RawDataRole)
+
+        for module in getRegisteredExperimentModules():
+            if module[1] == moduleName:
+                return module[0].dataPoints
+
+        raise ExperimentException("_readDataPoints(): No module called {} found!".format(moduleName))
 
     def itemChanged(self, item):
         if item.parent():
@@ -288,147 +224,104 @@ class ExperimentInteractor(QObject):
             self._logger.error("setExperiment(): only scalar input allowed!")
             return False
 
-        return self._applyExperiment(exp, False)
+        return self._applyExperiment(exp)
 
-    def restoreExperiment(self, exp):
-        """
-        Restore the given generated experiment settings into the target model.
-
-        Returns:
-            bool: `True` if successful, `False` if errors occurred.
-        """
-        if exp is None:
-            return
-        if isinstance(exp, list):
-            self._logger.error("restoreExperiment(): only scalar input allowed!")
-            return False
-
-        return self._applyExperiment(exp, True)
-
-    def _applyExperiment(self, exp, ignoreIsPublic):
+    def _applyExperiment(self, exp):
         """
         Set all module settings to those provided in the experiment.
         Returns:
             bool: `True` if successful, `False` if errors occurred.
         """
-        self.targetModel.removeRows(0, self.targetModel.rowCount())
-
-        # load module defaults
-        self._setupModelItems()
-
-        # overwrite all settings with the provided ones
-        for moduleName, value in exp.items():
-            if moduleName == "Name":
+        self.dataPoints = []
+        self.targetModel.clear()
+        # insert main items
+        for key, value in exp.items():
+            if key == 'Name':
                 continue
 
-            moduleType = value['type']
+            name = PropertyItem(key)
+            value = None
+            newItems = [name, value]
+            self.targetModel.appendRow(newItems)
 
-            # sanity check
-            moduleCls = getattr(experimentModules, moduleType, None)
-            if moduleCls is None:
-                self._logger.error("_applyExperiment(): No module called {0}"
-                                   "".format(moduleName))
+        # insert default settings
+        for row in range(self.targetModel.rowCount()):
+            index = self.targetModel.index(row, 0)
+            try:
+                self._addSettings(index)
+                self.dataPoints += self._readDataPoints(index)
+            except ExperimentException as e:
+                self._logger.error(e)
                 return False
 
-            items = self.targetModel.findItems(moduleType)
-            if not len(items):
-                self._logger.error("_applyExperiment(): No item in List called {0}"
-                                   "".format(moduleName))
-                return False
+        for moduleName, moduleValue in exp.items():
+            if moduleName == 'Name':
+                continue
 
-            moduleItem = None
-            for idx, item in enumerate(items):
-                if not item.isUsed:
-                    item.isUsed = True
-                    moduleItem = items.pop(idx)
+            if not moduleValue:
+                continue
 
-            # sanity check
-            subModuleCls = getExperimentModuleClassByName(moduleCls,
-                                                          moduleName)
+            for valKey, valVal in moduleValue.items():
+                modules = self.targetModel.findItems(moduleName)[0]
 
-            if not subModuleCls:
-                self._logger.error("_applyExperiment(): No sub-module called {0}"
-                                   "".format(moduleName))
-                return False
-
-            moduleIndex = moduleItem.index()
-            moduleTypeIndex = moduleIndex.model().index(moduleIndex.row(),
-                                                        1)
-            moduleIndex.model().setData(moduleTypeIndex,
-                                        moduleName,
-                                        role=PropertyItem.RawDataRole)
-            # due to signal connections, default settings are loaded
-            # automatically in the back
-
-            # overwrite specific settings
-            for key, val in value.items():
-                if key == "type":
-                    continue
-
-                for row in range(moduleItem.rowCount()):
-                    if self.targetModel.data(
-                            moduleItem.child(row, 0).index()) == key:
-                        value_idx = self.targetModel.index(row, 1, moduleIndex)
-                        self.targetModel.setData(value_idx,
-                                                 val,
-                                                 role=PropertyItem.RawDataRole)
+                for row in range(modules.rowCount()):
+                    if self.targetModel.data(modules.child(row, 0).index()) == valKey:
+                        valueIdx = self.targetModel.index(row, 1, self.targetModel.indexFromItem(modules))
+                        self.targetModel.setData(valueIdx, valVal, role=PropertyItem.RawDataRole)
                         break
                 else:
-                    if not ignoreIsPublic:
-                        self._logger.error("_applyExperiment(): Setting: '{0}' not "
-                                           "available for Module: '{1}'".format(
-                            key, moduleName))
-                        return False
+                    self._logger.error("_applyExperiment(): Setting: '{0}' not "
+                                       "available for Module: '{1}'".format(
+                        valKey, moduleName))
+                    return False
+
+        self.targetView.setModel(self.targetModel)
 
         return True
 
     def getDataPoints(self):
-        dataPoints = []
-        for expModule in self.moduleList:
-            moduleCls = getattr(experimentModules, expModule)
-            regExpModules = getRegisteredExperimentModules(moduleCls)
-            for idx, regExpModule in enumerate(regExpModules):
-                dataPoints += regExpModule[0].dataPoints
-
-        return dataPoints
+        return self.dataPoints
 
     def handleFrame(self, frame):
-        for expModule in self.moduleList:
-            moduleCls = getattr(experimentModules, expModule)
-            regExpModules = getRegisteredExperimentModules(moduleCls)
-            # test all modules
-            for idx, regExpModule in enumerate(regExpModules):
-                dataPoints = regExpModule[0].handleFrame(frame)
-                if dataPoints is not None:
-                    return dataPoints
+        for row in range(self.targetModel.rowCount()):
+            index = self.targetModel.index(row, 0)
+
+            parent = index.model().itemFromIndex(index)
+            moduleName = parent.data(role=PropertyItem.RawDataRole)
+
+            for module in getRegisteredExperimentModules():
+                if module[1] == moduleName:
+                    dataPoints = module[0].handleFrame(frame)
+                    if dataPoints is not None:
+                        return dataPoints
+
+        self._logger.warning("Frame with id={} can not be processed!".format(frame.min_id))
 
     def runExperiment(self):
         data = []
         self.runningExperiment = True
         for row in range(self.targetModel.rowCount()):
             index = self.targetModel.index(row, 0)
+
             parent = index.model().itemFromIndex(index)
-            child = index.model().item(index.row(), 1)
             moduleName = parent.data(role=PropertyItem.RawDataRole)
-            subModuleName = child.data(role=PropertyItem.RawDataRole)
 
-            if subModuleName is None:
-                continue
+            for module in getRegisteredExperimentModules():
+                if module[1] == moduleName:
+                    startParams = module[0].getStartParams(self)
+                    if startParams is not None:
+                        data.append(startParams)
 
-            moduleClass = getattr(experimentModules, moduleName, None)
-            subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
-            startParams = subModuleClass.getStartParams(self)
-            if startParams is not None:
-                data.append(startParams)
+                    settings = self.getSettings(parent)
+                    vals = []
+                    for key, val in settings.items():
+                        if val is not None:
+                            vals.append(val)
+                    params = module[0].getParams(self, vals)
+                    if params and not None:
+                        data.append(params)
 
-            settings = self.getSettings(parent)
-            vals = []
-            for key, val in settings.items():
-                if val is not None:
-                    vals.append(val)
-            params = subModuleClass.getParams(self, vals)
-            if params and not None:
-                data.append(params)
+                    break
 
         # start experiment
         payload = bytes([1])
@@ -442,28 +335,22 @@ class ExperimentInteractor(QObject):
         data = []
         for row in range(self.targetModel.rowCount()):
             index = self.targetModel.index(row, 0)
+
             parent = index.model().itemFromIndex(index)
-            child = index.model().item(index.row(), 1)
             moduleName = parent.data(role=PropertyItem.RawDataRole)
-            subModuleName = child.data(role=PropertyItem.RawDataRole)
 
-            if subModuleName is None:
-                continue
+            for module in getRegisteredExperimentModules():
+                if module[1] == moduleName:
+                    settings = self.getSettings(parent)
+                    vals = []
+                    for key, val in settings.items():
+                        if val is not None:
+                            vals.append(val)
+                    params = module[0].getParams(self, vals)
+                    if params and not None:
+                        data.append(params)
 
-            moduleClass = getattr(experimentModules, moduleName, None)
-            subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
-            startParams = subModuleClass.getStartParams(self)
-            if startParams is not None:
-                data.append(startParams)
-
-            settings = self.getSettings(parent)
-            vals = []
-            for key, val in settings.items():
-                if val is not None:
-                    vals.append(val)
-            params = subModuleClass.getParams(self, vals)
-            if params and not None:
-                data.append(params)
+                    break
 
         for _data in data:
             self.inputQueue.put(_data)
@@ -477,19 +364,17 @@ class ExperimentInteractor(QObject):
         self.runningExperiment = False
         for row in range(self.targetModel.rowCount()):
             index = self.targetModel.index(row, 0)
+
             parent = index.model().itemFromIndex(index)
-            child = index.model().item(index.row(), 1)
             moduleName = parent.data(role=PropertyItem.RawDataRole)
-            subModuleName = child.data(role=PropertyItem.RawDataRole)
 
-            if subModuleName is None:
-                continue
+            for module in getRegisteredExperimentModules():
+                if module[1] == moduleName:
+                    stopParams = module[0].getStopParams(self)
+                    if stopParams is not None:
+                        data.append(stopParams)
 
-            moduleClass = getattr(experimentModules, moduleName, None)
-            subModuleClass = getExperimentModuleClassByName(moduleClass, subModuleName)
-            params = subModuleClass.getStopParams(self)
-            if params and not None:
-                data.append(params)
+                    break
 
         # stop experiment
         payload = bytes([0])

@@ -15,7 +15,7 @@ from pyqtgraph.dockarea import *
 from pyqtgraph.parametertree import ParameterTree, Parameter
 
 from .connection import SerialConnection
-from .experiments import ExperimentInteractor, PropertyItem
+from .experiments import ExperimentInteractor, PropertyItem, ExperimentView
 from .registry import *
 from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, CSVExporter, DataIntDialog
 from .visualization import MplVisualizer
@@ -92,8 +92,9 @@ class MainGui(QMainWindow):
         self.standardDockState = self.area.saveState()
 
         # property dock
-        self.targetView = ParameterTree(self, showHeader=False)
-        self.targetView.setRootIsDecorated(False)
+        self.targetView = ExperimentView(self)
+        self.targetView.expanded.connect(self.targetViewChanged)
+        self.targetView.collapsed.connect(self.targetViewChanged)
 
         self.propertyDock.addWidget(self.targetView)
 
@@ -300,30 +301,32 @@ class MainGui(QMainWindow):
         self._currentInterpolationPoints = 10
 
         # todo
-        # read config file
+        self._currentItem = None
+        self.dataPointBuffers = None
+
         if not self.loadExpFromFile(fileName):
             return
 
+        self.exp = ExperimentInteractor(self.inputQueue, self.targetView, self)
+        self.runExp.connect(self.exp.runExperiment)
+        self.stopExp.connect(self.exp.stopExperiment)
+        self.exp.expFinished.connect(self.saveLastMeas)
 
-        # das ganze interaktions zeug
+        self._applyFirstExperiment()
+        dataPointNames = self.exp.getDataPoints()
 
-        # moduleList = self.loadExpFromFile(fileName)
-        # self.exp = ExperimentInteractor(moduleList, self.inputQueue, self)
-        # self.runExp.connect(self.exp.runExperiment)
-        # self.stopExp.connect(self.exp.stopExperiment)
-        #
-        # datenpunkte
-        # dataPointNames = self.exp.getDataPoints()
-        # self.plotCharts = []
-        # if dataPointNames:
-        #     self.dataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
-        #     self.dataPointListWidget.addItems(dataPointNames)
-        #
-        # self.exp.expFinished.connect(self.saveLastMeas)
-        #
-        # if not self._applyExperimentByName(self._experiments[0]['Name']):
-        #     self._logger.error('Can not apply experiment {}!'.format(self._experiments[0]['Name']))
-        #     return
+        self._updateExperimentsList()
+
+        self.plotCharts = []
+        if dataPointNames:
+            dataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
+            self.updateDataPoints(dataPointNames, dataPointBuffers)
+
+    def _updateExperimentsList(self):
+        self.experimentList.clear()
+        for exp in self._experiments:
+            self._logger.debug("Add '{}' to experiment list".format(exp["Name"]))
+            self.experimentList.addItem(exp["Name"])
 
     def setIntPoints(self):
         self._settings.beginGroup('plot')
@@ -681,11 +684,9 @@ class MainGui(QMainWindow):
             self.area.addDock(dock, "bottom", self.animationDock)
 
     def closedDock(self):
-        """ Gets called when a dock was closed, if it was a plot dock remove the corresponding PlotChart object
+        """
+        Gets called when a dock was closed, if it was a plot dock remove the corresponding PlotChart object
         form the list
-
-        Returns
-        -------
 
         """
         openDocks = [dock.title() for dock in self.findAllPlotDocks()]
@@ -817,27 +818,27 @@ class MainGui(QMainWindow):
         experimentsFileName = os.path.split(fileName)[0]
         self._logger.info("Load config file: {0}".format(experimentsFileName))
         with open(fileName.encode(), "r") as f:
-            experiments = yaml.load(f)
-
-        for experiment in experiments:
-            params = []
-            for key, val in experiment.items():
-                if key == 'Name':
-                    expName = val
-                    continue
-
-                subModule = {'name': key, 'type': 'group', 'children': list()}
-                for k, v in val.items():
-                    if k == 'Module':
-                        continue
-                    subModule['children'].append({'name': k, 'type': 'float', 'value': float(v)})
-                params.append(subModule)
-
-            self._experiments.append(Parameter.create(name=expName, type='group', children=params))
+            self._experiments = yaml.load(f)
 
         self._logger.info("Lade {} Experimente".format(len(self._experiments)))
 
-        self.targetView.setParameters(self._experiments[0], showTop=False)
+        return success
+
+    def _applyFirstExperiment(self):
+        """
+        Apply the first experiment update the experiment index.
+
+        Returns:
+            bool: `True` if successful, `False` if errors occurred.
+        """
+        idx = 0
+
+        # apply
+        success = self._applyExperimentByIdx(idx)
+        self._currentItem = self.experimentList.item(idx)
+
+        self.setQListItemBold(self.experimentList, self._currentItem, success)
+        self.setQListItemBold(self.lastMeasList, self._currentItem, success)
 
         return success
 
@@ -851,29 +852,6 @@ class MainGui(QMainWindow):
 
         self.setQListItemBold(self.experimentList, item, success)
         self.setQListItemBold(self.lastMeasList, item, success)
-
-    def _applyExperimentByName(self, expName):
-        """
-        Apply the experiment given by `expName` und update the experiment index.
-
-        Returns:
-            bool: `True` if successful, `False` if errors occurred.
-        """
-        try:
-            idx = list(map(itemgetter("Name"), self._experiments)).index(expName)
-        except ValueError as e:
-            self._logger.error("_applyExperimentByName(): Error no regime called "
-                               "'{0}'".format(expName))
-            return False
-
-        # apply
-        success = self._applyExperimentByIdx(idx)
-        self._currentItem = self.experimentList.item(idx)
-
-        self.setQListItemBold(self.experimentList, self._currentItem, success)
-        self.setQListItemBold(self.lastMeasList, self._currentItem, success)
-
-        return success
 
     def _applyExperimentByIdx(self, index=0):
         """
@@ -1022,17 +1000,26 @@ class MainGui(QMainWindow):
 
         measurement = self.lastMeasurements[idx]
 
-        success = self.exp.restoreExperiment(measurement['exp'])
+        success = self.exp.setExperiment(measurement['exp'])
 
         self.setQListItemBold(self.lastMeasList, item, success)
         self.setQListItemBold(self.experimentList, item, success)
 
-        self.dataPointBuffers = measurement['datapointbuffers']
+        dataPointNames = self.exp.getDataPoints()
+        dataPointBuffers = measurement['datapointbuffers']
+        if dataPointNames:
+            self.updateDataPoints(dataPointNames, dataPointBuffers)
 
         for i in range(self.dataPointTreeWidget.topLevelItemCount()):
             self.updatePlot(self.dataPointTreeWidget.topLevelItem(i))
 
         self._logger.info("Apply measurement '{}'".format(measurement['exp']['Name']))
+
+    def updateDataPoints(self, dataPointNames, dataPointBuffers):
+        if dataPointNames:
+            self.dataPointBuffers = dataPointBuffers
+            self.dataPointListWidget.clear()
+            self.dataPointListWidget.addItems(dataPointNames)
 
     def setQListItemBold(self, qList=None, item=None, state=True):
         for i in range(qList.count()):
