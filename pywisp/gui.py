@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
 from copy import deepcopy
-from operator import itemgetter
 from queue import Queue
 
 import pkg_resources
@@ -12,10 +11,9 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from pyqtgraph import PlotWidget, exporters, TextItem, mkBrush
 from pyqtgraph.dockarea import *
-from pyqtgraph.parametertree import ParameterTree, Parameter
 
 from .connection import SerialConnection
-from .experiments import ExperimentInteractor, PropertyItem, ExperimentView
+from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, CSVExporter, DataIntDialog
 from .visualization import MplVisualizer
@@ -969,26 +967,7 @@ class MainGui(QMainWindow):
         data = {}
         data.update({'datapointbuffers': deepcopy(self.dataPointBuffers)})
 
-        experiment = deepcopy(self._experiments[self._currentExperimentIndex])
-
-        # save actual parameter
-        for row in range(self.exp.targetModel.rowCount()):
-            index = self.exp.targetModel.index(row, 0)
-
-            parent = index.model().itemFromIndex(index)
-            moduleName = parent.data(role=PropertyItem.RawDataRole)
-
-            for module in getRegisteredExperimentModules():
-                if module[1] == moduleName:
-                    settings = self.exp.getSettings(parent)
-                    for key, val in settings.items():
-                        if val is not None:
-                            # check if module is available
-                            if experiment[moduleName] is None:
-                                experiment[moduleName] = {key: val}
-                            else:
-                                experiment[moduleName][key] = val
-        data.update({'exp': experiment})
+        data.update({'exp': deepcopy(self.exp.getExperiment())})
 
         self.lastMeasurements.append(data)
         self.lastMeasList.addItem(

@@ -17,6 +17,13 @@ class ExperimentException(Exception):
 class ExperimentModel(QStandardItemModel):
     def __init__(self, parent=None):
         QStandardItemModel.__init__(self, parent)
+        self._name = None
+
+    def setName(self, name):
+        self._name = name
+
+    def getName(self):
+        return self._name
 
     def flags(self, index):
         if index.column() == 1:
@@ -150,7 +157,6 @@ class ExperimentInteractor(QObject):
         self.targetModel = ExperimentModel(self)
         self.targetModel.itemChanged.connect(self.itemChanged)
 
-
     def _addSettings(self, index):
         parent = index.model().itemFromIndex(index)
         moduleName = parent.data(role=PropertyItem.RawDataRole)
@@ -238,6 +244,7 @@ class ExperimentInteractor(QObject):
         # insert main items
         for key, value in exp.items():
             if key == 'Name':
+                self.targetModel.setName(value)
                 continue
 
             name = PropertyItem(key)
@@ -271,10 +278,9 @@ class ExperimentInteractor(QObject):
                         self.targetModel.setData(valueIdx, valVal, role=PropertyItem.RawDataRole)
                         break
                 else:
-                    self._logger.error("_applyExperiment(): Setting: '{0}' not "
+                    self._logger.warning("_applyExperiment(): Setting: '{0}' not "
                                        "available for Module: '{1}'".format(
                         valKey, moduleName))
-                    return False
 
         self.targetView.setModel(self.targetModel)
 
@@ -386,3 +392,20 @@ class ExperimentInteractor(QObject):
             self.inputQueue.put(_data)
 
         self.expFinished.emit()
+
+    def getExperiment(self):
+        exp = {'Name': self.targetModel.getName()}
+
+        for row in range(self.targetModel.rowCount()):
+            index = self.targetModel.index(row, 0)
+
+            parent = index.model().itemFromIndex(index)
+            moduleName = parent.data(role=PropertyItem.RawDataRole)
+
+            for module in getRegisteredExperimentModules():
+                if module[1] == moduleName:
+                    exp[moduleName] = self.getSettings(parent)
+
+                    break
+
+        return exp
