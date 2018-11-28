@@ -934,6 +934,8 @@ class MainGui(QMainWindow):
 
         for frame in frames:
             data = self.exp.handleFrame(frame)
+            if data is None:
+                continue
             time = data['Zeit'] / 1000.0
             datapoints = data['Punkte']
             names = data['Punkte'].keys()

@@ -304,6 +304,8 @@ class ExperimentInteractor(QObject):
 
         self._logger.warning("Frame with id={} can not be processed!".format(frame.min_id))
 
+        return None
+
     def runExperiment(self):
         data = []
         self.runningExperiment = True
