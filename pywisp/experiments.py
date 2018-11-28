@@ -302,8 +302,6 @@ class ExperimentInteractor(QObject):
                     if dataPoints is not None:
                         return dataPoints
 
-        self._logger.warning("Frame with id={} can not be processed!".format(frame.min_id))
-
         return None
 
     def runExperiment(self):
