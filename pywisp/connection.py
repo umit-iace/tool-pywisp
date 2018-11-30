@@ -78,8 +78,11 @@ class SerialConnection(QtCore.QThread):
         while not self.inputQueue.empty():
             self.writeData(self.inputQueue.get())
 
-        self.min.transport_reset()
+        self.resetConnection()
         del self.min
+
+    def resetConnection(self):
+        self.min.transport_reset()
 
     def readData(self, frames):
         """ Reads and emits the data, that comes over the serial interface.

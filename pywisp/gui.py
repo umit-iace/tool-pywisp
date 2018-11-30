@@ -298,7 +298,6 @@ class MainGui(QMainWindow):
         self._currentTimerTime = 10
         self._currentInterpolationPoints = 10
 
-        # todo
         self._currentItem = None
         self.dataPointBuffers = None
         self.plotCharts = []
@@ -782,6 +781,7 @@ class MainGui(QMainWindow):
         self.connection.doRead = False
         self.timer.stop()
         self.exp.stopExperiment()
+        self.connection.resetConnection()
 
     def sendParameter(self):
         if self._currentExperimentIndex == self.experimentList.row(self._currentItem):

@@ -81,10 +81,7 @@ class DataPointBuffer(object):
         """
         Clears all the buffers of the data point
         """
-        # TODO test if erase runs better than without
-        self.values.clear()
         del self.values[:]
-        self.time.clear()
         del self.time[:]
 
 
@@ -138,11 +135,8 @@ class PlotChart(object):
 
     def clear(self):
         if self.plotWidget:
-            # TODO test if erase runs better than without
             self.plotWidget.getPlotItem().clear()
-            self.dataPoints.clear()
             del self.dataPoints[:]
-            self.plotCurves.clear()
             del self.plotCurves[:]
 
 
