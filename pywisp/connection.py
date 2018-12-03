@@ -43,7 +43,7 @@ class SerialConnection(QtCore.QThread):
                 self.writeData(self.inputQueue.get())
             if frames and self.doRead:
                 self.readData(frames)
-            time.sleep(0.001)
+            time.sleep(0.01)
 
     def connect(self):
         """ Checks of an arduino port is avaiable and connect to these one.
@@ -78,11 +78,15 @@ class SerialConnection(QtCore.QThread):
         while not self.inputQueue.empty():
             self.writeData(self.inputQueue.get())
 
-        self.resetConnection()
+        self.min.poll()
+        self.min.transport_reset()
         del self.min
 
-    def resetConnection(self):
-        self.min.transport_reset()
+    def stop(self):
+        while not self.inputQueue.empty():
+            self.writeData(self.inputQueue.get())
+
+        self.min.poll()
 
     def readData(self, frames):
         """ Reads and emits the data, that comes over the serial interface.

@@ -115,7 +115,7 @@ class PlotChart(object):
         self.plotCurves.append(self.plotWidget.plot(name=dataPoint.name, pen=mkPen(colorItem, width=2)))
 
     def setInterpolationPoints(self, interpolationPoints):
-        self.interpolationPoints = interpolationPoints
+        self.interpolationPoints = int(interpolationPoints)
 
     def updatePlot(self):
         """

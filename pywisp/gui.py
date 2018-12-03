@@ -779,9 +779,9 @@ class MainGui(QMainWindow):
         self.experimentList.repaint()
 
         self.connection.doRead = False
+        self.connection.stop()
         self.timer.stop()
         self.exp.stopExperiment()
-        self.connection.resetConnection()
 
     def sendParameter(self):
         if self._currentExperimentIndex == self.experimentList.row(self._currentItem):
@@ -904,7 +904,8 @@ class MainGui(QMainWindow):
             self.statusbarLabel.setText("Nicht Verbunden")
 
     def disconnect(self):
-        self.stopExperiment()
+        if self.actStartExperiment.isEnabled():
+            self.stopExperiment()
         self.connection.disconnect()
         self.connection = None
         self._logger.info("Arduino getrennt.")
