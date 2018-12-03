@@ -779,7 +779,7 @@ class MainGui(QMainWindow):
         self.experimentList.repaint()
 
         self.connection.doRead = False
-        self.connection.stop()
+
         self.timer.stop()
         self.exp.stopExperiment()
 
