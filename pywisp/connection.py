@@ -130,6 +130,15 @@ class TcpConnection(Connection):
             self.writeData(self.inputQueue.get())
         if not (self.sock == None):
             self.sock.close()
+        self._reset()
+
+    def clear(self):
+        self._reset()
+
+    def _reset(self,):
+        while not self.inputQueue.empty():
+            self.writeData(self.inputQueue.get())
+        time.sleep(0.1)
 
     def connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

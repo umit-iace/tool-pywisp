@@ -361,14 +361,6 @@ class MainGui(QMainWindow):
 
         self._settings.endGroup()
 
-    def _readSettings(self):
-        # add default settings if none are present
-        if not self._settings.contains("view/show_coordinates"):
-            self._settings.setValue("view/show_coordinates", "True")
-        # set default communication to serial
-        self._settings.setValue("tcp_connection_active", "False")
-        self._settings.setValue("serial_connection_active", "True")
-
     def _addSetting(self, group, setting, value):
         """
         Add a setting, if settings is present, no changes are made.
@@ -412,6 +404,10 @@ class MainGui(QMainWindow):
         self._addSetting("plot_colors", "gray", "#7f7f7f")
         self._addSetting("plot_colors", "olive", "#bcbd22")
         self._addSetting("plot_colors", "cyan", "#17becf")
+
+        # set default communication to serial
+        self._settings.setValue("tcp_connection_active", "False")
+        self._settings.setValue("serial_connection_active", "True")
 
     def updateCoordInfo(self, pos, widget, coordItem):
         mouseCoords = widget.getPlotItem().vb.mapSceneToView(pos)
