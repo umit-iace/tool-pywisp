@@ -38,6 +38,17 @@ class SerialConnection(Connection):
 
         self.doRead = False
 
+    def run(self):
+        """ Starts the timer and thread
+        """
+        while True and self.isConnected:
+            frames = self.min.poll()
+            if not self.inputQueue.empty():
+                self.writeData(self.inputQueue.get())
+            if frames and self.doRead:
+                self.readData(frames)
+            time.sleep(0.01)
+
     def connect(self):
         """ Checks of an arduino port is avaiable and connect to these one.
 
@@ -62,28 +73,27 @@ class SerialConnection(Connection):
             self.isConnected = True
             return True
 
-    def run(self):
-        """ Starts the timer and thread
-        """
-        while True and self.isConnected:
-            frames = self.min.poll()
-            if not self.inputQueue.empty():
-                self.writeData(self.inputQueue.get())
-            if frames and self.doRead:
-                self.readData(frames)
-            time.sleep(0.001)
-
     def disconnect(self):
         """ Close the serial interface connection
 
         """
-        self.isConnected = False
         time.sleep(1)
+        self.isConnected = False
+        self._reset()
+        self.min.close()
+        del self.min
+
+    def clear(self):
+        self._reset(False)
+
+    def _reset(self, reset=True):
         while not self.inputQueue.empty():
             self.writeData(self.inputQueue.get())
 
-        self.min.transport_reset()
-        del self.min
+        if reset:
+            self.min.transport_reset()
+        time.sleep(0.1)
+        self.min.poll()
 
     def readData(self, frames):
         """ Reads and emits the data, that comes over the serial interface.

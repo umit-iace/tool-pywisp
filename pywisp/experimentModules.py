@@ -43,35 +43,3 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
     def getParams(self, *kwargs):
         pass
 
-
-class TestBench(ExperimentModule):
-    """
-    Base class for the used test bench
-    """
-
-    def __init__(self):
-        ExperimentModule.__init__(self)
-
-
-class Controller(ExperimentModule):
-    """
-    Base class for controllers.
-    Args:
-        settings (dict): Dictionary holding the config options for this module.
-    """
-    dataPoints = []
-
-    def __init__(self):
-        ExperimentModule.__init__(self)
-
-
-class Trajectory(ExperimentModule):
-    """
-    Base class for all trajectory generators
-    Args:
-        settings (dict): Dictionary holding the config options for this module.
-    """
-    dataPoints = []
-
-    def __init__(self):
-        ExperimentModule.__init__(self)

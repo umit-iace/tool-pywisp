@@ -12,13 +12,10 @@ from binascii import crc32
 from threading import Lock
 from serial import Serial, SerialException
 from time import time
-from logging import getLogger, ERROR
+import logging
 
 
 randomizer = SystemRandom()
-
-
-min_logger = getLogger('min')
 
 
 def int32_to_bytes(value: int) -> bytes:
@@ -85,7 +82,7 @@ class MINTransport:
     RECEIVING_CHECKSUM_0 = 8
     RECEIVING_EOF = 9
 
-    def __init__(self, window_size=8, rx_window_size=16, transport_fifo_size=100, idle_timeout_ms=3000, ack_retransmit_timeout_ms=25, frame_retransmit_timeout_ms=50, loglevel=ERROR):
+    def __init__(self, window_size=8, rx_window_size=16, transport_fifo_size=100, idle_timeout_ms=3000, ack_retransmit_timeout_ms=25, frame_retransmit_timeout_ms=50):
         """
         :param window_size: Number of outstanding unacknowledged frames permitted to send
         :param rx_window_size: Number of outstanding unacknowledged frames that can be received
@@ -95,14 +92,16 @@ class MINTransport:
         :param frame_retransmit_timeout_ms: Time before frames are resent
         :param loglevel: set the logging desired
         """
+        # initialize logger
+        self._logger = logging.getLogger(self.__class__.__name__)
+        self._logger.setLevel(logging.ERROR)
+
         self.transport_fifo_size = transport_fifo_size
         self.ack_retransmit_timeout_ms = ack_retransmit_timeout_ms
         self.max_window_size = window_size
         self.idle_timeout_ms = idle_timeout_ms
         self.frame_retransmit_timeout_ms = frame_retransmit_timeout_ms
         self.rx_window_size = rx_window_size
-
-        min_logger.setLevel(level=loglevel)
 
         # Stats about the link
         self._longest_transport_fifo = 0
@@ -163,18 +162,18 @@ class MINTransport:
         ack_frame = MINFrame(min_id=self.ACK, seq=self._rn, payload=bytes([self._rn]), transport=True, ack_or_reset=True)
         on_wire_bytes = self._on_wire_bytes(frame=ack_frame)
         self._last_sent_ack_time_ms = self._now_ms()
-        min_logger.debug("Sending ACK, seq={}".format(ack_frame.seq))
+        self._logger.debug("Sending ACK, seq={}".format(ack_frame.seq))
         self._serial_write(on_wire_bytes)
 
     def _send_nack(self, to: int):
         # For a NACK we send an ACK but also request some frame retransmits
         nack_frame = MINFrame(min_id=self.ACK, seq=self._rn, payload=bytes([to]), transport=True, ack_or_reset=True)
         on_wire_bytes = self._on_wire_bytes(frame=nack_frame)
-        min_logger.debug("Sending NACK, seq={}, to={}".format(nack_frame.seq, to))
+        self._logger.debug("Sending NACK, seq={}, to={}".format(nack_frame.seq, to))
         self._serial_write(on_wire_bytes)
 
     def _send_reset(self):
-        min_logger.debug("Sending RESET")
+        self._logger.debug("Sending RESET")
         reset_frame = MINFrame(min_id=self.RESET, seq=0, payload=bytes(), transport=True, ack_or_reset=True)
         on_wire_bytes = self._on_wire_bytes(frame=reset_frame)
         self._serial_write(on_wire_bytes)
@@ -216,8 +215,8 @@ class MINTransport:
             raise ValueError("MIN ID out of range")
         frame = MINFrame(min_id=min_id, payload=payload, transport=False, seq=0)
         on_wire_bytes = self._on_wire_bytes(frame=frame)
-        min_logger.info("Sending MIN frame, min_id={}, payload={}".format(min_id, bytes_to_hexstr(payload)))
-        min_logger.debug("Sending MIN frame, on wire bytes={}".format(bytes_to_hexstr(on_wire_bytes)))
+        self._logger.info("Sending MIN frame, min_id={}, payload={}".format(min_id, bytes_to_hexstr(payload)))
+        self._logger.debug("Sending MIN frame, on wire bytes={}".format(bytes_to_hexstr(on_wire_bytes)))
         self._serial_write(on_wire_bytes)
 
     def queue_frame(self, min_id: int, payload: bytes):
@@ -235,7 +234,7 @@ class MINTransport:
             raise ValueError("MIN ID out of range")
         # Frame put into the transport FIFO
         if len(self._transport_fifo) < self.transport_fifo_size:
-            min_logger.debug("Queueing min_id={}".format(min_id))
+            self._logger.debug("Queueing min_id={}".format(min_id))
             frame = MINFrame(min_id=min_id, payload=payload, seq=self._sn_max, transport=True)
             self._transport_fifo.append(frame)
         else:
@@ -256,18 +255,18 @@ class MINTransport:
         The embedded version of this code does not implement NACKs: generally the MCU will not have enough memory to stash out-of-order
         frames for later reassembly.
         """
-        min_logger.debug("MIN frame received @{}: min_id_control=0x{:02x}, min_seq={}".format(time(), min_id_control, min_seq))
+        self._logger.debug("MIN frame received @{}: min_id_control=0x{:02x}, min_seq={}".format(time(), min_id_control, min_seq))
         self._last_received_anything_ms = self._now_ms()
         if min_id_control & 0x80:
             if min_id_control == self.ACK:
-                min_logger.debug("Received ACK")
+                self._logger.debug("Received ACK")
                 # The ACK number indicates the serial number of the next packet wanted, so any previous packets can be marked off
                 number_acked = (min_seq - self._sn_min) & 0xff
                 number_in_window = (self._sn_max - self._sn_min) & 0xff
                 # Need to guard against old ACKs from an old session still turning up.
                 # Number acked will be 1 if there are no frames in the window
                 if number_acked <= number_in_window:
-                    min_logger.debug("Number ACKed = {}".format(number_acked))
+                    self._logger.debug("Number ACKed = {}".format(number_acked))
                     self._sn_min = min_seq
 
                     assert len(self._transport_fifo) >= number_in_window
@@ -281,10 +280,10 @@ class MINTransport:
                         self._transport_fifo_pop()
                 else:
                     if number_in_window > 0:
-                        min_logger.warning("Spurious ACK: self._sn_min={}, self._sn_max={}, min_seq={}, payload[0]={}".format(self._sn_min, self._sn_max, min_seq, min_payload[0]))
+                        self._logger.warning("Spurious ACK: self._sn_min={}, self._sn_max={}, min_seq={}, payload[0]={}".format(self._sn_min, self._sn_max, min_seq, min_payload[0]))
                     self._spurious_acks += 1
             elif min_id_control == self.RESET:
-                min_logger.debug("RESET received".format(min_seq))
+                self._logger.debug("RESET received".format(min_seq))
                 self._resets_received += 1
                 self._transport_fifo_reset()
                 self._rx_reset()
@@ -294,14 +293,14 @@ class MINTransport:
 
                 self._last_received_frame_ms = self._now_ms()
                 if min_seq == self._rn:
-                    min_logger.debug("MIN application frame received @{} (min_id={} seq={})".format(time(), min_id_control & 0x3f, min_seq))
+                    self._logger.debug("MIN application frame received @{} (min_id={} seq={})".format(time(), min_id_control & 0x3f, min_seq))
                     self._rx_list.append(min_frame)
 
                     # We want this frame. Now see if there are stashed frames it joins up with and 'receive' those
                     self._rn = (self._rn + 1) & 0xff
                     while self._rn in self._stashed_rx_dict:
                         stashed_frame = self._stashed_rx_dict[self._rn]  # type: MINFrame
-                        min_logger.debug("MIN application stashed frame recovered @{} (self._rn={} min_id={} seq={})".format(time(), self._rn, stashed_frame.min_id, stashed_frame.seq))
+                        self._logger.debug("MIN application stashed frame recovered @{} (self._rn={} min_id={} seq={})".format(time(), self._rn, stashed_frame.min_id, stashed_frame.seq))
                         del self._stashed_rx_dict[self._rn]
                         self._rx_list.append(stashed_frame)
                         self._rn = (self._rn + 1) & 0xff
@@ -318,13 +317,13 @@ class MINTransport:
                             self._send_nack(earliest_seq)
                         else:
                             # Something has gone wrong here: stale stuff is hanging around, give up and reset
-                            min_logger.error("Stale frames in the stashed area; resetting")
+                            self._logger.error("Stale frames in the stashed area; resetting")
                             self._nack_outstanding = None
                             self._stashed_rx_dict = {}
                             self._send_ack()
                     else:
                         self._send_ack()
-                    min_logger.debug("Sending ACK for min ID={} with self._rn={}".format(min_id_control & 0x3f, self._rn))
+                        self._logger.debug("Sending ACK for min ID={} with self._rn={}".format(min_id_control & 0x3f, self._rn))
                 else:
                     # If the frames come within the window size in the future sequence range then we accept them and assume some were missing
                     # (They may also be duplicates, in which case we store them over the top of the old ones)
@@ -332,19 +331,19 @@ class MINTransport:
                         # We want to only NACK a range of frames once, not each time otherwise we will overload with retransmissions
                         if self._nack_outstanding is None:
                             # If we are missing specific frames then send a NACK to specifically request them
-                            min_logger.debug("Sending NACK for min ID={} with seq={} to={}".format(min_id_control & 0x3f, self._rn, min_seq))
+                            self._logger.debug("Sending NACK for min ID={} with seq={} to={}".format(min_id_control & 0x3f, self._rn, min_seq))
                             self._send_nack(min_seq)
                             self._nack_outstanding = min_seq
                         else:
-                            min_logger.debug("(Outstanding NACK)")
+                            self._logger.debug("(Outstanding NACK)")
 
                         # Hang on to this frame because we will join it up later with the missing ones that are re-sent
                         self._stashed_rx_dict[min_seq] = min_frame
-                        min_logger.debug("MIN application frame stashed @{} (min_id={}, seq={})".format(time(), min_id_control & 0x3f, min_seq))
+                        self._logger.debug("MIN application frame stashed @{} (min_id={}, seq={})".format(time(), min_id_control & 0x3f, min_seq))
                     else:
-                        min_logger.warning("Frame stale? Discarding @{} (min_id={}, seq={})".format(time(), min_id_control & 0x3f, min_seq))
+                        self._logger.warning("Frame stale? Discarding @{} (min_id={}, seq={})".format(time(), min_id_control & 0x3f, min_seq))
                         if min_seq in self._stashed_rx_dict and min_payload != self._stashed_rx_dict[min_seq].payload:
-                            min_logger.error("Inconsistency between frame contents")
+                            self._logger.error("Inconsistency between frame contents")
                         # Out of range (may be an old retransmit duplicate that we don't want) - throw it away
                         self._sequence_mismatch_drops += 1
         else:
@@ -356,7 +355,7 @@ class MINTransport:
         Called by handler to pass over a sequence of bytes
         :param data:
         """
-        min_logger.debug("Received bytes: {}".format(bytes_to_hexstr(data)))
+        self._logger.debug("Received bytes: {}".format(bytes_to_hexstr(data)))
         for byte in data:
             if self._rx_header_bytes_seen == 2:
                 self._rx_header_bytes_seen = 0
@@ -417,7 +416,7 @@ class MINTransport:
                     computed_checksum = self._crc32(bytearray([self._rx_frame_id_control, self._rx_control]) + self._rx_frame_buf)
 
                 if self._rx_frame_checksum != computed_checksum:
-                    min_logger.warning("CRC mismatch (0x{:08x} vs 0x{:08x}), frame dropped".format(self._rx_frame_checksum, computed_checksum))
+                    self._logger.warning("CRC mismatch (0x{:08x} vs 0x{:08x}), frame dropped".format(self._rx_frame_checksum, computed_checksum))
                     # Frame fails checksum, is dropped
                     self._rx_frame_state = self.SEARCHING_FOR_SOF
                 else:
@@ -428,12 +427,12 @@ class MINTransport:
                     # Frame received OK, pass up frame for handling")
                     self._min_frame_received(min_id_control=self._rx_frame_id_control, min_payload=bytes(self._rx_frame_buf), min_seq=self._rx_frame_seq)
                 else:
-                    min_logger.warning("No EOF received, dropping frame")
+                    self._logger.warning("No EOF received, dropping frame")
 
                 # Look for next frame
                 self._rx_frame_state = self.SEARCHING_FOR_SOF
             else:
-                min_logger.error("Unexpected state, state machine reset")
+                self._logger.error("Unexpected state, state machine reset")
                 # Should never get here but in case we do just reset
                 self._rx_frame_state = self.SEARCHING_FOR_SOF
 
@@ -537,7 +536,7 @@ class MINTransport:
             frame.seq = self._sn_max
             self._last_sent_frame_ms = self._now_ms()
             frame.last_sent_time = self._now_ms()
-            min_logger.debug("Sending new frame id={} seq={} len={} payload={}".format(frame.min_id, frame.seq, len(frame.payload), bytes_to_hexstr(frame.payload)))
+            self._logger.debug("Sending new frame id={} seq={} len={} payload={}".format(frame.min_id, frame.seq, len(frame.payload), bytes_to_hexstr(frame.payload)))
             self._transport_fifo_send(frame=frame)
             self._sn_max = (self._sn_max + 1) & 0xff
         else:
@@ -545,13 +544,13 @@ class MINTransport:
             if window_size > 0 and remote_connected:
                 oldest_frame = self._find_oldest_frame()
                 if self._now_ms() - oldest_frame.last_sent_time > self.frame_retransmit_timeout_ms:
-                    min_logger.debug("Resending old frame id={} seq={}".format(oldest_frame.min_id, oldest_frame.seq))
+                    self._logger.debug("Resending old frame id={} seq={}".format(oldest_frame.min_id, oldest_frame.seq))
                     self._transport_fifo_send(frame=oldest_frame)
 
         # Periodically transmit ACK
         if self._now_ms() - self._last_sent_ack_time_ms > self.ack_retransmit_timeout_ms:
             if remote_active:
-                min_logger.debug("Periodic send of ACK")
+                self._logger.debug("Periodic send of ACK")
                 self._send_ack()
 
         if (self._sn_max - self._sn_max) & 0xff > window_size:
@@ -572,7 +571,7 @@ class MINTransportSerial(MINTransport):
         return now
 
     def _serial_write(self, data):
-        min_logger.debug("_serial_write: {}".format(bytes_to_hexstr(data)))
+        self._logger.debug("_serial_write: {}".format(bytes_to_hexstr(data)))
         self._serial.write(data)
 
     def _serial_any(self):
@@ -584,7 +583,7 @@ class MINTransportSerial(MINTransport):
     def _serial_close(self):
         self._serial.close()
 
-    def __init__(self, port, baud=115200, loglevel=ERROR):
+    def __init__(self, port, baud=115200):
         """
         Open MIN connection on a given port.
         :param port: serial port
@@ -596,7 +595,7 @@ class MINTransportSerial(MINTransport):
             self._serial.reset_output_buffer()
         except SerialException:
             raise MINConnectionError("Transport MIN cannot open port '{}'".format(port))
-        super().__init__(loglevel=loglevel)
+        super().__init__()
 
 
 class ThreadsafeTransportMINSerialHandler(MINTransportSerial):
@@ -606,8 +605,8 @@ class ThreadsafeTransportMINSerialHandler(MINTransportSerial):
     A typical usage is to create a simple thread that calls poll() in a loop which takes MIN frames received and puts them into a Python queue.
     The application can send directly and pick up incoming frames from the queue.
     """
-    def __init__(self, port, loglevel=ERROR):
-        super().__init__(port=port, loglevel=loglevel)
+    def __init__(self, port):
+        super().__init__(port=port)
         self._thread_lock = Lock()
 
     def close(self):
