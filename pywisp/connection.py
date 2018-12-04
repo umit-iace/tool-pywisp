@@ -112,8 +112,6 @@ class TcpConnection(Connection):
         self.client_ip = ipadr
         self.sock = None
         super(TcpConnection, self).__init__(inputQueue, outputQueue, port)
-        self.controlword = 0x0000
-        self.doRead = False
 
     def disconnect(self):
         self.isConnected = False
@@ -133,6 +131,7 @@ class TcpConnection(Connection):
             self.sock = None
             return False
         self.isConnected = True
+        self.sock.settimeout(0.001)
         return True
 
     def getIP():
@@ -147,69 +146,38 @@ class TcpConnection(Connection):
         """ Starts the timer and thread
         """
         while True and self.isConnected:
+            self.readData()
             if not self.inputQueue.empty():
                 self.writeData(self.inputQueue.get())
-            self.readData()
             time.sleep(0.001)
 
     def readData(self):
-        if not self.doRead:
-            return
         try:
-            inputdata = self.sock.recv(18)
-            if inputdata == b'\x32':
+            # TODO change buffer size for a size which is ok (like min)
+            frame = self.sock.recv(41)
+            if frame == b'\x32':
                 self.isConnected = False
                 self.writeData({'id': 1, 'msg': b'\x32'})
-            elif inputdata == b'':
+            elif frame == b'':
                 pass
             else:
-                print("Recv: ", inputdata)
-                self.outputQueue.put(inputdata)
-        except:
+                print("Recv: ", frame)
+                self.outputQueue.put(frame)
+        except socket.timeout:
+            # if nothing is to read, get on
+            pass
+        except socket.error:
             self._logger.error("Lesen vom Host nicht möglich!")
             self.isConnected = False
 
     def writeData(self, data):
-        self.controlword = (self.controlword & 0xFF00) + (data['id'])
-        if (data['id'] == 1) and (data['msg'] == b'\x01'):
-            # start experiment
-            self.doRead = True
-            self.controlword = (self.controlword & 0xFCFF) + (1 << 8)
-            data['msg'] = None
-        elif (data['id'] == 1) and (data['msg'] == b'\x00'):
-            # stop experiment
-            self.doRead = False
-            self.controlword = (self.controlword & 0xFCFF) + (1 << 9)
-            data['msg'] = None
-        elif (data['id'] == 40) and (data['msg'] == b'\x03'):
-            # start trajectory
-            self.doRead = True
-            self.controlword = (self.controlword & 0xF3FF) + (3 << 10)
-            data['msg'] = None
-        elif (data['id'] == 40) and (data['msg'] == b'\x00'):
-            # stop trajectory
-            self.controlword = (self.controlword & 0xF3FF)
-            data['msg'] = None
-        elif (data['id'] == 50) and (data['msg'] == b'\x01'):
-            # start controller
-            self.controlword = (self.controlword & 0xEFFF) + (1 << 12)
-            data['msg'] = None
-        elif (data['id'] == 50) and (data['msg'] == b'\x00'):
-            # stop controller
-            self.controlword = (self.controlword & 0xEFFF)
-            data['msg'] = None
         try:
-            if (data['msg'] == None):
-                outputdata = struct.pack('>H', self.controlword)
-            else:
-                outputdata = struct.pack('>H', self.controlword) + data['msg']
+            outputdata = struct.pack('>B', data['id']) + data['msg']
+            if (len(outputdata) < 41):
+                for i in range(41 - len(outputdata)):
+                    outputdata += b'\x00'
             self.sock.send(outputdata)
-            print("send: ", outputdata, " with ", (self.controlword & 0x00FF), " and ", ((self.controlword & 0x0300) >> 8))
+            print("send: ", outputdata, " with ", data['id'], " and ", data['msg'])
         except:
             self._logger.error("Schreiben an Host nicht möglich!")
             self.isConnected = False
-
-
-# TODO create a communication protocoll to start/end experiments and to close conn
-
-# TODO -> testbench.py, trajectory.py, controller.py
