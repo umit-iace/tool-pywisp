@@ -94,6 +94,7 @@ class MINTransport:
         """
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
+        self._logger.setLevel(logging.ERROR)
 
         self.transport_fifo_size = transport_fifo_size
         self.ack_retransmit_timeout_ms = ack_retransmit_timeout_ms

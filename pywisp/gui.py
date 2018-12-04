@@ -783,6 +783,8 @@ class MainGui(QMainWindow):
         self.timer.stop()
         self.exp.stopExperiment()
 
+        self.connection.clear()
+
     def sendParameter(self):
         if self._currentExperimentIndex == self.experimentList.row(self._currentItem):
             self.exp.sendParameterExperiment()
