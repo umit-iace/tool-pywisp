@@ -951,7 +951,11 @@ class MainGui(QMainWindow):
             time = data['Zeit'] / 1000.0
             datapoints = data['Punkte']
             names = data['Punkte'].keys()
-            for buffer in self.dataPointBuffers:
+            listitems = self.lastMeasList.findItems('~current~', Qt.MatchContains)
+            if len(listitems) != 1:
+                self._logger.warn('woah, more than one ~current~ measurement')
+            idx = self.lastMeasList.row(listitems[0])
+            for buffer in self.lastMeasurements[idx]['datapointbuffers']:
                 if buffer.name in names:
                     buffer.addValue(time, datapoints[buffer.name])
 
