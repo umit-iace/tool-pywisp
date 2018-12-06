@@ -140,7 +140,7 @@ class MainGui(QMainWindow):
         self.lastMeasList = QListWidget(self)
         self.lastMeasDock.addWidget(self.lastMeasList)
         self.lastMeasList.itemDoubleClicked.connect(self.loadLastMeas)
-        self.lastMeasurements = []
+        self.measurements = []
 
         # log dock
         self.logBox = QTextEdit(self)
@@ -275,6 +275,9 @@ class MainGui(QMainWindow):
         self.expMenu.addAction(self.actDisconnect)
         self.actDisconnect.triggered.connect(self.disconnect)
         self.expMenu.addSeparator()
+        self.expMenu.addAction(self.actStartExperiment)
+        self.expMenu.addAction(self.actStopExperiment)
+        self.expMenu.addAction(self.actSendParameter)
         self.actSendParameter = QAction('&Parameter senden')
         self.actSendParameter.setEnabled(False)
         self.actSendParameter.setShortcut(QKeySequence("F8"))
@@ -409,7 +412,7 @@ class MainGui(QMainWindow):
             else:
                 self._logger.warning("Can't set comport for arduino automatically! Set the port manually!")
         else:
-            self._logger.warning("No ComPorts avaiable, connect device!")
+            self._logger.warning("No ComPorts available, connect device!")
 
     def getComPorts(self):
         def setPort(port):
@@ -461,7 +464,7 @@ class MainGui(QMainWindow):
     def removeSelectedPlotTreeItems(self):
         items = self.dataPointTreeWidget.selectedItems()
         if not items:
-            self._logger.error("Kann Plot nicht löschen: Kein Plot ausgewählt.")
+            self._logger.error("Cannot delete plot: No plot selected.")
             return
 
         for item in items:
@@ -472,7 +475,7 @@ class MainGui(QMainWindow):
         while item.parent():
             item = item.parent()
 
-        text = "Der markierte Plot '" + item.text(0) + "' wird gelöscht!"
+        text = "The labeled plot '" + item.text(0) + "' will be deleted!"
         buttonReply = QMessageBox.warning(self, "Plot delete", text, QMessageBox.Ok | QMessageBox.Cancel)
         if buttonReply == QMessageBox.Ok:
             openDocks = [dock.title() for dock in self.findAllPlotDocks()]
@@ -483,7 +486,7 @@ class MainGui(QMainWindow):
 
     def addDatapointToTree(self):
         if not self.dataPointListWidget.selectedIndexes():
-            self._logger.error("Kann Datenpunkt nicht hinzufügen: Keine Datenpunkte ausgewählt.")
+            self._logger.error("Cannot add datapoint: No datapoint selected.")
             return
 
         dataPoints = []
@@ -500,7 +503,7 @@ class MainGui(QMainWindow):
                     self.addPlotTreeItem(default=True)
                 toplevelItem = self.dataPointTreeWidget.topLevelItem(0)
             else:
-                self._logger.error("Kann Datenset nicht hinzufügen: Kein Datenset ausgewählt.")
+                self._logger.error("Cannot add dataset: No dataset selected.")
                 return
         else:
             toplevelItem = toplevelItems[0]
@@ -550,7 +553,7 @@ class MainGui(QMainWindow):
     def removeDatapointFromTree(self):
         items = self.dataPointTreeWidget.selectedItems()
         if not items:
-            self._logger.error("Kann Datenset nicht löschen: Kein Datenset ausgewählt")
+            self._logger.error("Cannot delete dataset: No dataset selected.")
             return
 
         toplevelItem = items[0]
@@ -654,10 +657,10 @@ class MainGui(QMainWindow):
         coordItem = TextItem(text='', anchor=(0, 1))
         widget.getPlotItem().addItem(coordItem, ignoreBounds=True)
 
-        def info_wrapper(pos):
+        def infoWrapper(pos):
             self.updateCoordInfo(pos, widget, coordItem)
 
-        widget.scene().sigMouseMoved.connect(info_wrapper)
+        widget.scene().sigMouseMoved.connect(infoWrapper)
 
         widget.scene().contextMenu = [QAction("Export png", self),
                                       QAction("Export csv", self)]
@@ -764,13 +767,12 @@ class MainGui(QMainWindow):
             self.outputQueue.get()
 
         data = {}
-        data.update({'datapointbuffers': deepcopy(self.dataPointBuffers)})
+        data.update({'datapointBuffers': deepcopy(self.dataPointBuffers)})
         data.update({'exp': deepcopy(self.exp.getExperiment())})
-        self.lastMeasurements.append(data)
+        self.measurements.append(data)
 
-        idx = len(self.lastMeasurements)
-        item = QListWidgetItem(str(self.lastMeasList.count() + 1) + ": " \
-                            + self._currentExperimentName + " ~current~")
+        item = QListWidgetItem(str(self.lastMeasList.count() + 1) + ": "
+                               + self._currentExperimentName + " ~current~")
         self.lastMeasList.addItem(item)
 
         self.connection.doRead = True
@@ -882,7 +884,7 @@ class MainGui(QMainWindow):
             return False
 
         expName = self._experiments[index]["Name"]
-        self._logger.info("Experiment '{}' übernommen".format(expName))
+        self._logger.info("Experiment '{}' applied".format(expName))
 
         if self.connection is not None:
             # check if experiment runs
@@ -911,20 +913,20 @@ class MainGui(QMainWindow):
             self.connection.start()
         else:
             self.connection = None
-            self._logger.warning("Keinen Arduino gefunden. Erneut Verbinden!")
-            self.statusbarLabel.setText("Nicht Verbunden")
+            self._logger.warning("Cannot found an arduino. Reconnect!")
+            self.statusbarLabel.setText("Not connected!")
 
     def disconnect(self):
         if self.actStopExperiment.isEnabled():
             self.stopExperiment()
         self.connection.disconnect()
         self.connection = None
-        self._logger.info("Arduino getrennt.")
+        self._logger.info("Arduino disconnected.")
         self.actConnect.setEnabled(True)
         self.actDisconnect.setEnabled(False)
         self.actStartExperiment.setEnabled(False)
         self.actStopExperiment.setEnabled(False)
-        self.statusbarLabel.setText("Nicht Verbunden")
+        self.statusbarLabel.setText("Not connected!")
 
     def findAllPlotDocks(self):
         list = []
@@ -949,21 +951,23 @@ class MainGui(QMainWindow):
             if data is None:
                 continue
             time = data['Zeit'] / 1000.0
-            datapoints = data['Punkte']
+            dataPoints = data['Punkte']
             names = data['Punkte'].keys()
-            listitems = self.lastMeasList.findItems('~current~', Qt.MatchContains)
-            if len(listitems) != 1:
-                self._logger.warn('woah, more than one ~current~ measurement')
-            idx = self.lastMeasList.row(listitems[0])
-            for buffer in self.lastMeasurements[idx]['datapointbuffers']:
+
+            listItems = self.lastMeasList.findItems('~current~', Qt.MatchContains)
+            if len(listItems) != 1:
+                self._logger.warning('Error, more than one ~current~ measurement available. Use first one!')
+
+            idx = self.lastMeasList.row(listItems[0])
+            for buffer in self.measurements[idx]['datapointBuffers']:
                 if buffer.name in names:
-                    buffer.addValue(time, datapoints[buffer.name])
+                    buffer.addValue(time, dataPoints[buffer.name])
 
             if self.visualizer:
                 dps = {}
                 for dataPoint in self.visualizer.dataPoints:
                     if dataPoint in names:
-                        dps[dataPoint] = datapoints[dataPoint]
+                        dps[dataPoint] = dataPoints[dataPoint]
                 if dps:
                     self.visualizer.update(dps)
 
@@ -981,9 +985,11 @@ class MainGui(QMainWindow):
     def saveLastMeas(self):
         if self._currentExperimentIndex is None:
             return
+
         items = self.lastMeasList.findItems('~current~', Qt.MatchContains)
         if len(items) != 1:
-            self._logger.warn('woah, more than one ~current~ measurement')
+            self._logger.warn('Error, more than one ~current~ measurement available. Use first one!')
+
         item = items[0]
         item.setText(item.text().replace(' ~current~', ''))
 
@@ -995,13 +1001,13 @@ class MainGui(QMainWindow):
             self._logger.error("loadLastMeas(): No measurement called '{0}".format(expName))
             return False
 
-        if idx >= len(self.lastMeasurements):
+        if idx >= len(self.measurements):
             self._logger.error("loadLastMeas(): Invalid index '{}')".format(idx))
             return False
 
         self._logger.info("Restore of measurement '{}'".format(expName))
 
-        measurement = self.lastMeasurements[idx]
+        measurement = self.measurements[idx]
 
         success = self.exp.setExperiment(measurement['exp'])
 
@@ -1009,7 +1015,7 @@ class MainGui(QMainWindow):
         self.setQListItemBold(self.experimentList, item, success)
 
         dataPointNames = self.exp.getDataPoints()
-        dataPointBuffers = measurement['datapointbuffers']
+        dataPointBuffers = measurement['datapointBuffers']
         if dataPointNames:
             self.updateDataPoints(dataPointNames, dataPointBuffers)
 
