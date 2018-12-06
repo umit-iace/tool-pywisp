@@ -89,7 +89,6 @@ class SerialConnection(QtCore.QThread):
         if reset:
             self.min.transport_reset()
         time.sleep(0.1)
-        self.min.poll()
 
     def readData(self, frames):
         """ Reads and emits the data, that comes over the serial interface.
