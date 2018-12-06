@@ -981,15 +981,11 @@ class MainGui(QMainWindow):
     def saveLastMeas(self):
         if self._currentExperimentIndex is None:
             return
-
-        data = {}
-        data.update({'datapointbuffers': deepcopy(self.dataPointBuffers)})
-
-        data.update({'exp': deepcopy(self.exp.getExperiment())})
-
-        self.lastMeasurements.append(data)
-        self.lastMeasList.addItem(
-            QListWidgetItem(str(self.lastMeasList.count() + 1) + ": " + self._currentExperimentName))
+        items = self.lastMeasList.findItems('~current~', Qt.MatchContains)
+        if len(items) != 1:
+            self._logger.warn('woah, more than one ~current~ measurement')
+        item = items[0]
+        item.setText(item.text().replace(' ~current~', ''))
 
     def loadLastMeas(self, item):
         expName = str(item.text())
