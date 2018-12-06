@@ -476,10 +476,6 @@ class MainGui(QMainWindow):
             tcpHostPort.setEnabled(True)
             self.comMenu.addAction(tcpHostPort)
             tcpHostPort.triggered.connect(self.setTcpPort)
-
-            # TODO delte this, only for testing purpose
-            self.tcp_ip = str("10.4.13.210")
-            self.port = 50007
         else:
             noAction = QAction("Wähle Verbindungsart", self)
             noAction.setEnabled(False)
@@ -1037,8 +1033,16 @@ class MainGui(QMainWindow):
                 self._logger.warning("Keinen Arduino gefunden. Erneut Verbinden!")
             self.statusbarLabel.setText(self.getStatusBarInfo())
         elif tcp_active:
+            # TODO delete this, only for testing purpose
+            self.tcp_ip = str("10.4.13.210")
+            self.port = 50007
+
             if self.tcp_ip == None:
                 self._logger.warning("Bitte IP Adresse des Servers eingeben!")
+                self.connection = None
+                return
+            if type(self.port) == str:
+                self._logger.warn("Bitte Port Nummer des Servers eingeben!")
                 self.connection = None
                 return
             self.connection = TcpConnection(self.inputQueue, self.outputQueue, self.port, self.tcp_ip)
@@ -1120,7 +1124,6 @@ class MainGui(QMainWindow):
 
         for dock in self.findAllPlotDocks():
             dock.close()
-            # TODO hier kommt noch ein Fehler und prüfen ob experiment nicht gerade läuft
         self.area.restoreState(self.standardDockState)
 
     def saveLastMeas(self):

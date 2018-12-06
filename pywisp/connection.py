@@ -172,7 +172,6 @@ class TcpConnection(Connection):
 
     def readData(self):
         try:
-            # TODO change buffer size for a size which is ok (like min)
             frame = self.sock.recv(41)
             if frame == b'\x32':
                 self.isConnected = False
@@ -180,7 +179,7 @@ class TcpConnection(Connection):
             elif frame == b'':
                 pass
             else:
-                print("Recv: ", frame)
+                # print("Recv: ", frame)
                 self.outputQueue.put(frame)
         except socket.timeout:
             # if nothing is to read, get on
@@ -196,7 +195,7 @@ class TcpConnection(Connection):
                 for i in range(41 - len(outputdata)):
                     outputdata += b'\x00'
             self.sock.send(outputdata)
-            print("send: ", outputdata, " with ", data['id'], " and ", data['msg'])
+            # print("send: ", outputdata, " with ", data['id'], " and ", data['msg'])
         except:
             self._logger.error("Schreiben an Host nicht möglich!")
             self.isConnected = False
