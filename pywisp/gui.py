@@ -763,6 +763,16 @@ class MainGui(QMainWindow):
         while not self.outputQueue.empty():
             self.outputQueue.get()
 
+        data = {}
+        data.update({'datapointbuffers': deepcopy(self.dataPointBuffers)})
+        data.update({'exp': deepcopy(self.exp.getExperiment())})
+        self.lastMeasurements.append(data)
+
+        idx = len(self.lastMeasurements)
+        item = QListWidgetItem(str(self.lastMeasList.count() + 1) + ": " \
+                            + self._currentExperimentName + " ~current~")
+        self.lastMeasList.addItem(item)
+
         self.connection.doRead = True
 
         self.timer.start(int(self._currentTimerTime))
