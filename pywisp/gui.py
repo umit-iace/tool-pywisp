@@ -906,7 +906,7 @@ class MainGui(QMainWindow):
             self.statusbarLabel.setText("Nicht Verbunden")
 
     def disconnect(self):
-        if self.actStartExperiment.isEnabled():
+        if self.actStopExperiment.isEnabled():
             self.stopExperiment()
         self.connection.disconnect()
         self.connection = None
