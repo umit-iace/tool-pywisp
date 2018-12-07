@@ -272,17 +272,17 @@ class MainGui(QMainWindow):
         self.actDisconnect.setEnabled(False)
         self.actDisconnect.setIcon(QIcon(get_resource("disconnected.png")))
         self.actDisconnect.setShortcut(QKeySequence("F10"))
+        self.actSendParameter = QAction('&Parameter senden')
+        self.actSendParameter.setEnabled(False)
+        self.actSendParameter.setShortcut(QKeySequence("F8"))
+        self.expMenu.addAction(self.actSendParameter)
+        self.actSendParameter.triggered.connect(self.sendParameter)
         self.expMenu.addAction(self.actDisconnect)
         self.actDisconnect.triggered.connect(self.disconnect)
         self.expMenu.addSeparator()
         self.expMenu.addAction(self.actStartExperiment)
         self.expMenu.addAction(self.actStopExperiment)
         self.expMenu.addAction(self.actSendParameter)
-        self.actSendParameter = QAction('&Parameter senden')
-        self.actSendParameter.setEnabled(False)
-        self.actSendParameter.setShortcut(QKeySequence("F8"))
-        self.expMenu.addAction(self.actSendParameter)
-        self.actSendParameter.triggered.connect(self.sendParameter)
 
         # toolbar
         self.toolbarExp = QToolBar("Experiment")
@@ -759,7 +759,9 @@ class MainGui(QMainWindow):
             buffer.clearBuffer()
 
         for chart in self.plotCharts:
-            chart.clear()
+            for dataPoint in chart.dataPoints:
+                dataPoint.clearBuffer()
+
             chart.setInterpolationPoints(self._currentInterpolationPoints)
             chart.updatePlot()
 
@@ -954,12 +956,7 @@ class MainGui(QMainWindow):
             dataPoints = data['Punkte']
             names = data['Punkte'].keys()
 
-            listItems = self.lastMeasList.findItems('~current~', Qt.MatchContains)
-            if len(listItems) != 1:
-                self._logger.warning('Error, more than one ~current~ measurement available. Use first one!')
-
-            idx = self.lastMeasList.row(listItems[0])
-            for buffer in self.measurements[idx]['datapointBuffers']:
+            for buffer in self.dataPointBuffers:
                 if buffer.name in names:
                     buffer.addValue(time, dataPoints[buffer.name])
 
