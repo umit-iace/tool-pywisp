@@ -71,11 +71,11 @@ class MainGui(QMainWindow):
         self.setCentralWidget(self.area)
 
         # create docks
-        self.experimentDock = Dock("Experimente")
-        self.lastMeasDock = Dock("Vorherige Messungen")
+        self.experimentDock = Dock("Experiments")
+        self.lastMeasDock = Dock("Last Measurements")
         self.propertyDock = Dock("Parameter")
         self.logDock = Dock("Log")
-        self.dataDock = Dock("Daten")
+        self.dataDock = Dock("Data")
         self.animationDock = Dock("Animation")
 
         # arrange docks
@@ -187,7 +187,7 @@ class MainGui(QMainWindow):
             "Export the selected data set from the left to the selected plot "
             "on the right."
         )
-        self.dataPointExportButton.clicked.connect(self.exportDatapointFromTree)
+        self.dataPointExportButton.clicked.connect(self.exportDataPointFromTree)
         self.dataPointManipulationLayout.addWidget(self.dataPointExportButton)
         self.dataPointPlotAddButtonWidget = QWidget()
         self.dataPointPlotAddButtonLayout = QVBoxLayout()
@@ -301,8 +301,9 @@ class MainGui(QMainWindow):
         self._currentTimerTime = 10
         self._currentInterpolationPoints = 10
 
-        self._currentItem = None
-        self.dataPointBuffers = None
+        self._currentExpListItem = None
+        self._currentLastMeasItem = None
+        self._currentDataPointBuffers = None
         self.plotCharts = []
 
         if not self.loadExpFromFile(fileName):
@@ -316,6 +317,7 @@ class MainGui(QMainWindow):
         self._updateExperimentsList()
 
         self._applyFirstExperiment()
+
 
     def _updateExperimentsList(self):
         self.experimentList.clear()
@@ -489,13 +491,6 @@ class MainGui(QMainWindow):
             self._logger.error("Cannot add datapoint: No datapoint selected.")
             return
 
-        dataPoints = []
-        for item in self.dataPointListWidget.selectedItems():
-            for data in self.dataPointBuffers:
-                if data.name == item.text():
-                    dataPoints.append(data)
-                    continue
-
         toplevelItems = self.dataPointTreeWidget.selectedItems()
         if not toplevelItems:
             if self.dataPointTreeWidget.topLevelItemCount() < 2:
@@ -515,10 +510,10 @@ class MainGui(QMainWindow):
         for i in range(toplevelItem.childCount()):
             topLevelItemList.append(toplevelItem.child(i).text(1))
 
-        for idx, dataPoint in enumerate(dataPoints):
-            if dataPoint.name not in topLevelItemList:
+        for idx, dataPoint in enumerate(self.dataPointListWidget.selectedItems()):
+            if dataPoint.text() not in topLevelItemList:
                 child = QTreeWidgetItem()
-                child.setText(1, dataPoint.name)
+                child.setText(1, dataPoint.text())
 
                 toplevelItem.addChild(child)
 
@@ -532,14 +527,21 @@ class MainGui(QMainWindow):
 
         self.plots(toplevelItem)
 
-    def exportDatapointFromTree(self):
+    def exportDataPointFromTree(self):
         if not self.dataPointListWidget.selectedIndexes():
             self._logger.error("Can't export data set: no data set selected.")
             return
 
+        if self._currentLastMeasItem is None:
+            self._logger.error("Nothing to export!")
+            return
+
+        idx = self.lastMeasList.row(self._currentLastMeasItem)
+        dataPointBuffers = self.measurements[idx]['dataPointBuffers']
+
         dataPoints = []
         for item in self.dataPointListWidget.selectedItems():
-            for data in self.dataPointBuffers:
+            for data in dataPointBuffers:
                 if data.name == item.text():
                     dataPoints.append(data)
                     continue
@@ -575,6 +577,13 @@ class MainGui(QMainWindow):
     def plots(self, item):
         title = item.text(0)
 
+        if self._currentLastMeasItem is None:
+            self._logger.error("No Measurement to plot!")
+            return
+
+        idx = self.lastMeasList.row(self._currentLastMeasItem)
+        dataPointBuffers = self.measurements[idx]['dataPointBuffers']
+
         # check if a top level item has been clicked
         if not item.parent():
             if title in self.nonPlottingDocks:
@@ -586,7 +595,7 @@ class MainGui(QMainWindow):
             # check if plot has already been opened
             openDocks = [dock.title() for dock in self.findAllPlotDocks()]
             if title in openDocks:
-                self.updatePlot(item)
+                self.updatePlot(item, dataPointBuffers)
 
     def plotVectorClicked(self, item):
 
@@ -604,7 +613,14 @@ class MainGui(QMainWindow):
         # check if plot has already been opened
         openDocks = [dock.title() for dock in self.findAllPlotDocks()]
         if title in openDocks:
-            self.updatePlot(item)
+            if self._currentLastMeasItem is None:
+                dataPointNames = self.exp.getDataPoints()
+                dataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
+            else:
+                idx = self.lastMeasList.row(self._currentLastMeasItem)
+                dataPointBuffers = self.measurements[idx]['dataPointBuffers']
+
+            self.updatePlot(item, dataPointBuffers)
             try:
                 self.area.docks[title].raiseDock()
             except:
@@ -612,13 +628,13 @@ class MainGui(QMainWindow):
         else:
             self.plotDataVector(item)
 
-    def updatePlot(self, item):
+    def updatePlot(self, item, dataPointBuffers):
         title = item.text(0)
 
         # get the new datapoints
         newDataPoints = []
         for indx in range(item.childCount()):
-            for dataPoint in self.dataPointBuffers:
+            for dataPoint in dataPointBuffers:
                 if dataPoint.name == item.child(indx).text(1):
                     newDataPoints.append(dataPoint)
 
@@ -641,8 +657,15 @@ class MainGui(QMainWindow):
         widget.showGrid(True, True)
         widget.getPlotItem().getAxis("bottom").setLabel(text="Time", units="s")
 
+        if self._currentLastMeasItem is None:
+            dataPointNames = self.exp.getDataPoints()
+            dataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
+        else:
+            idx = self.lastMeasList.row(self._currentLastMeasItem)
+            dataPointBuffers = self.measurements[idx]['dataPointBuffers']
+
         for idx in range(item.childCount()):
-            for datapoint in self.dataPointBuffers:
+            for datapoint in dataPointBuffers:
                 if datapoint.name == item.child(idx).text(1):
                     chart.addPlotCurve(datapoint)
 
@@ -733,7 +756,7 @@ class MainGui(QMainWindow):
         """
         start the experiment and disable start button
         """
-        self._currentExperimentIndex = self.experimentList.row(self._currentItem)
+        self._currentExperimentIndex = self.experimentList.row(self._currentExpListItem)
         self._currentExperimentName = self._experiments[self._currentExperimentIndex]["Name"]
 
         self._settings.beginGroup('plot')
@@ -755,13 +778,14 @@ class MainGui(QMainWindow):
             self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.darkGreen))
             self.experimentList.repaint()
 
-        for buffer in self.dataPointBuffers:
-            buffer.clearBuffer()
+        dataPointNames = self.exp.getDataPoints()
+
+        if dataPointNames:
+            self._currentDataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
+        else:
+            return
 
         for chart in self.plotCharts:
-            for dataPoint in chart.dataPoints:
-                dataPoint.clearBuffer()
-
             chart.setInterpolationPoints(self._currentInterpolationPoints)
             chart.updatePlot()
 
@@ -769,13 +793,14 @@ class MainGui(QMainWindow):
             self.outputQueue.get()
 
         data = {}
-        data.update({'datapointBuffers': deepcopy(self.dataPointBuffers)})
+        data.update({'dataPointBuffers': self._currentDataPointBuffers})
         data.update({'exp': deepcopy(self.exp.getExperiment())})
         self.measurements.append(data)
 
         item = QListWidgetItem(str(self.lastMeasList.count() + 1) + ": "
                                + self._currentExperimentName + " ~current~")
         self.lastMeasList.addItem(item)
+        self.loadLastMeas(item)
 
         self.connection.doRead = True
 
@@ -799,12 +824,12 @@ class MainGui(QMainWindow):
         self.connection.clear()
 
     def sendParameter(self):
-        if self._currentExperimentIndex == self.experimentList.row(self._currentItem):
+        if self._currentExperimentIndex == self.experimentList.row(self._currentExpListItem) and "~current~" in self._currentLastMeasItem.text():
             self.exp.sendParameterExperiment()
         else:
             self._logger.warning("Selected Experiment '{}' doesn't match current running Experiment '{}'!".format(
                 self._currentExperimentName,
-                self._experiments[self.experimentList.row(self._currentItem)]["Name"]))
+                self._experiments[self.experimentList.row(self._currentExpListItem)]["Name"]))
 
     def loadExpFromFile(self, fileName):
         """
@@ -843,16 +868,15 @@ class MainGui(QMainWindow):
 
         # apply
         success = self._applyExperimentByIdx(idx)
-        self._currentItem = self.experimentList.item(idx)
+        self._currentExpListItem = self.experimentList.item(idx)
 
-        self.setQListItemBold(self.experimentList, self._currentItem, success)
-        self.setQListItemBold(self.lastMeasList, self._currentItem, success)
+        self.setQListItemBold(self.experimentList, self._currentExpListItem, success)
+        self.setQListItemBold(self.lastMeasList, self._currentExpListItem, success)
 
         dataPointNames = self.exp.getDataPoints()
 
         if dataPointNames:
-            dataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
-            self.updateDataPoints(dataPointNames, dataPointBuffers)
+            self.updateDataPoints(dataPointNames)
 
         return success
 
@@ -862,7 +886,7 @@ class MainGui(QMainWindow):
         Apply the selected experiment to the current target and set it bold.
         """
         success = self._applyExperimentByIdx(self.experimentList.row(item))
-        self._currentItem = item
+        self._currentExpListItem = item
 
         self.setQListItemBold(self.experimentList, item, success)
         self.setQListItemBold(self.lastMeasList, item, success)
@@ -870,8 +894,7 @@ class MainGui(QMainWindow):
         dataPointNames = self.exp.getDataPoints()
 
         if dataPointNames:
-            dataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
-            self.updateDataPoints(dataPointNames, dataPointBuffers)
+            self.updateDataPoints(dataPointNames)
 
     def _applyExperimentByIdx(self, index=0):
         """
@@ -908,7 +931,7 @@ class MainGui(QMainWindow):
             self._logger.info("Mit Arduino auf " + self.connection.port + " verbunden.")
             self.actConnect.setEnabled(False)
             self.actDisconnect.setEnabled(True)
-            if self._currentItem is not None:
+            if self._currentExpListItem is not None:
                 self.actStartExperiment.setEnabled(True)
             self.actStopExperiment.setEnabled(False)
             self.statusbarLabel.setText("Verbunden")
@@ -956,7 +979,7 @@ class MainGui(QMainWindow):
             dataPoints = data['Punkte']
             names = data['Punkte'].keys()
 
-            for buffer in self.dataPointBuffers:
+            for buffer in self._currentDataPointBuffers:
                 if buffer.name in names:
                     buffer.addValue(time, dataPoints[buffer.name])
 
@@ -985,13 +1008,17 @@ class MainGui(QMainWindow):
 
         items = self.lastMeasList.findItems('~current~', Qt.MatchContains)
         if len(items) != 1:
-            self._logger.warn('Error, more than one ~current~ measurement available. Use first one!')
+            self._logger.warning('Error, more than one ~current~ measurement available. Use first one!')
 
         item = items[0]
         item.setText(item.text().replace(' ~current~', ''))
 
+        idx = self.lastMeasList.row(item)
+        self.measurements[idx].update({'dataPointBuffers': deepcopy(self._currentDataPointBuffers)})
+
     def loadLastMeas(self, item):
         expName = str(item.text())
+        self._currentLastMeasItem = item
         try:
             idx = self.lastMeasList.row(item)
         except ValueError:
@@ -1012,18 +1039,17 @@ class MainGui(QMainWindow):
         self.setQListItemBold(self.experimentList, item, success)
 
         dataPointNames = self.exp.getDataPoints()
-        dataPointBuffers = measurement['datapointBuffers']
+        dataPointBuffers = measurement['dataPointBuffers']
         if dataPointNames:
-            self.updateDataPoints(dataPointNames, dataPointBuffers)
+            self.updateDataPoints(dataPointNames)
 
         for i in range(self.dataPointTreeWidget.topLevelItemCount()):
-            self.updatePlot(self.dataPointTreeWidget.topLevelItem(i))
+            self.updatePlot(self.dataPointTreeWidget.topLevelItem(i), dataPointBuffers)
 
         self._logger.info("Apply measurement '{}'".format(measurement['exp']['Name']))
 
-    def updateDataPoints(self, dataPointNames, dataPointBuffers):
+    def updateDataPoints(self, dataPointNames):
         if dataPointNames:
-            self.dataPointBuffers = dataPointBuffers
             self.dataPointListWidget.clear()
             self.dataPointListWidget.addItems(dataPointNames)
 
