@@ -36,7 +36,7 @@ class MainGui(QMainWindow):
         self.port = ''
 
         self.timer = QTimer()
-        self.timer.timeout.connect(self.updateData)
+        self.timer.timeout.connect(self.updateDataPlots())
 
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -979,13 +979,10 @@ class MainGui(QMainWindow):
             if buffer.name in names:
                 buffer.addValue(time, dataPoints[buffer.name])
 
+    def updateDataPlots(self):
         if self.visualizer:
-            dps = {}
-            for dataPoint in self.visualizer.dataPoints:
-                if dataPoint in names:
-                    dps[dataPoint] = dataPoints[dataPoint]
-            if dps:
-                self.visualizer.update(dps)
+            # TODO muss noch geupdated werden
+            pass
 
         for chart in self.plotCharts:
             chart.updatePlot()
