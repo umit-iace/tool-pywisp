@@ -33,8 +33,6 @@ class MainGui(QMainWindow):
         QCoreApplication.setApplicationName(globals()["__package__"])
 
         self.connection = None
-        self.inputQueue = Queue()
-        self.outputQueue = Queue()
         self.port = ''
 
         self.timer = QTimer()
@@ -309,7 +307,8 @@ class MainGui(QMainWindow):
         if not self.loadExpFromFile(fileName):
             return
 
-        self.exp = ExperimentInteractor(self.inputQueue, self.targetView, self)
+        self.exp = ExperimentInteractor(self.targetView, self)
+        self.exp.sendData.connect(self.writeToConnection)
         self.runExp.connect(self.exp.runExperiment)
         self.stopExp.connect(self.exp.stopExperiment)
         self.exp.expFinished.connect(self.saveLastMeas)
@@ -789,9 +788,6 @@ class MainGui(QMainWindow):
             chart.setInterpolationPoints(self._currentInterpolationPoints)
             chart.updatePlot()
 
-        while not self.outputQueue.empty():
-            self.outputQueue.get()
-
         data = {}
         data.update({'dataPointBuffers': self._currentDataPointBuffers})
         data.update({'exp': deepcopy(self.exp.getExperiment())})
@@ -925,8 +921,14 @@ class MainGui(QMainWindow):
         logging.getLogger().removeHandler(self.textLogger)
         super().closeEvent(QCloseEvent)
 
+    def writeToConnection(self, data):
+        if self.connection:
+            self.connection.writeData(data)
+        else:
+            self._logger.error('Keine Verbindung vorhanden!')
+
     def connect(self):
-        self.connection = SerialConnection(self.inputQueue, self.outputQueue, self.port)
+        self.connection = SerialConnection(self.port)
         if self.connection.connect():
             self._logger.info("Mit Arduino auf " + self.connection.port + " verbunden.")
             self.actConnect.setEnabled(False)
@@ -935,6 +937,7 @@ class MainGui(QMainWindow):
                 self.actStartExperiment.setEnabled(True)
             self.actStopExperiment.setEnabled(False)
             self.statusbarLabel.setText("Verbunden")
+            self.connection.received.connect(self.updateData)
             self.connection.start()
         else:
             self.connection = None
@@ -945,6 +948,7 @@ class MainGui(QMainWindow):
         if self.actStopExperiment.isEnabled():
             self.stopExperiment()
         self.connection.disconnect()
+        self.connection.received.disconnect()
         self.connection = None
         self._logger.info("Arduino disconnected.")
         self.actConnect.setEnabled(True)
@@ -963,33 +967,25 @@ class MainGui(QMainWindow):
 
         return list
 
-    def updateData(self):
-        if self.outputQueue.empty():
+    def updateData(self, frame):
+        data = self.exp.handleFrame(frame)
+        if data is None:
             return
+        time = data['Zeit'] / 1000.0
+        dataPoints = data['Punkte']
+        names = data['Punkte'].keys()
 
-        frames = []
-        for i in range(0, self.outputQueue.qsize()):
-            frames.append(self.outputQueue.get())
+        for buffer in self._currentDataPointBuffers:
+            if buffer.name in names:
+                buffer.addValue(time, dataPoints[buffer.name])
 
-        for frame in frames:
-            data = self.exp.handleFrame(frame)
-            if data is None:
-                continue
-            time = data['Zeit'] / 1000.0
-            dataPoints = data['Punkte']
-            names = data['Punkte'].keys()
-
-            for buffer in self._currentDataPointBuffers:
-                if buffer.name in names:
-                    buffer.addValue(time, dataPoints[buffer.name])
-
-            if self.visualizer:
-                dps = {}
-                for dataPoint in self.visualizer.dataPoints:
-                    if dataPoint in names:
-                        dps[dataPoint] = dataPoints[dataPoint]
-                if dps:
-                    self.visualizer.update(dps)
+        if self.visualizer:
+            dps = {}
+            for dataPoint in self.visualizer.dataPoints:
+                if dataPoint in names:
+                    dps[dataPoint] = dataPoints[dataPoint]
+            if dps:
+                self.visualizer.update(dps)
 
         for chart in self.plotCharts:
             chart.updatePlot()

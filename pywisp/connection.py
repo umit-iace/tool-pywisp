@@ -12,10 +12,9 @@ class SerialConnection(QtCore.QThread):
     """ A class for a serial interface connection implemented as a QThread
 
     """
+    received = QtCore.pyqtSignal(object)
 
     def __init__(self,
-                 inputQueue,
-                 outputQueue,
                  port,
                  baud=115200):
         QtCore.QThread.__init__(self)
@@ -24,8 +23,6 @@ class SerialConnection(QtCore.QThread):
         self.port = port
 
         self.isConnected = False
-        self.inputQueue = inputQueue
-        self.outputQueue = outputQueue
 
         self.moveToThread(self)
 
@@ -39,8 +36,6 @@ class SerialConnection(QtCore.QThread):
         """
         while True and self.isConnected:
             frames = self.min.poll()
-            if not self.inputQueue.empty():
-                self.writeData(self.inputQueue.get())
             if frames and self.doRead:
                 self.readData(frames)
             time.sleep(0.01)
@@ -83,9 +78,6 @@ class SerialConnection(QtCore.QThread):
         self._reset(False)
 
     def _reset(self, reset=True):
-        while not self.inputQueue.empty():
-            self.writeData(self.inputQueue.get())
-
         if reset:
             self.min.transport_reset()
         time.sleep(0.1)
@@ -94,7 +86,7 @@ class SerialConnection(QtCore.QThread):
         """ Reads and emits the data, that comes over the serial interface.
         """
         for frame in frames:
-            self.outputQueue.put(frame)
+            self.received.emit(frame)
 
     def writeData(self, data):
         """ Writes the given data to the serial inferface.
