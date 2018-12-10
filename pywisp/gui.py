@@ -71,7 +71,7 @@ class MainGui(QMainWindow):
         # create docks
         self.experimentDock = Dock("Experiments")
         self.lastMeasDock = Dock("Last Measurements")
-        self.propertyDock = Dock("Parameter")
+        self.propertyDock = Dock("Parameters")
         self.logDock = Dock("Log")
         self.dataDock = Dock("Data")
         self.animationDock = Dock("Animation")
@@ -316,7 +316,6 @@ class MainGui(QMainWindow):
         self._updateExperimentsList()
 
         self._applyFirstExperiment()
-
 
     def _updateExperimentsList(self):
         self.experimentList.clear()
@@ -941,7 +940,7 @@ class MainGui(QMainWindow):
             self.connection.start()
         else:
             self.connection = None
-            self._logger.warning("Cannot found an arduino. Reconnect!")
+            self._logger.warning("Cannot find an arduino. Reconnect!")
             self.statusbarLabel.setText("Not connected!")
 
     def disconnect(self):
@@ -1001,7 +1000,7 @@ class MainGui(QMainWindow):
 
         items = self.lastMeasList.findItems('~current~', Qt.MatchContains)
         if len(items) != 1:
-            self._logger.warning('Error, more than one ~current~ measurement available. Use first one!')
+            self._logger.warning('Error, more than one ~current~ measurement available. Using first one!')
 
         item = items[0]
         item.setText(item.text().replace(' ~current~', ''))
