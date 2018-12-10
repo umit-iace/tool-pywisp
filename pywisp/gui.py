@@ -36,7 +36,7 @@ class MainGui(QMainWindow):
         self.port = ''
 
         self.timer = QTimer()
-        self.timer.timeout.connect(self.updateDataPlots())
+        self.timer.timeout.connect(self.updateDataPlots)
 
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
