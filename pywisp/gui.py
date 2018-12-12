@@ -1065,7 +1065,7 @@ class MainGui(QMainWindow):
     def disconnect(self):
         serial_active = self._settings.value("serial_connection_active") == "True"
         tcp_active = self._settings.value("tcp_connection_active") == "True"
-        if self.actStartExperiment.isEnabled():
+        if self.actStopExperiment.isEnabled():
             self.stopExperiment()
         self.connection.disconnect()
         self.connection = None
