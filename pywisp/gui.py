@@ -1034,7 +1034,7 @@ class MainGui(QMainWindow):
             self.statusbarLabel.setText(self.getStatusBarInfo())
         elif tcp_active:
             # TODO delete this, only for testing purpose
-            self.tcp_ip = str("10.4.13.210")
+            self.tcp_ip = str("10.4.22.176")
             self.port = 50007
 
             if self.tcp_ip == None:
@@ -1047,7 +1047,7 @@ class MainGui(QMainWindow):
                 return
             self.connection = TcpConnection(self.inputQueue, self.outputQueue, self.port, self.tcp_ip)
             if self.connection.connect():
-                self._logger.info("Mit Server '{0}/{1}' verbunden."
+                self._logger.info("Mit Server {0}:{1} verbunden."
                                   .format(self.tcp_ip, self.port))
                 self.actConnect.setEnabled(False)
                 self.actDisconnect.setEnabled(True)
@@ -1057,7 +1057,7 @@ class MainGui(QMainWindow):
                 self.connection.start()
             else:
                 self.connection = None
-                self._logger.error("Verbindung mit Server '{0}/{1}' nicht möglich"
+                self._logger.error("Verbindung mit Server {0}:{1} nicht möglich"
                                    .format(self.tcp_ip, self.port))
             self.statusbarLabel.setText(self.getStatusBarInfo())
 
