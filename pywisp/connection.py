@@ -7,7 +7,7 @@ import time
 from PyQt5 import QtCore
 import struct
 
-from . import MINTransportSerial
+from . import MINTransportSerial, MINFrame
 
 class Connection(QtCore.QThread):
     """ Base class for serial and tcp connection
@@ -172,14 +172,15 @@ class TcpConnection(Connection):
 
     def readData(self):
         try:
-            frame = self.sock.recv(41)
-            if frame == b'\x32':
+            data = self.sock.recv(41)
+            if data == b'\x32': # wut is this
                 self.isConnected = False
                 self.writeData({'id': 1, 'msg': b'\x32'})
-            elif frame == b'':
+            elif data == b'':
                 pass
-            else:
-                # print("Recv: ", frame)
+            if data:
+                frame = MINFrame(data[0],data[1:],0,0)
+                # print("Recv: ", data)
                 self.outputQueue.put(frame)
         except socket.timeout:
             # if nothing is to read, get on
