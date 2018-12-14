@@ -114,6 +114,7 @@ class TcpConnection(Connection):
     """ A Class for a tcp client which connects a server
 
     """
+    payloadLen = 80
     def __init__(self,
                  inputQueue,
                  outputQueue,
@@ -172,13 +173,15 @@ class TcpConnection(Connection):
 
     def readData(self):
         try:
-            data = self.sock.recv(41)
+            data = self.sock.recv(self.payloadLen + 1)
             if data == b'\x32': # wut is this
                 self.isConnected = False
                 self.writeData({'id': 1, 'msg': b'\x32'})
             elif data == b'':
                 pass
             if data:
+                if len(data) != self.payloadLen + 1:
+                    print('wooooah not good')
                 frame = MINFrame(data[0],data[1:],0,0)
                 # print("Recv: ", data)
                 self.outputQueue.put(frame)
@@ -192,8 +195,8 @@ class TcpConnection(Connection):
     def writeData(self, data):
         try:
             outputdata = struct.pack('>B', data['id']) + data['msg']
-            if (len(outputdata) < 41):
-                for i in range(41 - len(outputdata)):
+            if (len(outputdata) < self.payloadLen + 1):
+                for i in range(self.payloadLen + 1 - len(outputdata)):
                     outputdata += b'\x00'
             self.sock.send(outputdata)
             # print("send: ", outputdata, " with ", data['id'], " and ", data['msg'])
