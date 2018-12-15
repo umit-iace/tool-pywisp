@@ -145,11 +145,11 @@ class ExperimentInteractor(QObject):
     and the Experiment
     """
     expFinished = pyqtSignal()
+    sendData = pyqtSignal(object)
 
-    def __init__(self, inputQueue, targetView, parent=None):
+    def __init__(self, targetView, parent=None):
         QObject.__init__(self, parent)
         self._logger = logging.getLogger(self.__class__.__name__)
-        self.inputQueue = inputQueue
         self.targetView = targetView
         self.dataPoints = None
         self.runningExperiment = False
@@ -336,7 +336,7 @@ class ExperimentInteractor(QObject):
         data.append({'id': 1,
                      'msg': payload})
         for _data in data:
-            self.inputQueue.put(_data)
+            self.sendData.emit(_data)
 
     def sendParameterExperiment(self):
         data = []
@@ -360,7 +360,7 @@ class ExperimentInteractor(QObject):
                     break
 
         for _data in data:
-            self.inputQueue.put(_data)
+            self.sendData.emit(_data)
 
     def stopExperiment(self):
         data = []
@@ -389,7 +389,7 @@ class ExperimentInteractor(QObject):
         data.append({'id': 1,
                      'msg': payload})
         for _data in data:
-            self.inputQueue.put(_data)
+            self.sendData.emit(_data)
 
         self.expFinished.emit()
 

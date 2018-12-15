@@ -82,7 +82,7 @@ class MINTransport:
     RECEIVING_CHECKSUM_0 = 8
     RECEIVING_EOF = 9
 
-    def __init__(self, window_size=8, rx_window_size=16, transport_fifo_size=100, idle_timeout_ms=3000, ack_retransmit_timeout_ms=25, frame_retransmit_timeout_ms=50):
+    def __init__(self, window_size=8, rx_window_size=16, transport_fifo_size=100, idle_timeout_ms=3000, ack_retransmit_timeout_ms=100, frame_retransmit_timeout_ms=200):
         """
         :param window_size: Number of outstanding unacknowledged frames permitted to send
         :param rx_window_size: Number of outstanding unacknowledged frames that can be received

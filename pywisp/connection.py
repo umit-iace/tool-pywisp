@@ -1,41 +1,65 @@
 # -*- coding: utf-8 -*-
 import logging
+import socket
+import struct
+import time
+from abc import ABCMeta, abstractmethod
+
 import serial
 import serial.tools.list_ports
-import socket
-import time
 from PyQt5 import QtCore
-import struct
 
 from . import MINTransportSerial, MINFrame
 
-class Connection(QtCore.QThread):
+
+class Connection(QtCore.QThread, metaclass=ABCMeta):
     """ Base class for serial and tcp connection
 
     """
-    def __init__(self, inputQueue, outputQueue, port):
+    received = QtCore.pyqtSignal(object)
+
+    def __init__(self):
         QtCore.QThread.__init__(self)
         self.isConnected = False
-        self.port = port
-        self.inputQueue = inputQueue
-        self.outputQueue = outputQueue
         self._logger = logging.getLogger(self.__class__.__name__)
+        self.moveToThread(self)
+
+    @abstractmethod
+    def connect(self):
+        pass
+
+    @abstractmethod
+    def disconnect(self):
+        pass
+
+    @abstractmethod
+    def clear(self):
+        pass
+
+    @abstractmethod
+    def readData(self, frames):
+        pass
+
+    @abstractmethod
+    def writeData(self, data):
+        pass
 
 
 class SerialConnection(Connection):
     """ A class for a serial interface connection implemented as a QThread
 
     """
+    received = QtCore.pyqtSignal(object)
 
     def __init__(self,
-                 inputQueue,
-                 outputQueue,
                  port,
                  baud=115200):
+        super(SerialConnection, self).__init__()
+
         self.min = None
         self.baud = baud
-        super(SerialConnection, self).__init__(inputQueue, outputQueue, port)
-
+        self.port = port
+        self.isConnected = False
         self.doRead = False
 
     def run(self):
@@ -43,8 +67,6 @@ class SerialConnection(Connection):
         """
         while True and self.isConnected:
             frames = self.min.poll()
-            if not self.inputQueue.empty():
-                self.writeData(self.inputQueue.get())
             if frames and self.doRead:
                 self.readData(frames)
             time.sleep(0.01)
@@ -87,19 +109,15 @@ class SerialConnection(Connection):
         self._reset(False)
 
     def _reset(self, reset=True):
-        while not self.inputQueue.empty():
-            self.writeData(self.inputQueue.get())
-
         if reset:
             self.min.transport_reset()
         time.sleep(0.1)
-        self.min.poll()
 
     def readData(self, frames):
         """ Reads and emits the data, that comes over the serial interface.
         """
         for frame in frames:
-            self.outputQueue.put(frame)
+            self.received.emit(frame)
 
     def writeData(self, data):
         """ Writes the given data to the serial inferface.
@@ -110,33 +128,32 @@ class SerialConnection(Connection):
         """
         self.min.queue_frame(min_id=data['id'], payload=data['msg'])
 
+
 class TcpConnection(Connection):
     """ A Class for a tcp client which connects a server
 
     """
     payloadLen = 80
+
     def __init__(self,
-                 inputQueue,
-                 outputQueue,
-                 port,
                  ipadr):
+        super(TcpConnection, self).__init__()
         self.client_ip = ipadr
         self.sock = None
-        super(TcpConnection, self).__init__(inputQueue, outputQueue, port)
 
     def disconnect(self):
         self.isConnected = False
         time.sleep(1)
         while not self.inputQueue.empty():
             self.writeData(self.inputQueue.get())
-        if not (self.sock == None):
+        if self.sock is not None:
             self.sock.close()
         self._reset()
 
     def clear(self):
         self._reset()
 
-    def _reset(self,):
+    def _reset(self, ):
         while not self.inputQueue.empty():
             self.writeData(self.inputQueue.get())
         time.sleep(0.1)
@@ -154,13 +171,13 @@ class TcpConnection(Connection):
         self.sock.settimeout(0.001)
         return True
 
-    def getIP():
+    def getIP(self):
         """
         get the IP adress of host and return it
         """
         hostname = socket.gethostname()
-        own_ip = socket.gethostbyname(hostname)
-        return own_ip
+        ip = socket.gethostbyname(hostname)
+        return ip
 
     def run(self):
         """ Starts the timer and thread
@@ -171,35 +188,35 @@ class TcpConnection(Connection):
                 self.writeData(self.inputQueue.get())
             time.sleep(0.001)
 
-    def readData(self):
+    def readData(self, frames):
         try:
             data = self.sock.recv(self.payloadLen + 1)
-            if data == b'\x32': # wut is this
+            if data == b'\x32':  # wut is this
                 self.isConnected = False
                 self.writeData({'id': 1, 'msg': b'\x32'})
             elif data == b'':
                 pass
             if data:
                 if len(data) != self.payloadLen + 1:
-                    print('wooooah not good')
-                frame = MINFrame(data[0],data[1:],0,0)
+                    self._logger.error("Length of data differs from payload length!")
+                frame = MINFrame(data[0], data[1:], 0, 0)
                 # print("Recv: ", data)
-                self.outputQueue.put(frame)
+                self.received.emit(frame)
         except socket.timeout:
             # if nothing is to read, get on
             pass
-        except socket.error:
-            self._logger.error("Lesen vom Host nicht möglich!")
+        except socket.error as e:
+            self._logger.error("Reading from host not possible! {}".format(e))
             self.isConnected = False
 
     def writeData(self, data):
         try:
-            outputdata = struct.pack('>B', data['id']) + data['msg']
-            if (len(outputdata) < self.payloadLen + 1):
-                for i in range(self.payloadLen + 1 - len(outputdata)):
-                    outputdata += b'\x00'
-            self.sock.send(outputdata)
-            # print("send: ", outputdata, " with ", data['id'], " and ", data['msg'])
-        except:
-            self._logger.error("Schreiben an Host nicht möglich!")
+            outputData = struct.pack('>B', data['id']) + data['msg']
+            if len(outputData) < self.payloadLen + 1:
+                for i in range(self.payloadLen + 1 - len(outputData)):
+                    outputData += b'\x00'
+            self.sock.send(outputData)
+            # print("send: ", outputData, " with ", data['id'], " and ", data['msg'])
+        except Exception as e:
+            self._logger.error("Writing to host not possible! {}".format(e))
             self.isConnected = False
