@@ -1,16 +1,15 @@
 # -*- coding: utf-8 -*-
 from .experimentModules import *
 from .visualization import Visualizer
+from .connection import Connection
 
 _registry = {}
 
 
 def registerExperimentModule(expCls):
     """
-    main hook to register a module in the pywisp framework
-    :param moduleType:
-    :param cls: class to be registered
-    :return: None
+    hook to register a module in the pywisp framework
+    :param expCls: class to be registered
     """
     if not issubclass(expCls, ExperimentModule):
         raise TypeError("Module must match type to be registered for! "
@@ -29,11 +28,38 @@ def registerExperimentModule(expCls):
 
 def getRegisteredExperimentModules():
     """
-    main hook to retrieve registered classes for a specific experiment module
-    :param moduleType:
-    :return:
+    hook to retrieve registered experiment modules
+    :return: list of experiment modules
     """
     return _registry.get(ExperimentModule, [])
+
+
+def registerConnection(expCls):
+    """
+    hook to register a connection in the pywisp framework
+    :param expCls: class to be registered
+    """
+    if not issubclass(expCls, ExperimentModule):
+        raise TypeError("Module must match type to be registered for! "
+                        "{0} <> {1}".format(expCls, ExperimentModule))
+
+    clsEntry = _registry.get(Connection, [])
+    increment = (expCls, expCls.__name__)
+    if increment in clsEntry:
+        raise ValueError("class {0} already registered as connection!"
+                         "".format(expCls))
+
+    clsEntry.append(increment)
+    _registry[Connection] = clsEntry
+    _registry[Connection.__name__] = clsEntry
+
+
+def getRegisteredConnections():
+    """
+    hook to retrieve registered connections
+    :return: list of connection classes
+    """
+    return _registry.get(Connection, [])
 
 
 def registerVisualizer(visCls):
@@ -59,6 +85,6 @@ def registerVisualizer(visCls):
 def getRegisteredVisualizers():
     """
     hook to retrieve registered visualizers
-    :return: visualizer class
+    :return: list of visualizer classes
     """
     return _registry.get(Visualizer, [])
