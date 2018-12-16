@@ -31,9 +31,8 @@ class MainGui(QMainWindow):
             pkg_resources.require("PyWisp")[0].version)
         QCoreApplication.setApplicationName(globals()["__package__"])
 
-        self.connection = None
-        self.port = ''
-        self.tcp_ip = ''
+        self.connections = {}
+        self.isConnected = False
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.updateDataPlots)
@@ -54,7 +53,7 @@ class MainGui(QMainWindow):
         icon = QIcon(res_path)
         self.setWindowIcon(icon)
         self.resize(1000, 700)
-        self.setWindowTitle('Visualisierung')
+        self.setWindowTitle('Visualization')
 
         # status bar
         self.statusBar = QStatusBar(self)
@@ -97,7 +96,7 @@ class MainGui(QMainWindow):
         # animation dock
         self.animationWidget = QWidget()
         availableVis = getRegisteredVisualizers()
-        self._logger.info("Visualisierung gefunden: {}".format([name for cls, name in availableVis]))
+        self._logger.info("Found Visualization: {}".format([name for cls, name in availableVis]))
         if availableVis:
             # instantiate the first visualizer
             self._logger.info("loading visualizer '{}'".format(availableVis[0][1]))
@@ -246,7 +245,7 @@ class MainGui(QMainWindow):
         self.actShowCoords.changed.connect(self.updateShowCoordsSetting)
 
         # options
-        self.optMenu = self.menuBar().addMenu('&Optionen')
+        self.optMenu = self.menuBar().addMenu('&Optionens')
         self.actIntPoints = QAction("&Interpolationspunkte", self)
         self.actIntPoints.triggered.connect(self.setIntPoints)
         self.optMenu.addAction(self.actIntPoints)
@@ -257,28 +256,32 @@ class MainGui(QMainWindow):
         # experiment
         self.expMenu = self.menuBar().addMenu('&Experiment')
         self.comMenu = self.expMenu.addMenu('&Verbindungsart')
-        self.actConnTcp = QAction('&TCP/IP', self)
-        self.actConnTcp.setCheckable(True)
-        self.actConnTcp.setEnabled(
-            self._settings.value("tcp_connection_active") == "True"
-        )
-        self.actConnTcp.setChecked(
-            self._settings.value("tcp_connection_active") == "True"
-        )
-        self.comMenu.addAction(self.actConnTcp)
-        self.actConnTcp.changed.connect(self.updateConnType)
-        self.actConnSerial = QAction('&Serial', self)
-        self.actConnSerial.setCheckable(True)
-        self.actConnSerial.setEnabled(
-            self._settings.value("serial_connection_active") == "True"
-        )
-        self.actConnSerial.setChecked(
-            self._settings.value("serial_connection_active") == "True"
-        )
-        self.comMenu.addAction(self.actConnSerial)
-        self.actConnSerial.changed.connect(self.updateConnType)
-        self.comMenu = self.expMenu.addMenu('&Verbindungsport')
-        self.comMenu.aboutToShow.connect(self.getConnPorts)
+
+        # TODO
+        # Verbindungstypen laden
+        # Optionen werden  erst beim connect gesetzt
+        # Menüeinträge einarbeiten
+        # bei 1x serial, default com port laden, wenn möglich
+        #
+        availableConns = getRegisteredConnections()
+        if availableConns:
+            for cls, name in availableConns:
+                self._logger.info("Found Connection: {}".format(name))
+                self.connection[cls] = {}
+        else:
+            self._logger.error("No Connections found, return!")
+            return
+
+        for conn, connInstance in self.connections.items():
+            if isinstance(conn, SerialConnection):
+                actConnTcpType = self._getTcpDataType
+                self.comMenu.addAction(actConnTcpType)
+            elif isinstance(conn, TcpConnection):
+                actConnSerialType = self.get
+                self.comMenu.addAction(actConnSerialType)
+            else:
+                self._logger.warning("Cannot handle the connection type!")
+
         self.expMenu.addSeparator()
         self.actConnect = QAction('&Versuchsaufbau verbinden')
         self.actConnect.setIcon(QIcon(get_resource("connected.png")))
@@ -313,8 +316,6 @@ class MainGui(QMainWindow):
         self.toolbarExp.addSeparator()
         self.toolbarExp.addAction(self.actStartExperiment)
         self.toolbarExp.addAction(self.actStopExperiment)
-
-        self.setDefaultComPort()
 
         self._currentTimerTime = 10
         self._currentInterpolationPoints = 10
@@ -384,8 +385,8 @@ class MainGui(QMainWindow):
         self._addSetting("view", "show_coordinates", "True")
 
         # plot management
-        self._addSetting("plot", "interpolation_points", 100)
-        self._addSetting("plot", "timer_time", 100)
+        self._addSetting("plot", "interpolation_points", 10000)
+        self._addSetting("plot", "timer_time", 10000)
 
         # log management
         self._addSetting("log_colors", "CRITICAL", "#DC143C")
@@ -407,10 +408,6 @@ class MainGui(QMainWindow):
         self._addSetting("plot_colors", "olive", "#bcbd22")
         self._addSetting("plot_colors", "cyan", "#17becf")
 
-        # set default communication to serial
-        self._settings.setValue("tcp_connection_active", "False")
-        self._settings.setValue("serial_connection_active", "True")
-
     def updateCoordInfo(self, pos, widget, coordItem):
         mouseCoords = widget.getPlotItem().vb.mapSceneToView(pos)
         coordItem.setPos(mouseCoords.x(), mouseCoords.y())
@@ -427,8 +424,6 @@ class MainGui(QMainWindow):
 
     # event functions
     def setDefaultComPort(self):
-        serial_active = self._settings.value("serial_connection_active") == "True"
-        if serial_active:
             comPorts = serial.tools.list_ports.comports()
             if comPorts:
                 arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
@@ -439,14 +434,10 @@ class MainGui(QMainWindow):
                     self._logger.warning("Can't set comport for arduino automatically! Set the port manually!")
             else:
                 self._logger.warning("Can't set comport for arduino automatically! Set the port manually!")
-        else:
-            self._logger.warning("No ComPorts available, connect device!")
 
     @pyqtSlot()
     def getConnPorts(self):
         # Check what communication is active
-        serial_active = self._settings.value("serial_connection_active") == "True"
-        tcp_active = self._settings.value("tcp_connection_active") == "True"
         self.comMenu.clear()
         if serial_active:
             def setPort(port):
@@ -522,26 +513,6 @@ class MainGui(QMainWindow):
                                                        "Eingabe des Host-Ports",
                                                        "Bitte Port des Host angeben:",
                                                        int(self.port), 0, 65535, 1)
-
-    def getStatusBarInfo(self):
-        serial_active = self._settings.value("serial_connection_active") == "True"
-        tcp_active = self._settings.value("tcp_connection_active") == "True"
-        if serial_active:
-            strinfo = "Serielle Verbindung: "
-            if (self.connection == None):
-                strinfo += "Nicht verbunden!"
-            else:
-                strinfo += "Verbunden auf Port " + self.connection.port
-            return strinfo
-        elif tcp_active:
-            strinfo = "Tcp Verbindung: "
-            if (self.connection == None):
-                strinfo += "Nicht verbunden!"
-            else:
-                strinfo += "Verbunden mit Server '{0}/{1}'".format(self.tcp_ip, self.port)
-            return strinfo
-        else:
-            return "Keine Verbindungsart ausgewählt!"
 
     def addPlotTreeItem(self, default=False):
         text = "plot_{:03d}".format(self.dataPointTreeWidget.topLevelItemCount())
@@ -854,25 +825,6 @@ class MainGui(QMainWindow):
         self._settings.setValue("view/show_coordinates", str(self.actShowCoords.isChecked()))
 
     @pyqtSlot()
-    def updateConnType(self):
-        if self.actConnSerial.isChecked():
-            self.actConnTcp.setChecked(False)
-            self._settings.setValue("tcp_connection_active", "False")
-            self.actConnTcp.setEnabled(False)
-            self._settings.setValue("serial_connection_active", "True")
-        elif self.actConnTcp.isChecked():
-            self.actConnSerial.setChecked(False)
-            self._settings.setValue("serial_connection_active", "False")
-            self.actConnSerial.setEnabled(False)
-            self._settings.setValue("tcp_connection_active", "True")
-        else:
-            self._settings.setValue("serial_connection_active", "False")
-            self._settings.setValue("tcp_connection_active", "False")
-            self.actConnSerial.setEnabled(True)
-            self.actConnTcp.setEnabled(True)
-        self.statusbarLabel.setText(self.getStatusBarInfo())
-
-    @pyqtSlot()
     def startExperiment(self):
         """
         start the experiment and disable start button
@@ -920,7 +872,8 @@ class MainGui(QMainWindow):
         self.lastMeasList.addItem(item)
         self.loadLastMeas(item)
 
-        self.connection.doRead = True
+        for conn, connInstance in self.connections.items():
+            connInstance.doRead = True
 
         self.timer.start(int(self._currentTimerTime))
         self.exp.runExperiment()
@@ -934,14 +887,14 @@ class MainGui(QMainWindow):
             self.experimentList.item(i).setBackground(QBrush(Qt.white))
         self.experimentList.repaint()
 
-        serial_active = self._settings.value("serial_connection_active") == "True"
-        if serial_active:
-            self.connection.doRead = False
+        for conn, connInstance in self.connections.items():
+            connInstance.doRead = False
 
         self.timer.stop()
         self.exp.stopExperiment()
 
-        self.connection.clear()
+        for conn, connInstance in self.connections.items():
+            connInstance.clear()
 
     def sendParameter(self):
         if self._currentExperimentIndex == self.experimentList.row(
@@ -1032,7 +985,7 @@ class MainGui(QMainWindow):
         expName = self._experiments[index]["Name"]
         self._logger.info("Experiment '{}' applied".format(expName))
 
-        if self.connection is not None:
+        if self.isConnected:
             # check if experiment runs
             if not self.actStopExperiment.isEnabled():
                 self.actStartExperiment.setDisabled(False)
@@ -1040,18 +993,19 @@ class MainGui(QMainWindow):
         return self.exp.setExperiment(self._experiments[index])
 
     def closeEvent(self, QCloseEvent):
-        if self.connection:
-            self.disconnect()
+        if self.isConnected:
+            for conn, connInstance in self.connections.items():
+                connInstance.disconnect()
         self._logger.info("Close Event received, shutting down.")
         logging.getLogger().removeHandler(self.textLogger)
         super().closeEvent(QCloseEvent)
 
     @pyqtSlot()
     def connect(self):
-        serial_active = self._settings.value("serial_connection_active") == "True"
-        tcp_active = self._settings.value("tcp_connection_active") == "True"
-        if serial_active:
-            self.connection = SerialConnection(self.inputQueue, self.outputQueue, self.port)
+        for conn, connInstance in self.connections.items():
+            self.isConnected = True
+
+            SerialConnection(self.inputQueue, self.outputQueue, self.port)
             if self.connection.connect():
                 self._logger.info("Mit Arduino auf " + self.connection.port + " verbunden.")
                 self.actConnect.setEnabled(False)
@@ -1066,19 +1020,7 @@ class MainGui(QMainWindow):
                 self.connection = None
                 self._logger.warning("Keinen Arduino gefunden. Erneut Verbinden!")
             self.statusbarLabel.setText(self.getStatusBarInfo())
-        elif tcp_active:
-            # TODO delete this, only for testing purpose
-            self.tcp_ip = str("10.4.22.176")
-            self.port = 50007
 
-            if self.tcp_ip == None:
-                self._logger.warning("Bitte IP Adresse des Servers eingeben!")
-                self.connection = None
-                return
-            if type(self.port) == str:
-                self._logger.warn("Bitte Port Nummer des Servers eingeben!")
-                self.connection = None
-                return
             self.connection = TcpConnection(self.inputQueue, self.outputQueue, self.port, self.tcp_ip)
             if self.connection.connect():
                 self._logger.info("Mit Server {0}:{1} verbunden."
@@ -1090,35 +1032,29 @@ class MainGui(QMainWindow):
                 self.actStopExperiment.setEnabled(False)
                 self.connection.start()
             else:
-                self.connection = None
-                self._logger.error("Verbindung mit Server {0}:{1} nicht möglich"
-                                   .format(self.tcp_ip, self.port))
             self.statusbarLabel.setText(self.getStatusBarInfo())
 
     def writeToConnection(self, data):
-        if self.connection:
-            self.connection.writeData(data)
+        for conn, connInstance in self.connections.items():
+            if connInstance:
+                connInstance.writeData(data)
         else:
             self._logger.error('Keine Verbindung vorhanden!')
 
     @pyqtSlot()
     def disconnect(self):
-        serial_active = self._settings.value("serial_connection_active") == "True"
-        tcp_active = self._settings.value("tcp_connection_active") == "True"
         if self.actStopExperiment.isEnabled():
             self.stopExperiment()
-        self.connection.disconnect()
-        self.connection.received.disconnect()
-        self.connection = None
-        if serial_active:
-            self._logger.info("Serial connection disconnected!")
-        elif tcp_active:
-            self._logger.info("TCP connection disconnected!")
+
+        for conn, connInstance in self.connections.items():
+            connInstance.disconnect()
+            connInstance.received.disconnect()
         self.actConnect.setEnabled(True)
         self.actDisconnect.setEnabled(False)
         self.actStartExperiment.setEnabled(False)
         self.actStopExperiment.setEnabled(False)
-        self.statusbarLabel.setText(self.getStatusBarInfo())
+        self.statusbarLabel.setText('Not Connected')
+        self.isConnected = False
 
     def findAllPlotDocks(self):
         list = []
