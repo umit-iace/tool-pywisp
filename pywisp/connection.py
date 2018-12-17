@@ -3,7 +3,7 @@ import logging
 import socket
 import struct
 import time
-from abc import ABCMeta, abstractmethod
+from abc import abstractmethod
 
 import serial
 import serial.tools.list_ports
@@ -12,7 +12,7 @@ from PyQt5 import QtCore
 from . import MINTransportSerial, MINFrame
 
 
-class Connection(metaclass=ABCMeta):
+class Connection(object):
     """ Base class for serial and tcp connection
 
     """
@@ -21,6 +21,11 @@ class Connection(metaclass=ABCMeta):
     def __init__(self):
         self.isConnected = False
         self._logger = logging.getLogger(self.__class__.__name__)
+
+    @property
+    @abstractmethod
+    def settings(self):
+        pass
 
     @abstractmethod
     def connect(self):
@@ -43,15 +48,13 @@ class Connection(metaclass=ABCMeta):
         pass
 
 
-class SerialConnection(QtCore.QThread):
+class SerialConnection(Connection, QtCore.QThread):
     """ A class for a serial interface connection implemented as a QThread
 
     """
-    __metaclass__ = Connection
-
     def __init__(self,
                  port,
-                 baud=115200):
+                 baud):
         super(SerialConnection, self).__init__()
         QtCore.QThread.__init__(self)
 
@@ -128,12 +131,11 @@ class SerialConnection(QtCore.QThread):
         self.min.queue_frame(min_id=data['id'], payload=data['msg'])
 
 
-class TcpConnection(QtCore.QThread):
+class TcpConnection(Connection, QtCore.QThread):
     """ A Class for a tcp client which connects a server
 
     """
     payloadLen = 80
-    __metaclass__ = Connection
 
     def __init__(self,
                  ipAddr):

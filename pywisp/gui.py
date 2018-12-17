@@ -58,7 +58,7 @@ class MainGui(QMainWindow):
         # status bar
         self.statusBar = QStatusBar(self)
         self.setStatusBar(self.statusBar)
-        self.statusbarLabel = QLabel(self.getStatusBarInfo())
+        self.statusbarLabel = QLabel("Not connected!")
         self.statusBar.addPermanentWidget(self.statusbarLabel, 1)
         self.coordLabel = QLabel("x=0.0 y=0.0")
         self.statusBar.addPermanentWidget(self.coordLabel)
@@ -121,13 +121,13 @@ class MainGui(QMainWindow):
 
         self.actStartExperiment = QAction(self)
         self.actStartExperiment.setDisabled(True)
-        self.actStartExperiment.setText("&Starte Experiment")
+        self.actStartExperiment.setText("&Start experiment")
         self.actStartExperiment.setIcon(QIcon(get_resource("play.png")))
         self.actStartExperiment.setShortcut(QKeySequence("F5"))
         self.actStartExperiment.triggered.connect(self.startExperiment)
 
         self.actStopExperiment = QAction(self)
-        self.actStopExperiment.setText("&Stoppe Experiment")
+        self.actStopExperiment.setText("&Stop experiment")
         self.actStopExperiment.setDisabled(True)
         self.actStopExperiment.setIcon(QIcon(get_resource("stop.png")))
         self.actStopExperiment.setShortcut(QKeySequence("F6"))
@@ -167,7 +167,7 @@ class MainGui(QMainWindow):
             "Add the selected data set from the left to the selected plot "
             "on the right.")
         self.dataPointRightButton.clicked.connect(self.addDatapointToTree)
-        self.dataPointLabel = QLabel('Datenpunkt', self)
+        self.dataPointLabel = QLabel('Data point', self)
         self.dataPointLabel.setAlignment(Qt.AlignCenter)
         self.dataPointManipulationLayout.addWidget(self.dataPointLabel)
         self.dataPointManipulationLayout.addWidget(self.dataPointRightButton)
@@ -209,7 +209,7 @@ class MainGui(QMainWindow):
         self.dataLayout.addWidget(self.dataPointManipulationWidget)
 
         self.dataPointTreeWidget = QTreeWidget()
-        self.dataPointTreeWidget.setHeaderLabels(["Plottitel", "Datenpunkte"])
+        self.dataPointTreeWidget.setHeaderLabels(["Plot title", "Data point"])
         self.dataPointTreeWidget.itemDoubleClicked.connect(self.plotVectorClicked)
         self.dataPointTreeWidget.setExpandsOnDoubleClick(0)
         self.dataPointTreeLayout = QVBoxLayout()
@@ -225,18 +225,18 @@ class MainGui(QMainWindow):
                                           logging.INFO)
         self.textLogger.set_target_cb(self.logBox)
         logging.getLogger().addHandler(self.textLogger)
-        self._logger.info('Laborvisualisierung')
+        self._logger.info('Laboratory visualization')
 
         # menu bar
-        dateiMenu = self.menuBar().addMenu("&Datei")
+        dateiMenu = self.menuBar().addMenu("&File")
         dateiMenu.addAction("&Quit", self.close, QKeySequence(Qt.CTRL + Qt.Key_W))
 
         # view
-        self.viewMenu = self.menuBar().addMenu('&Ansicht')
-        self.actLoadStandardState = QAction('&Lade Standarddockansicht')
+        self.viewMenu = self.menuBar().addMenu('&View')
+        self.actLoadStandardState = QAction('&Load default view')
         self.viewMenu.addAction(self.actLoadStandardState)
         self.actLoadStandardState.triggered.connect(self.loadStandardDockState)
-        self.actShowCoords = QAction("&Zeige Koordinaten", self)
+        self.actShowCoords = QAction("&Show coordinates", self)
         self.actShowCoords.setCheckable(True)
         self.actShowCoords.setChecked(
             self._settings.value("view/show_coordinates") == "True"
@@ -245,17 +245,17 @@ class MainGui(QMainWindow):
         self.actShowCoords.changed.connect(self.updateShowCoordsSetting)
 
         # options
-        self.optMenu = self.menuBar().addMenu('&Optionens')
-        self.actIntPoints = QAction("&Interpolationspunkte", self)
+        self.optMenu = self.menuBar().addMenu('&Options')
+        self.actIntPoints = QAction("&Interpolation points", self)
         self.actIntPoints.triggered.connect(self.setIntPoints)
         self.optMenu.addAction(self.actIntPoints)
-        self.actTimerTime = QAction("&Timer Zeit", self)
+        self.actTimerTime = QAction("&Timer time", self)
         self.optMenu.addAction(self.actTimerTime)
         self.actTimerTime.triggered.connect(self.setTimerTime)
 
         # experiment
         self.expMenu = self.menuBar().addMenu('&Experiment')
-        self.comMenu = self.expMenu.addMenu('&Verbindungsart')
+        self.connMenu = self.menuBar().addMenu('&Connections')
 
         # TODO
         # Verbindungstypen laden
@@ -267,20 +267,21 @@ class MainGui(QMainWindow):
         if availableConns:
             for cls, name in availableConns:
                 self._logger.info("Found Connection: {}".format(name))
-                self.connection[cls] = {}
+                self.connections[cls] = {}
         else:
             self._logger.error("No Connections found, return!")
             return
 
         for conn, connInstance in self.connections.items():
-            if isinstance(conn, SerialConnection):
-                actConnTcpType = self._getTcpDataType
-                self.comMenu.addAction(actConnTcpType)
-            elif isinstance(conn, TcpConnection):
-                actConnSerialType = self.get
-                self.comMenu.addAction(actConnSerialType)
+            if issubclass(conn, SerialConnection):
+                serialMenu = self.connMenu.addMenu(conn.__name__)
+                self._getSerialMenu(serialMenu, conn.settings)
+            elif issubclass(conn, TcpConnection):
+                actConnTcpType = self._getTcpMenu(conn.settings)
+                self.connMenu.addMenu(actConnTcpType)
             else:
                 self._logger.warning("Cannot handle the connection type!")
+            self.connMenu.addSeparator()
 
         self.expMenu.addSeparator()
         self.actConnect = QAction('&Versuchsaufbau verbinden')
@@ -337,6 +338,41 @@ class MainGui(QMainWindow):
         self._updateExperimentsList()
 
         self._applyFirstExperiment()
+
+    def _getSerialMenu(self, serialMenu, settings):
+        # port
+        portMenu = serialMenu.addMenu("Port")
+        portMenu.aboutToShow.connect(lambda: self.getComPorts(settings['port'], portMenu))
+
+        # baud
+        baudAction = serialMenu.addAction("Baud")
+
+        return serialMenu
+
+    def getComPorts(self, port, connMenu):
+        def setPort(port):
+            def fn():
+                self.port = port
+
+            return fn
+
+        connMenu.clear()
+        comPorts = serial.tools.list_ports.comports()
+        if comPorts:
+            if port == '':
+                arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
+                if len(arduinoPorts) != 0:
+                    port = arduinoPorts[0]
+            for p in comPorts:
+                portAction = QAction(p.device, self)
+                portAction.setCheckable(True)
+                portAction.setChecked(True if p.device in port else False)
+                portAction.triggered.connect(setPort(p.device))
+                connMenu.addAction(portAction)
+        else:
+            noAction = QAction("(None)", self)
+            noAction.setEnabled(False)
+            connMenu.addAction(noAction)
 
     def _updateExperimentsList(self):
         self.experimentList.clear()
@@ -423,97 +459,6 @@ class MainGui(QMainWindow):
             coordItem.hide()
 
     # event functions
-    def setDefaultComPort(self):
-            comPorts = serial.tools.list_ports.comports()
-            if comPorts:
-                arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
-
-                if len(arduinoPorts) != 0:
-                    self.port = arduinoPorts[0]
-                else:
-                    self._logger.warning("Can't set comport for arduino automatically! Set the port manually!")
-            else:
-                self._logger.warning("Can't set comport for arduino automatically! Set the port manually!")
-
-    @pyqtSlot()
-    def getConnPorts(self):
-        # Check what communication is active
-        self.comMenu.clear()
-        if serial_active:
-            def setPort(port):
-                def fn():
-                    self.port = port
-
-                return fn
-
-            comPorts = serial.tools.list_ports.comports()
-            if comPorts:
-                if self.port == '':
-                    arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
-                    if len(arduinoPorts) != 0:
-                        self.port = arduinoPorts[0]
-                for p in comPorts:
-                    portAction = QAction(p.device, self)
-                    portAction.setCheckable(True)
-                    portAction.setChecked(True if p.device in self.port else False)
-                    portAction.triggered.connect(setPort(p.device))
-                    self.comMenu.addAction(portAction)
-            else:
-                noAction = QAction("(None)", self)
-                noAction.setEnabled(False)
-                self.comMenu.addAction(noAction)
-        elif tcp_active:
-            tcpHostIp = QAction("Host IP...", self)
-            tcpHostIp.setEnabled(True)
-            self.comMenu.addAction(tcpHostIp)
-            tcpHostIp.triggered.connect(self.setTcpIp)
-            tcpHostPort = QAction("Host Port...", self)
-            tcpHostPort.setEnabled(True)
-            self.comMenu.addAction(tcpHostPort)
-            tcpHostPort.triggered.connect(self.setTcpPort)
-        else:
-            noAction = QAction("Wähle Verbindungsart", self)
-            noAction.setEnabled(False)
-            self.comMenu.addAction(noAction)
-
-    @pyqtSlot()
-    def setTcpIp(self):
-        client_ip = TcpConnection.getIP()
-        self.tcp_ip, okPressed = QInputDialog.getText(self, 'Eingabe der Host-IP',
-                                                      'Beachten Sie dass die IP im gleichen\n' +
-                                                      'Netzwerk liegt wie Ihre IP: ' + client_ip,
-                                                      QLineEdit.Normal, self.tcp_ip)
-        ip_int = self.tcp_ip.split('.')
-        if len(ip_int) != 4:
-            self._logger.error("IP Adresse '{}' ist keine gültige Adresse"
-                               .format(self.tcp_ip))
-            self.tcp_ip = None
-            return
-        for i in ip_int:
-            if not i.isdigit():
-                self._logger.error("IP Adresse '{}' enhält Buchstaben oder "
-                                   "andere Zeichen".format(self.tcp_ip))
-                self.tcp_ip = None
-                return
-            if int(i) < 0 or int(i) > 255:
-                self._logger.error("IP Adresse '{}' Werte nicht im definierten "
-                                   "Bereich (0 <= x <= 255)".format(self.tcp_ip))
-                self.tcp_ip = None
-                return
-
-    @pyqtSlot()
-    def setTcpPort(self):
-        if self.port == '':
-            self.port, okPressed = QInputDialog.getInt(self,
-                                                       "Eingabe des Host-Ports",
-                                                       "Bitte Port des Host angeben:",
-                                                       0, 0, 65535, 1)
-        else:
-            self.port, okPressed = QInputDialog.getInt(self,
-                                                       "Eingabe des Host-Ports",
-                                                       "Bitte Port des Host angeben:",
-                                                       int(self.port), 0, 65535, 1)
-
     def addPlotTreeItem(self, default=False):
         text = "plot_{:03d}".format(self.dataPointTreeWidget.topLevelItemCount())
         if not default:
@@ -1003,36 +948,21 @@ class MainGui(QMainWindow):
     @pyqtSlot()
     def connect(self):
         for conn, connInstance in self.connections.items():
-            self.isConnected = True
-
-            SerialConnection(self.inputQueue, self.outputQueue, self.port)
-            if self.connection.connect():
-                self._logger.info("Mit Arduino auf " + self.connection.port + " verbunden.")
+            if connInstance.connect():
+                self._logger.info("Connection for {} established!".format(conn))
                 self.actConnect.setEnabled(False)
                 self.actDisconnect.setEnabled(True)
                 if self._currentExpListItem is not None:
                     self.actStartExperiment.setEnabled(True)
                 self.actStopExperiment.setEnabled(False)
-                self.statusbarLabel.setText("Verbunden")
+                self.statusbarLabel.setText("Connected!")
                 self.connection.received.connect(self.updateData)
                 self.connection.start()
+                self.isConnected = True
             else:
-                self.connection = None
-                self._logger.warning("Keinen Arduino gefunden. Erneut Verbinden!")
-            self.statusbarLabel.setText(self.getStatusBarInfo())
-
-            self.connection = TcpConnection(self.inputQueue, self.outputQueue, self.port, self.tcp_ip)
-            if self.connection.connect():
-                self._logger.info("Mit Server {0}:{1} verbunden."
-                                  .format(self.tcp_ip, self.port))
-                self.actConnect.setEnabled(False)
-                self.actDisconnect.setEnabled(True)
-                if self._currentItem is not None:
-                    self.actStartExperiment.setEnabled(True)
-                self.actStopExperiment.setEnabled(False)
-                self.connection.start()
-            else:
-            self.statusbarLabel.setText(self.getStatusBarInfo())
+                self._logger.warning("No connection for {} established! Check your settings!".format(conn))
+                self.isConnected = False
+                return
 
     def writeToConnection(self, data):
         for conn, connInstance in self.connections.items():

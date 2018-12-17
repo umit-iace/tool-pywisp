@@ -34,20 +34,20 @@ def getRegisteredExperimentModules():
     return _registry.get(ExperimentModule, [])
 
 
-def registerConnection(expCls):
+def registerConnection(connCls):
     """
     hook to register a connection in the pywisp framework
-    :param expCls: class to be registered
+    :param connCls: class to be registered
     """
-    if not issubclass(expCls, ExperimentModule):
+    if not issubclass(connCls, Connection):
         raise TypeError("Module must match type to be registered for! "
-                        "{0} <> {1}".format(expCls, ExperimentModule))
+                        "{0} <> {1}".format(connCls, Connection))
 
     clsEntry = _registry.get(Connection, [])
-    increment = (expCls, expCls.__name__)
+    increment = (connCls, connCls.__name__)
     if increment in clsEntry:
         raise ValueError("class {0} already registered as connection!"
-                         "".format(expCls))
+                         "".format(connCls))
 
     clsEntry.append(increment)
     _registry[Connection] = clsEntry
