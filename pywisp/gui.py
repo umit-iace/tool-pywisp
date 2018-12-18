@@ -342,20 +342,38 @@ class MainGui(QMainWindow):
     def _getSerialMenu(self, serialMenu, settings):
         # port
         portMenu = serialMenu.addMenu("Port")
-        portMenu.aboutToShow.connect(lambda: self.getComPorts(settings['port'], portMenu))
+        portMenu.aboutToShow.connect(lambda: self.getComPorts(settings, portMenu))
 
         # baud
-        baudAction = serialMenu.addAction("Baud")
+        baudMenu = serialMenu.addMenu("Baud")
+        baudMenu.aboutToShow.connect(lambda: self.getBauds(settings, baudMenu))
 
         return serialMenu
 
-    def getComPorts(self, port, connMenu):
-        def setPort(port):
+    def getBauds(self, settings, connMenu):
+        def setBaud(baud):
             def fn():
-                self.port = port
+                settings['baud'] = baud
 
             return fn
 
+        baud = settings['baud']
+        bauds = ['1200', '2400', '4800', '9600', '14400', '19200', '28800', '38400', '57600', '115200']
+        connMenu.clear()
+        for _baud in bauds:
+            baudAction = QAction(_baud, self)
+            baudAction.setCheckable(True)
+            baudAction.setChecked(True if _baud in str(baud) else False)
+            baudAction.triggered.connect(setBaud(_baud))
+            connMenu.addAction(baudAction)
+
+    def getComPorts(self, settings, connMenu):
+        def setPort(port):
+            def fn():
+                settings['port'] = port
+            return fn
+
+        port = settings['port']
         connMenu.clear()
         comPorts = serial.tools.list_ports.comports()
         if comPorts:
@@ -947,7 +965,9 @@ class MainGui(QMainWindow):
 
     @pyqtSlot()
     def connect(self):
-        for conn, connInstance in self.connections.items():
+        for conn, _ in self.connections.items():
+            connInstance = conn()
+            self.connections[conn] = connInstance
             if connInstance.connect():
                 self._logger.info("Connection for {} established!".format(conn))
                 self.actConnect.setEnabled(False)
@@ -979,6 +999,7 @@ class MainGui(QMainWindow):
         for conn, connInstance in self.connections.items():
             connInstance.disconnect()
             connInstance.received.disconnect()
+            self.connections[conn] = None
         self.actConnect.setEnabled(True)
         self.actDisconnect.setEnabled(False)
         self.actStartExperiment.setEnabled(False)
