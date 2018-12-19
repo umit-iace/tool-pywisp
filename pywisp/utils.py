@@ -2,8 +2,8 @@
 import logging
 import numpy as np
 import os
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor, QIntValidator
+from PyQt5.QtCore import Qt, QRegExp
+from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout
 from pyqtgraph import mkPen
 
@@ -226,3 +226,44 @@ class DataIntDialog(QDialog):
         data = dialog._getData()
 
         return data, result == QDialog.Accepted
+
+
+class DataTcpIpDialog(QDialog):
+    def __init__(self, **kwargs):
+        parent = kwargs.get('parent', None)
+        super(DataTcpIpDialog, self).__init__(parent)
+
+        self.ipValue = kwargs.get("ip", 0)
+        self.portValue = kwargs.get("prt", 0)
+
+        ipRange = "(?:[0-1]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])"  # Part of the regular expression
+        # Regulare expression
+        ipRegex = QRegExp("^" + ipRange + "\\." + ipRange + "\\." + ipRange + "\\." + ipRange + "$")
+        ipValidator = QRegExpValidator(ipRegex, self)
+
+        mainLayout = QVBoxLayout(self)
+
+        self.ipData = QLineEdit(self)
+        self.ipData.setText(str(self.ipValue))
+        self.ipData.setValidator(ipValidator)
+
+        mainLayout.addWidget(self.ipData)
+
+        # OK and Cancel buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
+            Qt.Horizontal, self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        mainLayout.addWidget(buttons)
+
+    def _getData(self):
+        return self.ipData.text()
+
+    @staticmethod
+    def getData(**kwargs):
+        dialog = DataTcpIpDialog(**kwargs)
+        result = dialog.exec_()
+        ipData = dialog._getData()
+
+        return ipData, result == QDialog.Accepted

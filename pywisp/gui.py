@@ -14,7 +14,8 @@ from pyqtgraph.dockarea import *
 from .connection import SerialConnection, TcpConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
-from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, CSVExporter, DataIntDialog
+from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, CSVExporter, DataIntDialog, \
+    DataTcpIpDialog
 from .visualization import MplVisualizer
 
 
@@ -277,8 +278,9 @@ class MainGui(QMainWindow):
                 serialMenu = self.connMenu.addMenu(conn.__name__)
                 self._getSerialMenu(serialMenu, conn.settings)
             elif issubclass(conn, TcpConnection):
-                actConnTcpType = self._getTcpMenu(conn.settings)
-                self.connMenu.addMenu(actConnTcpType)
+                actTcp = QAction(conn.__name__)
+                self.connMenu.addAction(actTcp)
+                actTcp.triggered.connect(lambda: self._getTcpMenu(conn.settings))
             else:
                 self._logger.warning("Cannot handle the connection type!")
             self.connMenu.addSeparator()
@@ -339,16 +341,12 @@ class MainGui(QMainWindow):
 
         self._applyFirstExperiment()
 
-    def _getTcpMenu(self, serialMenu, settings):
-        # port
-        portMenu = serialMenu.addMenu("Port")
-        portMenu.aboutToShow.connect(lambda: self.getComPorts(settings, portMenu))
+    def _getTcpMenu(self, settings):
+        # ip and port
+        ip, ok = DataTcpIpDialog.getData(ip=settings['ip'])
 
-        # baud
-        baudMenu = serialMenu.addMenu("Baud")
-        baudMenu.aboutToShow.connect(lambda: self.getBauds(settings, baudMenu))
-
-        return serialMenu
+        if ok:
+            settings['ip'] = ip
 
     def _getSerialMenu(self, serialMenu, settings):
         # port
@@ -411,7 +409,7 @@ class MainGui(QMainWindow):
 
     def setIntPoints(self):
         self._settings.beginGroup('plot')
-        intPoints, ok = DataIntDialog.getData(min=2, max=500, current=self._settings.value("interpolation_points"))
+        intPoints, ok = DataIntDialog.getData(min=2, max=1000000, current=self._settings.value("interpolation_points"))
 
         if ok:
             self._settings.setValue("interpolation_points", int(intPoints))
