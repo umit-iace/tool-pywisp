@@ -339,6 +339,17 @@ class MainGui(QMainWindow):
 
         self._applyFirstExperiment()
 
+    def _getTcpMenu(self, serialMenu, settings):
+        # port
+        portMenu = serialMenu.addMenu("Port")
+        portMenu.aboutToShow.connect(lambda: self.getComPorts(settings, portMenu))
+
+        # baud
+        baudMenu = serialMenu.addMenu("Baud")
+        baudMenu.aboutToShow.connect(lambda: self.getBauds(settings, baudMenu))
+
+        return serialMenu
+
     def _getSerialMenu(self, serialMenu, settings):
         # port
         portMenu = serialMenu.addMenu("Port")
@@ -721,10 +732,18 @@ class MainGui(QMainWindow):
 
         widget.scene().sigMouseMoved.connect(infoWrapper)
 
-        widget.scene().contextMenu = [QAction("Export png", self),
+        qActionSep1 = QAction("", self)
+        qActionSep1.setSeparator(True)
+        qActionSep2 = QAction("", self)
+        qActionSep2.setSeparator(True)
+        widget.scene().contextMenu = [qActionSep1,
+                                      QAction("Auto Range All", self),
+                                      qActionSep2,
+                                      QAction("Export png", self),
                                       QAction("Export csv", self)]
-        widget.scene().contextMenu[0].triggered.connect(lambda: self.exportPng(widget.getPlotItem(), title, coordItem))
-        widget.scene().contextMenu[1].triggered.connect(lambda: self.exportCsv(chart, title))
+        widget.scene().contextMenu[1].triggered.connect(lambda: self.setAutoRange(widget))
+        widget.scene().contextMenu[3].triggered.connect(lambda: self.exportPng(widget.getPlotItem(), title, coordItem))
+        widget.scene().contextMenu[4].triggered.connect(lambda: self.exportCsv(chart, title))
 
         # create dock container and add it to dock area
         dock = Dock(title, closable=True)
@@ -747,6 +766,11 @@ class MainGui(QMainWindow):
         for indx, plot in enumerate(self.plotCharts):
             if not plot.title in openDocks:
                 self.plotCharts.pop(indx)
+
+    def setAutoRange(self, chart):
+        # TODO test
+        chart.autoRange()
+        chart.enableAutoRange()
 
     def exportCsv(self, chart, name):
         exporter = CSVExporter(chart.dataPoints)
