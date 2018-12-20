@@ -273,10 +273,14 @@ class MainGui(QMainWindow):
             self._logger.error("No Connections found, return!")
             return
 
+        serialCnt = 0
         for conn, connInstance in self.connections.items():
             if issubclass(conn, SerialConnection):
                 serialMenu = self.connMenu.addMenu(conn.__name__)
                 self._getSerialMenu(serialMenu, conn.settings)
+                if conn.settings['port'] == '':
+                    self.setDefaultComPort(conn.settings, serialCnt)
+                serialCnt += 1
             elif issubclass(conn, TcpConnection):
                 actTcp = QAction(conn.__name__)
                 self.connMenu.addAction(actTcp)
@@ -376,6 +380,18 @@ class MainGui(QMainWindow):
             baudAction.triggered.connect(setBaud(_baud))
             connMenu.addAction(baudAction)
 
+    def setDefaultComPort(self, settings, cnt):
+        comPorts = serial.tools.list_ports.comports()
+        if comPorts:
+            arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
+
+            if len(arduinoPorts) != 0:
+                settings['port'] = arduinoPorts[cnt]
+            else:
+                self._logger.warning("Can't set comport for Arduino automatically! Set the port manually!")
+        else:
+            self._logger.warning("No ComPorts for Arduino available, connect a device!")
+
     def getComPorts(self, settings, connMenu):
         def setPort(port):
             def fn():
@@ -390,6 +406,7 @@ class MainGui(QMainWindow):
                 arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
                 if len(arduinoPorts) != 0:
                     port = arduinoPorts[0]
+                    settings['port'] = port
             for p in comPorts:
                 portAction = QAction(p.device, self)
                 portAction.setCheckable(True)
@@ -907,8 +924,7 @@ class MainGui(QMainWindow):
                 self._logger.error('Config file {} does not exists!'.format(fileName))
                 success = False
 
-        experimentsFileName = os.path.split(fileName)[0]
-        self._logger.info("Load config file: {0}".format(experimentsFileName))
+        self._logger.info("Load config file: {0}".format(fileName))
         with open(fileName.encode(), "r") as f:
             self._experiments = yaml.load(f)
 
@@ -991,15 +1007,15 @@ class MainGui(QMainWindow):
             connInstance = conn()
             self.connections[conn] = connInstance
             if connInstance.connect():
-                self._logger.info("Connection for {} established!".format(conn))
+                self._logger.info("Connection for {} established!".format(conn.__name__))
                 self.actConnect.setEnabled(False)
                 self.actDisconnect.setEnabled(True)
                 if self._currentExpListItem is not None:
                     self.actStartExperiment.setEnabled(True)
                 self.actStopExperiment.setEnabled(False)
                 self.statusbarLabel.setText("Connected!")
-                self.connection.received.connect(self.updateData)
-                self.connection.start()
+                connInstance.received.connect(self.updateData)
+                connInstance.start()
                 self.isConnected = True
             else:
                 self._logger.warning("No connection for {} established! Check your settings!".format(conn))
@@ -1010,8 +1026,8 @@ class MainGui(QMainWindow):
         for conn, connInstance in self.connections.items():
             if connInstance:
                 connInstance.writeData(data)
-        else:
-            self._logger.error('Keine Verbindung vorhanden!')
+            else:
+                self._logger.error('Keine Verbindung vorhanden!')
 
     @pyqtSlot()
     def disconnect(self):
