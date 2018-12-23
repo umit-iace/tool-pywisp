@@ -1,0 +1,53 @@
+# default experiment file that is loaded when the gui starts up
+
+- Name: Testsprung
+
+  ConstTrajectory:
+   Startwert: 255
+   Startzeit: 1
+   Endwert: 60
+   PWM: True
+
+  BallInTube:
+
+- Name: SprungSystem
+
+  ConstTrajectory:
+   Startwert: 130
+   Startzeit: 1
+   Endwert: 73.55
+   PWM: True
+
+  BallInTube:
+
+- Name: RegelungSystemSprung
+
+  ConstTrajectory:
+   Endwert: 0.5
+   Startzeit: 2.0
+   Startwert: 0.0
+   PWM: False
+
+  BallInTube:
+
+  PIDController:
+   Kp: 2120.03
+   Ti: 0.7998
+   Td: 0.1861
+
+- Name: RegelungSystemSchwingung
+
+  SinoidTrajectory:
+   Amplitude: 2.0
+   Frequenz: 1.0
+   Amplitude0: 7.0
+   Startwert: 0.0
+   Startzeit: 2.0
+   PWM: False
+
+  BallInTube:
+
+  PIDController:
+   Kp: 2120.03
+   Ti: 0.7998
+   Td: 0.1861

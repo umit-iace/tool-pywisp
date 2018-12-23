@@ -7,7 +7,7 @@ Contents:
   :maxdepth: 2
 
   installation
-  guide/index
+  examples/index
   modules/index
   contributing
   authors

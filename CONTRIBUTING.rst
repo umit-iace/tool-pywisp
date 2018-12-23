@@ -12,7 +12,7 @@ Types of Contributions
 Report Bugs
 ~~~~~~~~~~~
 
-Report bugs at https://github.com/umit-iace/pywisp/issues.
+Report bugs at https://github.com/umit-iace/tool-pywisp/issues.
 
 If you are reporting a bug, please include:
 
@@ -43,7 +43,7 @@ Submit Feedback
 ~~~~~~~~~~~~~~~
 
 The best way to send feedback is to file an issue at
-https://github.com/umit-iace/pywisp/issues.
+https://github.com/umit-iace/tool-pywisp/issues.
 
 If you are proposing a feature:
 
@@ -55,7 +55,7 @@ If you are proposing a feature:
 Get Started!
 ------------
 
-Ready to contribute? Here's how to set up pymoskito_ for local development.
+Ready to contribute? Here's how to set up pywisp_ for local development.
 
 1. Fork the pywisp_ repo on GitHub.
 2. Clone your fork locally::
@@ -106,4 +106,4 @@ To run a subset of tests::
 
     $ python -m unittest pywisp/tests/test_gui.py
 
-.. _pywisp: https://github.com/umit-iace/pywisp
+.. _pywisp: https://github.com/umit-iace/tool-pywisp
