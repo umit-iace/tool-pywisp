@@ -26,7 +26,7 @@ setup(
         "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
     ],
-    keywords="pywisp visualisation arduino",
+    keywords="pywisp visualisation arduino tcpip",
     url="https://github.com/umit-iace/pywisp",
     author="IACE",
     author_email="jens.wurm@umit.at",
@@ -34,5 +34,7 @@ setup(
     package_dir={"pywisp": "pywisp"},
     install_requires=requirements,
     include_package_data=True,
+    test_suite="pywisp.tests",
+    tests_require=test_requirements,
     zip_safe=False
 )
