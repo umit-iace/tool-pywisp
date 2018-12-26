@@ -14,6 +14,9 @@ from serial import Serial, SerialException
 from time import time
 import logging
 
+__all__ = ["MINFrame", "MINTransport", "MINTransportSerial",
+           "ThreadsafeTransportMINSerialHandler", "MINConnectionError"]
+
 
 randomizer = SystemRandom()
 

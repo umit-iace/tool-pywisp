@@ -12,9 +12,12 @@ from PyQt5 import QtCore
 from . import MINTransportSerial, MINFrame
 
 
-class Connection(object):
-    """ Base class for serial and tcp connection
+__all__ = ["Connection", "TcpConnection", "SerialConnection"]
 
+
+class Connection(object):
+    """
+    Base class for a connection, i.e. tcp or serial
     """
     received = QtCore.pyqtSignal(object)
 
@@ -49,8 +52,8 @@ class Connection(object):
 
 
 class SerialConnection(Connection, QtCore.QThread):
-    """ A class for a serial interface connection implemented as a QThread
-
+    """
+    A connection derived class for a serial interface connection implemented as a QThread
     """
     def __init__(self,
                  port,
@@ -65,7 +68,8 @@ class SerialConnection(Connection, QtCore.QThread):
         self.moveToThread(self)
 
     def run(self):
-        """ Starts the timer and thread
+        """
+        Endless loop of the thread
         """
         while True and self.isConnected:
             frames = self.min.poll()
@@ -74,12 +78,9 @@ class SerialConnection(Connection, QtCore.QThread):
             time.sleep(0.01)
 
     def connect(self):
-        """ Checks of an arduino port is avaiable and connect to these one.
-
-        Returns
-        -------
-        bool
-            True if successful connected, False otherwise.
+        """
+        Checks if the given port is available and instantiate the min protocol
+        :return: True if successful connected, False otherwise.
         """
         ports = [
             p.device
@@ -98,8 +99,8 @@ class SerialConnection(Connection, QtCore.QThread):
             return True
 
     def disconnect(self):
-        """ Close the serial interface connection
-
+        """
+        Close the min protocol and reset the connection
         """
         time.sleep(1)
         self.isConnected = False
@@ -116,24 +117,24 @@ class SerialConnection(Connection, QtCore.QThread):
         time.sleep(0.1)
 
     def readData(self, frames):
-        """ Reads and emits the data, that comes over the serial interface.
+        """
+        Reads and emits the data frame, that comes over the serial interface.
+        :param frames: min frame from the other side
         """
         for frame in frames:
             self.received.emit(frame)
 
     def writeData(self, data):
-        """ Writes the given data to the serial inferface.
-        Parameters
-        ----------
-        data : dict
-            Readable string that will send over serial interface
+        """
+        Writes the given data frame to the min queue
+        :param data: dictionary that includes the min id and payload
         """
         self.min.queue_frame(min_id=data['id'], payload=data['msg'])
 
 
 class TcpConnection(Connection, QtCore.QThread):
-    """ A Class for a tcp client which connects a server
-
+    """
+    A connection derived Class for a tcp client implemented as a QThread, which connects a server
     """
     payloadLen = 80
 
@@ -162,6 +163,10 @@ class TcpConnection(Connection, QtCore.QThread):
         pass
 
     def connect(self):
+        """
+        Checks if the given port is available and instantiate the socket connection
+        :return: True if successful connected, False otherwise.
+        """
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             self.sock.connect((self.ipAddr, self.port))
@@ -176,14 +181,16 @@ class TcpConnection(Connection, QtCore.QThread):
 
     def getIP(self):
         """
-        get the IP adress of host and return it
+        Gets the IP address of host and return it
+        :return: the IP address
         """
         hostname = socket.gethostname()
         ip = socket.gethostbyname(hostname)
         return ip
 
     def run(self):
-        """ Starts the timer and thread
+        """
+        Endless loop of the thread
         """
         while True and self.isConnected:
             self.readData()
@@ -192,6 +199,10 @@ class TcpConnection(Connection, QtCore.QThread):
             time.sleep(0.001)
 
     def readData(self, frames):
+        """
+        Reads the data frame, build a min frame and emit it
+        :param frames: tcp frame
+        """
         try:
             data = self.sock.recv(self.payloadLen + 1)
             if data == b'\x32':  # TODO what is this
@@ -203,7 +214,6 @@ class TcpConnection(Connection, QtCore.QThread):
                 if len(data) != self.payloadLen + 1:
                     self._logger.error("Length of data differs from payload length!")
                 frame = MINFrame(data[0], data[1:], 0, 0)
-                # print("Recv: ", data)
                 self.received.emit(frame)
         except socket.timeout:
             # if nothing is to read, get on
@@ -213,13 +223,17 @@ class TcpConnection(Connection, QtCore.QThread):
             self.isConnected = False
 
     def writeData(self, data):
+        """
+        Writes a data frame to the socket connection
+        :param data:
+        :return:
+        """
         try:
             outputData = struct.pack('>B', data['id']) + data['msg']
             if len(outputData) < self.payloadLen + 1:
                 for i in range(self.payloadLen + 1 - len(outputData)):
                     outputData += b'\x00'
             self.sock.send(outputData)
-            # print("send: ", outputData, " with ", data['id'], " and ", data['msg'])
         except Exception as e:
             self._logger.error("Writing to host not possible! {}".format(e))
             self.isConnected = False

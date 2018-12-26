@@ -4,8 +4,13 @@ from abc import ABCMeta, abstractmethod
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+__all__ = ["MplVisualizer"]
+
 
 class Visualizer(metaclass=ABCMeta):
+    """
+    Base Class for animation
+    """
     def __init__(self):
         pass
 
@@ -15,6 +20,10 @@ class Visualizer(metaclass=ABCMeta):
 
 
 class MplVisualizer(Visualizer):
+    """
+    Base Class with some function the help visualizing the system using matplotlib
+    """
+
     def __init__(self, qWidget, qLayout):
         Visualizer.__init__(self)
         self.qWidget = qWidget

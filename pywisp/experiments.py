@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
+import ast
+import logging
 from collections import OrderedDict
 
-import ast
-from PyQt5.QtCore import Qt, QSize, pyqtSignal
+from PyQt5.QtCore import Qt, QSize, pyqtSignal, QObject
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QItemDelegate, QTreeView
 
-from . import experimentModules
 from .registry import *
 
 
@@ -30,28 +30,6 @@ class ExperimentModel(QStandardItemModel):
             return Qt.ItemIsEditable | Qt.ItemIsEnabled
         else:
             return Qt.ItemIsEnabled
-
-
-class ExperimentStateChange(object):
-    """
-    Object that is emitted when Experiment changes its state.
-
-    Keyword Args:
-        type: Keyword describing the state change, can be one of the following
-
-            * `init` Initialisation
-            * `start` : Start of Experiment
-            * `abort` : Abortion of Experiment
-
-        data: Data that is emitted on state change.
-        info: Further information.
-
-    """
-
-    def __init__(self, **kwargs):
-        assert "type" in kwargs.keys()
-        for key, val in kwargs.items():
-            setattr(self, key, val)
 
 
 class PropertyItem(QStandardItem):
@@ -279,7 +257,7 @@ class ExperimentInteractor(QObject):
                         break
                 else:
                     self._logger.warning("_applyExperiment(): Setting: '{0}' not "
-                                       "available for Module: '{1}'".format(
+                                         "available for Module: '{1}'".format(
                         valKey, moduleName))
 
         self.targetView.setModel(self.targetModel)

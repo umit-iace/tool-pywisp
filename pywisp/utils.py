@@ -7,15 +7,15 @@ from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout
 from pyqtgraph import mkPen
 
+__all__ = ["get_resource"]
+
 
 def get_resource(resName, resType="icons"):
     """
     Build absolute path to specified resource within the package
-    Args:
-        resName (str): name of the resource
-        resType (str): subdir
-    Return:
-        str: path to resource
+    :param resName: name of the ressource
+    :param resType: sub directory
+    :return: path to resource
     """
     own_path = os.path.dirname(__file__)
     resource_path = os.path.abspath(os.path.join(own_path, "resources", resType))
@@ -26,7 +26,6 @@ class PlainTextLogger(logging.Handler):
     """
     Logging handler hat formats log data for line display
     """
-
     def __init__(self, settings, level=logging.NOTSET):
         logging.Handler.__init__(self, level)
         self.name = "PlainTextLogger"
@@ -61,7 +60,6 @@ class DataPointBuffer(object):
     """
     Buffer object to store the values of the data points
     """
-
     def __init__(self, name):
         self.name = name
         self.values = []
@@ -70,9 +68,9 @@ class DataPointBuffer(object):
     def addValue(self, time, value):
         """
         Adds a new value to the data point buffer
-        Args:
-            time(float): time(stamp) of the corresponding value (x axis)
-            value(float): the new value for the data point (y axis)
+        :param time: time(stamp) of the corresponding value (x axis)
+        :param value: the new value for the data point (y axis)
+        :return:
         """
         self.time.append(time)
         self.values.append(value)
@@ -89,7 +87,6 @@ class PlotChart(object):
     """
     Object containing the plot widgets and the associated plot curves
     """
-
     def __init__(self, title, settings):
         self.title = title
         self.dataPoints = []
@@ -134,6 +131,9 @@ class PlotChart(object):
                         curve.setData(interpx, interpy)
 
     def clear(self):
+        """
+        Clears the data point and curve lists and the plot items
+        """
         if self.plotWidget:
             self.plotWidget.getPlotItem().clear()
             del self.dataPoints[:]
@@ -182,6 +182,9 @@ class CSVExporter(object):
 
 
 class DataIntDialog(QDialog):
+    """
+    Qt Dialog handler for integer settings with a min and max value
+    """
     def __init__(self, **kwargs):
         parent = kwargs.get('parent', None)
         super(DataIntDialog, self).__init__(parent)
@@ -194,10 +197,10 @@ class DataIntDialog(QDialog):
         labelLayout = QHBoxLayout()
 
         minLabel = QLabel(self)
-        minLabel.setText("min. Wert: {}".format(self.minValue))
+        minLabel.setText("min. value: {}".format(self.minValue))
         labelLayout.addWidget(minLabel)
         maxLabel = QLabel(self)
-        maxLabel.setText("max. Wert: {}".format(self.maxValue))
+        maxLabel.setText("max. value: {}".format(self.maxValue))
         labelLayout.addWidget(maxLabel)
         mainLayout.addLayout(labelLayout)
 
@@ -229,6 +232,9 @@ class DataIntDialog(QDialog):
 
 
 class DataTcpIpDialog(QDialog):
+    """
+    Qt Dialog handler for tcp settings
+    """
     def __init__(self, **kwargs):
         parent = kwargs.get('parent', None)
         super(DataTcpIpDialog, self).__init__(parent)
@@ -237,7 +243,7 @@ class DataTcpIpDialog(QDialog):
         self.portValue = kwargs.get("prt", 0)
 
         ipRange = "(?:[0-1]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])"  # Part of the regular expression
-        # Regulare expression
+        # regular expression
         ipRegex = QRegExp("^" + ipRange + "\\." + ipRange + "\\." + ipRange + "\\." + ipRange + "$")
         ipValidator = QRegExpValidator(ipRegex, self)
 
