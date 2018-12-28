@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 from copy import deepcopy
+import logging
 
 import pkg_resources
 import serial.tools.list_ports
@@ -16,7 +17,6 @@ from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, CSVExporter, DataIntDialog, \
     DataTcpIpDialog
-from .visualization import MplVisualizer
 
 
 class MainGui(QMainWindow):
@@ -96,16 +96,31 @@ class MainGui(QMainWindow):
 
         # animation dock
         self.animationWidget = QWidget()
+        self.animationLayout = QVBoxLayout()
         availableVis = getRegisteredVisualizers()
         self._logger.info("Found Visualization: {}".format([name for cls, name in availableVis]))
         if availableVis:
-            # instantiate the first visualizer
-            self._logger.info("loading visualizer '{}'".format(availableVis[0][1]))
-            self.animationLayout = QVBoxLayout()
-            if issubclass(availableVis[0][0], MplVisualizer):
-                self.animationWidget = QWidget()
+            if len(availableVis) == 1:
+                self._logger.info("loading visualizer '{}'".format(availableVis[0][1]))
                 self.visualizer = availableVis[0][0](self.animationWidget,
                                                      self.animationLayout)
+                self.animationDock.addWidget(self.animationWidget)
+            else:
+                # TODO
+                # hbox mit combobox zur auswahl
+                # instantiate the first visualizer
+                self.visComboBox = QComboBox()
+                for vis in availableVis:
+                    self.visComboBox.addItem(vis[1])
+                self.visComboBox.currentIndexChanged.connect(self.visualizerChanged)
+
+                self._logger.info("loading visualizer '{}'".format(availableVis[0][1]))
+                self.visualizer = availableVis[0][0](QWidget(),
+                                                     QVBoxLayout())
+
+                self.animationLayout.addWidget(self.visComboBox)
+                self.animationLayout.addWidget(self.visualizer.qWidget)
+                self.animationWidget.setLayout(self.animationLayout)
                 self.animationDock.addWidget(self.animationWidget)
         else:
             self.visualizer = None
@@ -339,6 +354,13 @@ class MainGui(QMainWindow):
 
         self._applyFirstExperiment()
 
+    def visualizerChanged(self, idx):
+        availableVis = getRegisteredVisualizers()
+        self.animationLayout.removeWidget(self.visualizer.qWidget)
+        self.visualizer = availableVis[idx][0](QWidget(),
+                                               QVBoxLayout())
+        self.animationLayout.addWidget(self.visualizer.qWidget)
+
     def _getTcpMenu(self, settings):
         # ip and port
         ip, ok = DataTcpIpDialog.getData(ip=settings['ip'])
@@ -390,6 +412,7 @@ class MainGui(QMainWindow):
         def setPort(port):
             def fn():
                 settings['port'] = port
+
             return fn
 
         port = settings['port']
