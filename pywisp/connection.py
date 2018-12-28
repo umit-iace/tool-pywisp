@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+"""
+This module contains all classes and functions related to establish a connection with a test rig.
+"""
+
 import logging
 import socket
 import struct

@@ -1,10 +1,11 @@
+import random
+import socket
+import threading as thg
+import time
 import unittest as ut
 from queue import Queue
-import socket
+
 from ..connection import TcpConnection
-import threading as thg
-import random
-import time
 
 
 class myServer(thg.Thread):
@@ -16,6 +17,7 @@ class myServer(thg.Thread):
         self.servs.bind(address)
         self.servs.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.servs.listen(1)
+
     def run(self):
         self.conn, self.claddr = self.servs.accept()
         print('Connected with ', self.claddr)
@@ -56,9 +58,9 @@ class TestTcpConnection(ut.TestCase):
         returnvalue = self.connection_tcp.connect()
         self.assertEqual(returnvalue, True,
                          "Can't connect to server!")
-        data = {'id' : 1, 'msg' : b'\x37'}
+        data = {'id': 1, 'msg': b'\x37'}
         self.inputQueue.put(data)
-        data = {'id' : 1, 'msg' : b'\x38'}
+        data = {'id': 1, 'msg': b'\x38'}
         self.inputQueue.put(data)
         self.connection_tcp.run()
 
@@ -68,7 +70,7 @@ class TestTcpConnection(ut.TestCase):
                          "Can't connect to server!")
         self.connection_tcp.disconnect()
 
+
 if __name__ == '__main__':
     suite = ut.TestLoader().loadTestsFromTestCase(TestTcpConnection)
     ut.TextTestRunner(verbosity=2).run(suite)
-
