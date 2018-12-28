@@ -24,7 +24,7 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
     module. On initialization, a possibly modified (in terms of its values) version of
     this dict will be passed back to this class and is thenceforward available
     via the :py:attr:`settings` property.
-    The :py:attr:`dataPoints` are accessable by the GUI for plotting.
+    The :py:attr:`dataPoints` are accessible by the GUI for plotting.
     """
     def __init__(self):
         QObject.__init__(self, None)

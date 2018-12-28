@@ -258,12 +258,6 @@ class MainGui(QMainWindow):
         self.expMenu = self.menuBar().addMenu('&Experiment')
         self.connMenu = self.menuBar().addMenu('&Connections')
 
-        # TODO
-        # Verbindungstypen laden
-        # Optionen werden  erst beim connect gesetzt
-        # Menüeinträge einarbeiten
-        # bei 1x serial, default com port laden, wenn möglich
-        #
         availableConns = getRegisteredConnections()
         if availableConns:
             for cls, name in availableConns:
