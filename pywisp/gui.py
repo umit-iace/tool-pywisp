@@ -1088,8 +1088,7 @@ class MainGui(QMainWindow):
 
     def updateDataPlots(self):
         if self.visualizer:
-            # TODO muss noch geupdated werden
-            pass
+            self.visualizer.update(self._currentDataPointBuffers)
 
         for chart in self.plotCharts:
             chart.updatePlot()
