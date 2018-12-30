@@ -1031,7 +1031,7 @@ class MainGui(QMainWindow):
                     self.actStartExperiment.setEnabled(True)
                 self.actStopExperiment.setEnabled(False)
                 self.statusbarLabel.setText("Connected!")
-                connInstance.received.connect(self.updateData)
+                connInstance.received.connect(lambda frame: self.updateData(frame, conn))
                 connInstance.start()
                 self.isConnected = True
             else:
@@ -1041,10 +1041,12 @@ class MainGui(QMainWindow):
 
     def writeToConnection(self, data):
         for conn, connInstance in self.connections.items():
-            if connInstance:
+            if connInstance and data['id'] == 1:
+                connInstance.writeData(data)
+            elif connInstance and data['connection'] == conn:
                 connInstance.writeData(data)
             else:
-                self._logger.error('Keine Verbindung vorhanden!')
+                self._logger.error('No connection available!')
 
     @pyqtSlot()
     def disconnect(self):
@@ -1072,8 +1074,8 @@ class MainGui(QMainWindow):
 
         return list
 
-    def updateData(self, frame):
-        data = self.exp.handleFrame(frame)
+    def updateData(self, frame, connection):
+        data = self.exp.handleFrame(frame, connection)
         if data is None:
             return
         time = data['Zeit'] / 1000.0

@@ -267,7 +267,7 @@ class ExperimentInteractor(QObject):
     def getDataPoints(self):
         return self.dataPoints
 
-    def handleFrame(self, frame):
+    def handleFrame(self, frame, connection):
         for row in range(self.targetModel.rowCount()):
             index = self.targetModel.index(row, 0)
 
@@ -275,7 +275,7 @@ class ExperimentInteractor(QObject):
             moduleName = parent.data(role=PropertyItem.RawDataRole)
 
             for module in getRegisteredExperimentModules():
-                if module[1] == moduleName:
+                if module[1] == moduleName and module[0].connection == connection:
                     dataPoints = module[0].handleFrame(frame)
                     if dataPoints is not None:
                         return dataPoints
@@ -304,8 +304,8 @@ class ExperimentInteractor(QObject):
                             vals.append(val)
                     params = module[0].getParams(self, vals)
                     if params and not None:
+                        params['connection'] = module[0].connection
                         data.append(params)
-
                     break
 
         # start experiment
@@ -333,8 +333,8 @@ class ExperimentInteractor(QObject):
                             vals.append(val)
                     params = module[0].getParams(self, vals)
                     if params and not None:
+                        params['connection'] = module[0].connection
                         data.append(params)
-
                     break
 
         for _data in data:
@@ -355,10 +355,10 @@ class ExperimentInteractor(QObject):
 
             for module in getRegisteredExperimentModules():
                 if module[1] == moduleName:
-                    stopParams = module[0].getStopParams(self)
-                    if stopParams is not None:
-                        data.append(stopParams)
-
+                    params = module[0].getStopParams(self)
+                    if params is not None:
+                        params['connection'] = module[0].connection
+                        data.append(params)
                     break
 
         # stop experiment
@@ -383,7 +383,6 @@ class ExperimentInteractor(QObject):
             for module in getRegisteredExperimentModules():
                 if module[1] == moduleName:
                     exp[moduleName] = self.getSettings(parent)
-
                     break
 
         return exp
