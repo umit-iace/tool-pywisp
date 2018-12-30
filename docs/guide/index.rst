@@ -20,6 +20,7 @@ testbench handling itself.
 
 - `dataPoints`: Data points, that come from the test rig.
 - `publicSettings`: Settings, that can be changed by the user in the GUI.
+- `connection`: Connection name, that is required to read and write to the correct connection.
 
 4 functions must be implemented:
 
