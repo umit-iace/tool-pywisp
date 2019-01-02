@@ -1,0 +1,10 @@
+# default experiment file that is loaded when the gui starts up
+
+- Name: SprungSystem
+
+  ConstTrajectory:
+   Endwert: 7.0
+   Startzeit: 2
+   Startwert: 0.0
+
+  TestTCP:
