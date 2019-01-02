@@ -1,0 +1,18 @@
+stages:
+  - docu
+docu:
+  stage: docu
+  tags:
+     - shell
+  script:
+     - virtualenv _venv
+     - source _venv/bin/activate
+     - pip install -r requirements.txt
+     - cd docs
+     - make html
+     - rm -rf /srv/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
+     - mkdir -p /srv/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
+     - mv _build/html/* /srv/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
+     - cd ..
+     - deactivate
+     - rm -rf *
