@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 import logging
-import numpy as np
 import os
+
+import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 from PyQt5.QtCore import Qt, QRegExp
 from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout
@@ -26,6 +30,7 @@ class PlainTextLogger(logging.Handler):
     """
     Logging handler hat formats log data for line display
     """
+
     def __init__(self, settings, level=logging.NOTSET):
         logging.Handler.__init__(self, level)
         self.name = "PlainTextLogger"
@@ -60,6 +65,7 @@ class DataPointBuffer(object):
     """
     Buffer object to store the values of the data points
     """
+
     def __init__(self, name):
         self.name = name
         self.values = []
@@ -87,6 +93,7 @@ class PlotChart(object):
     """
     Object containing the plot widgets and the associated plot curves
     """
+
     def __init__(self, title, settings):
         self.title = title
         self.dataPoints = []
@@ -140,51 +147,61 @@ class PlotChart(object):
             del self.plotCurves[:]
 
 
-class CSVExporter(object):
-    def __init__(self, dataPoints):
-        self.dataPoints = dataPoints
-        self.sep = ','
+class Exporter(object):
+    """
+    Class exports data points from GUI to different formats (csv, png) as pandas dataframe.
+    """
 
-    def export(self, fileName):
+    def __init__(self, **kwargs):
+        dataPoints = kwargs.get('dataPoints', None)
 
-        fd = open(fileName, 'w')
-        data = []
-        header = []
+        if dataPoints is None:
+            raise Exception("Given data points are None!")
 
-        for dataPoint in self.dataPoints:
-            if dataPoint.time:
-                header.append('Zeit')
-                header.append(dataPoint.name)
-                data.append(dataPoint.time)
-                data.append(dataPoint.values)
+        # build pandas data frame
+        # TODO list of data for time selection
+        self.df = pd.DataFrame.from_dict(dataPoints)
 
-        numColumns = len(header)
-        if data:
-            numRows = len(max(data, key=len))
-        else:
-            fd.close()
-            return
+        if 'time' in self.df.columns:
+            self.df.set_index('time', inplace=True)
 
-        fd.write(self.sep.join(header) + '\n')
+    def exportPng(self, fileName):
+        """
+        Exports the data point dataframe as png with matplotlib.
+        :param fileName: name of file with extension
+        """
+        fig = plt.figure(figsize=(10, 6))
+        gs = gridspec.GridSpec(1, 1, hspace=0.1)
+        axes = plt.Subplot(fig, gs[0])
 
-        for i in range(numRows):
-            for j in range(numColumns):
-                if i < len(data[j]):
-                    fd.write(str(data[j][i]))
-                else:
-                    fd.write(str(np.nan))
+        for col in self.df.columns:
+            self.df[col].plot(ax=axes, label=col)
 
-                if j < numColumns:
-                    fd.write(self.sep)
+        axes.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=4,
+                    ncol=4, mode="expand", borderaxespad=0., framealpha=0.5)
 
-            fd.write('\n')
-        fd.close()
+        axes.grid(True)
+        if self.df.index.name == 'time':
+            axes.set_xlabel(r"Time (s)")
+
+        fig.add_subplot(axes)
+
+        fig.savefig(fileName, dpi=300)
+
+    def exportCsv(self, fileName, sep=','):
+        """
+        Exports the data point dataframe as csv
+        :param fileName: name of file with extension
+        :param sep: separator for csv (default: ,)
+        """
+        self.df.to_csv(fileName, sep=sep)
 
 
 class DataIntDialog(QDialog):
     """
     Qt Dialog handler for integer settings with a min and max value
     """
+
     def __init__(self, **kwargs):
         parent = kwargs.get('parent', None)
         super(DataIntDialog, self).__init__(parent)
@@ -235,6 +252,7 @@ class DataTcpIpDialog(QDialog):
     """
     Qt Dialog handler for tcp settings
     """
+
     def __init__(self, **kwargs):
         parent = kwargs.get('parent', None)
         super(DataTcpIpDialog, self).__init__(parent)

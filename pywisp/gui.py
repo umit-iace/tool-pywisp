@@ -1,25 +1,28 @@
 # -*- coding: utf-8 -*-
+import logging
 import os
 from copy import deepcopy
-import logging
 
 import pkg_resources
 import serial.tools.list_ports
 import yaml
-from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QRectF, QTimer, QSettings, QCoreApplication
+from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QSettings, QCoreApplication
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from pyqtgraph import PlotWidget, exporters, TextItem, mkBrush
+from pyqtgraph import PlotWidget, TextItem
 from pyqtgraph.dockarea import *
 
 from .connection import SerialConnection, TcpConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
-from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, CSVExporter, DataIntDialog, \
+from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
     DataTcpIpDialog
 
 
 class MainGui(QMainWindow):
+    """
+    Main class for the GUI
+    """
     runExp = pyqtSignal()
     stopExp = pyqtSignal()
 
@@ -197,8 +200,7 @@ class MainGui(QMainWindow):
         self.dataPointManipulationLayout.addWidget(self.dataPointLeftButton)
         self.dataPointExportButton = QPushButton(chr(0x25BC), self)
         self.dataPointExportButton.setToolTip(
-            "Export the selected data set from the left to the selected plot "
-            "on the right."
+            "Export the selected data set from the left to a csv or png file."
         )
         self.dataPointExportButton.clicked.connect(self.exportDataPointFromTree)
         self.dataPointManipulationLayout.addWidget(self.dataPointExportButton)
@@ -299,17 +301,17 @@ class MainGui(QMainWindow):
             self.connMenu.addSeparator()
 
         self.expMenu.addSeparator()
-        self.actConnect = QAction('&Versuchsaufbau verbinden')
+        self.actConnect = QAction('&Connect')
         self.actConnect.setIcon(QIcon(get_resource("connected.png")))
         self.actConnect.setShortcut(QKeySequence("F9"))
         self.expMenu.addAction(self.actConnect)
         self.actConnect.triggered.connect(self.connect)
 
-        self.actDisconnect = QAction('&Versuchsaufbau trennen')
+        self.actDisconnect = QAction('&Disconnect')
         self.actDisconnect.setEnabled(False)
         self.actDisconnect.setIcon(QIcon(get_resource("disconnected.png")))
         self.actDisconnect.setShortcut(QKeySequence("F10"))
-        self.actSendParameter = QAction('&Parameter senden')
+        self.actSendParameter = QAction('&Send parameter')
         self.actSendParameter.setEnabled(False)
         self.actSendParameter.setShortcut(QKeySequence("F8"))
         self.expMenu.addAction(self.actSendParameter)
@@ -380,6 +382,11 @@ class MainGui(QMainWindow):
         return serialMenu
 
     def getBauds(self, settings, connMenu):
+        """
+        Sets the baud rate in serial connection menu
+        :param settings: serial connection settings
+        :param connMenu: serial connection menu
+        """
         def setBaud(baud):
             def fn():
                 settings['baud'] = baud
@@ -397,11 +404,17 @@ class MainGui(QMainWindow):
             connMenu.addAction(baudAction)
 
     def setDefaultComPort(self, settings, cnt):
+        """
+        Sets the default port in given connection settings if an Arduino can found. If more than one Arduino can found,
+        the counter describes the connection number.
+        :param settings: serial connection settings
+        :param cnt: counter for serial connection
+        """
         comPorts = serial.tools.list_ports.comports()
         if comPorts:
             arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
 
-            if len(arduinoPorts) != 0:
+            if len(arduinoPorts) != 0 and len(arduinoPorts) >= cnt:
                 settings['port'] = arduinoPorts[cnt]
             else:
                 self._logger.warning("Can't set comport for Arduino automatically! Set the port manually!")
@@ -409,6 +422,11 @@ class MainGui(QMainWindow):
             self._logger.warning("No ComPorts for Arduino available, connect a device!")
 
     def getComPorts(self, settings, connMenu):
+        """
+
+        :param settings:
+        :param connMenu:
+        """
         def setPort(port):
             def fn():
                 settings['port'] = port
@@ -442,6 +460,9 @@ class MainGui(QMainWindow):
             self.experimentList.addItem(exp["Name"])
 
     def setIntPoints(self):
+        """
+        Sets the among of interpolation points in settings with a dialog.
+        """
         self._settings.beginGroup('plot')
         intPoints, ok = DataIntDialog.getData(min=2, max=1000000, current=self._settings.value("interpolation_points"))
 
@@ -452,6 +473,9 @@ class MainGui(QMainWindow):
         self._settings.endGroup()
 
     def setTimerTime(self):
+        """
+        Sets the timer time in settings with a dialog.
+        """
         self._settings.beginGroup('plot')
         timerTime, ok = DataIntDialog.getData(min=2, max=10000, current=self._settings.value("timer_time"))
 
@@ -463,8 +487,7 @@ class MainGui(QMainWindow):
 
     def _addSetting(self, group, setting, value):
         """
-        Add a setting, if settings is present, no changes are made.
-
+        Adds a setting, if setting is present, no changes are made.
         :param setting (str): Setting to add.
         :param value: Value to be set.
         """
@@ -475,8 +498,7 @@ class MainGui(QMainWindow):
 
     def _initSettings(self):
         """
-        Provide initial settings for the config file.
-
+        Provides initial settings for view, plot and log management.
         """
         # view management
         self._addSetting("view", "show_coordinates", "True")
@@ -534,7 +556,7 @@ class MainGui(QMainWindow):
 
         similarItems = self.dataPointTreeWidget.findItems(name, Qt.MatchExactly)
         if similarItems:
-            self._logger.error("Name '{}' existiert bereits".format(name))
+            self._logger.error("Name '{}' exists.".format(name))
             return
 
         toplevelitem = QTreeWidgetItem()
@@ -618,18 +640,15 @@ class MainGui(QMainWindow):
         idx = self.lastMeasList.row(self._currentLastMeasItem)
         dataPointBuffers = self.measurements[idx]['dataPointBuffers']
 
-        dataPoints = []
+        dataPoints = {}
         for item in self.dataPointListWidget.selectedItems():
             for data in dataPointBuffers:
                 if data.name == item.text():
                     dataPoints.append(data)
+                    dataPoints[item.text()] = [data.time, data.values]
                     continue
 
-        exporter = CSVExporter(dataPoints)
-        filename = QFileDialog.getSaveFileName(self, "CSV export", ".csv", "CSV Data (*.csv)")
-        if filename[0]:
-            exporter.export(filename[0])
-            self._logger.info("Export successful.")
+        self.export(dataPoints)
 
     def removeDatapointFromTree(self):
         items = self.dataPointTreeWidget.selectedItems()
@@ -771,11 +790,18 @@ class MainGui(QMainWindow):
         widget.scene().contextMenu = [qActionSep1,
                                       QAction("Auto Range All", self),
                                       qActionSep2,
-                                      QAction("Export png", self),
-                                      QAction("Export csv", self)]
+                                      QAction("Export as ...", self),
+                                      ]
+
+        def _export_wrapper(export_func):
+            def _wrapper():
+                return export_func(widget.getPlotItem(),
+                                   )
+
+            return _wrapper
+
         widget.scene().contextMenu[1].triggered.connect(lambda: self.setAutoRange(widget))
-        widget.scene().contextMenu[3].triggered.connect(lambda: self.exportPng(widget.getPlotItem(), title, coordItem))
-        widget.scene().contextMenu[4].triggered.connect(lambda: self.exportCsv(chart, title))
+        widget.scene().contextMenu[3].triggered.connect(_export_wrapper(self.exportPlotItem))
 
         # create dock container and add it to dock area
         dock = Dock(title, closable=True)
@@ -800,40 +826,45 @@ class MainGui(QMainWindow):
                 self.plotCharts.pop(indx)
 
     def setAutoRange(self, chart):
-        # TODO test
         chart.autoRange()
         chart.enableAutoRange()
 
-    def exportCsv(self, chart, name):
-        exporter = CSVExporter(chart.dataPoints)
-        filename = QFileDialog.getSaveFileName(self, "CSV export", name + ".csv", "CSV Data (*.csv)")
+    def exportPlotItem(self, plotItem):
+        dataPoints = {}
+        for i, c in enumerate(plotItem.curves):
+            if c.getData() is None:
+                continue
+            if len(c.getData()) > 2:
+                self._logger.warning('Can not handle the amount of data!')
+                continue
+            dataPoints[c.name()] = c.getData()[1]
+        dataPoints['time'] = c.getData()[0]
+
+        self.export(dataPoints)
+
+    def export(self, dataPoints):
+        try:
+            exporter = Exporter(dataPoints=dataPoints)
+        except Exception as e:
+            self._logger.error("Can't instantiate exporter! " + str(e))
+            return
+
+        defaultPath = os.getenv('HOME')
+        defaultFile = os.path.join(defaultPath, 'export.csv')
+        filename = QFileDialog.getSaveFileName(self,
+                                               "Export as ...",
+                                               defaultFile,
+                                               "CSV Data (*.csv);;PNG Image (*.png)")
         if filename[0]:
-            exporter.export(filename[0])
-
-    def exportPng(self, plotItem, name, coordItem):
-        # Notwendig da Fehler in PyQtGraph
-        exporter = exporters.ImageExporter(plotItem)
-        oldGeometry = plotItem.geometry()
-        plotItem.setGeometry(QRectF(0, 0, 1920, 1080))
-
-        bgBrush = mkBrush('w')
-        exporter.params.param('background').setValue(bgBrush.color())
-        exporter.params.param('width').setValue(1920, blockSignal=exporter.widthChanged)
-        exporter.params.param('height').setValue(1080, blockSignal=exporter.heightChanged)
-
-        flag = 0
-        if coordItem.isVisible():
-            coordItem.hide()
-            flag = 1
-
-        filename = QFileDialog.getSaveFileName(self, "PNG export", name + ".png", "PNG Image (*.png)")
-        if filename[0]:
-            exporter.export(filename[0])
-
-        # restore old state
-        if flag == 1:
-            coordItem.show()
-        plotItem.setGeometry(QRectF(oldGeometry))
+            _, ext = os.path.splitext(filename[0])
+            if ext == '.csv':
+                exporter.exportCsv(filename[0])
+            elif ext == '.png':
+                exporter.exportPng(filename[0])
+            else:
+                self._logger.error("Wrong extension used!")
+                return
+            self._logger.info("Export successful as '{}.".format(filename[0]))
 
     @pyqtSlot(QModelIndex)
     def targetViewChanged(self, index):
@@ -846,7 +877,7 @@ class MainGui(QMainWindow):
     @pyqtSlot()
     def startExperiment(self):
         """
-        start the experiment and disable start button
+        Starts the experiment, the timer and the connections. Disables the start button.
         """
         self._currentExperimentIndex = self.experimentList.row(self._currentExpListItem)
         self._currentExperimentName = self._experiments[self._currentExperimentIndex]["Name"]
@@ -899,6 +930,9 @@ class MainGui(QMainWindow):
 
     @pyqtSlot()
     def stopExperiment(self):
+        """
+        Stops the experiment, the timer and clears the connections and enable start button.
+        """
         self.actStartExperiment.setDisabled(False)
         self.actStopExperiment.setDisabled(True)
         self.actSendParameter.setDisabled(True)
@@ -916,6 +950,9 @@ class MainGui(QMainWindow):
             connInstance.clear()
 
     def sendParameter(self):
+        """
+        Sends all parameters of the current experiment with `ExperimentInteractor` function `sendParameterExperiment`
+        """
         if self._currentExperimentIndex == self.experimentList.row(
                 self._currentExpListItem) and "~current~" in self._currentLastMeasItem.text():
             self.exp.sendParameterExperiment()
@@ -926,8 +963,8 @@ class MainGui(QMainWindow):
 
     def loadExpFromFile(self, fileName):
         """
-        load experiments from file
-        :param file_name:
+        Loads experiments from file
+        :param fileName: name of the file with experiments
         """
         success = True
         if fileName is None:
@@ -951,10 +988,8 @@ class MainGui(QMainWindow):
 
     def _applyFirstExperiment(self):
         """
-        Apply the first experiment update the experiment index.
-
-        Returns:
-            bool: `True` if successful, `False` if errors occurred.
+        Applies the first experiment update the experiment index.
+        :return: `True` if successful, `False` if errors occurred
         """
         idx = 0
 
@@ -976,6 +1011,7 @@ class MainGui(QMainWindow):
     def experimentDclicked(self, item):
         """
         Apply the selected experiment to the current target and set it bold.
+        :param item: item of the experiment in the `ExperimentList`
         """
         success = self._applyExperimentByIdx(self.experimentList.row(item))
         self._currentExpListItem = item
@@ -990,11 +1026,9 @@ class MainGui(QMainWindow):
 
     def _applyExperimentByIdx(self, index=0):
         """
-        Apply the given experiment.
-        Args:
-            index(int): Index of the experiment in the `ExperimentList` .
-        Returns:
-            bool: `True` if successful, `False` if errors occurred.
+        Applies the given experiment.
+        :param index: Index of the experiment in the `ExperimentList`
+        :return: `True` if successful, `False` if errors occurred
         """
         if index >= len(self._experiments):
             self._logger.error("applyExperiment: index error! ({})".format(index))
@@ -1011,6 +1045,10 @@ class MainGui(QMainWindow):
         return self.exp.setExperiment(self._experiments[index])
 
     def closeEvent(self, QCloseEvent):
+        """
+        Is called by closing the GUI. Disconnects all connections and sends close event.
+        :param QCloseEvent:
+        """
         if self.isConnected:
             for conn, connInstance in self.connections.items():
                 connInstance.disconnect()
@@ -1020,6 +1058,9 @@ class MainGui(QMainWindow):
 
     @pyqtSlot()
     def connect(self):
+        """
+        Connects all connections and sets the button states.
+        """
         for conn, _ in self.connections.items():
             connInstance = conn()
             self.connections[conn] = connInstance
@@ -1040,6 +1081,10 @@ class MainGui(QMainWindow):
                 return
 
     def writeToConnection(self, data):
+        """
+        PySignal function, that sends the given data to the connections
+        :param data: to send data
+        """
         for conn, connInstance in self.connections.items():
             if connInstance and data['id'] == 1:
                 connInstance.writeData(data)
@@ -1050,6 +1095,9 @@ class MainGui(QMainWindow):
 
     @pyqtSlot()
     def disconnect(self):
+        """
+        Disconnects all connections and resets the button states.
+        """
         if self.actStopExperiment.isEnabled():
             self.stopExperiment()
 
@@ -1065,6 +1113,10 @@ class MainGui(QMainWindow):
         self.isConnected = False
 
     def findAllPlotDocks(self):
+        """
+        Finds all docks where plots inside
+        :return: list of docks with plots
+        """
         list = []
         for title, dock in self.area.findAll()[1].items():
             if title in self.nonPlottingDocks:
@@ -1094,6 +1146,9 @@ class MainGui(QMainWindow):
             chart.updatePlot()
 
     def loadStandardDockState(self):
+        """
+        Loads the standard dock configuration of the GUI
+        """
         self.plotCharts.clear()
 
         for dock in self.findAllPlotDocks():
@@ -1101,6 +1156,9 @@ class MainGui(QMainWindow):
         self.area.restoreState(self.standardDockState)
 
     def saveLastMeas(self):
+        """
+        Saves at the end of an experiment the data in the measurements dict
+        """
         if self._currentExperimentIndex is None:
             return
 
@@ -1115,6 +1173,10 @@ class MainGui(QMainWindow):
         self.measurements[idx].update({'dataPointBuffers': deepcopy(self._currentDataPointBuffers)})
 
     def loadLastMeas(self, item):
+        """
+        Loads the measurement data from the measurement dict by given item from last measurement list
+        :param item: last measurement list item
+        """
         expName = str(item.text())
         self._currentLastMeasItem = item
         try:
@@ -1147,11 +1209,21 @@ class MainGui(QMainWindow):
         self._logger.info("Apply measurement '{}'".format(measurement['exp']['Name']))
 
     def updateDataPoints(self, dataPointNames):
+        """
+        Clears and adds all given data point names to list widget
+        :param dataPointNames: list of data point names
+        """
         if dataPointNames:
             self.dataPointListWidget.clear()
             self.dataPointListWidget.addItems(dataPointNames)
 
     def setQListItemBold(self, qList=None, item=None, state=True):
+        """
+        Sets the bold state of the item in the given list.
+        :param qList: list with item
+        :param item: item that should repaint
+        :param state: `True` repaint in bold, `False` repaint in without bold
+        """
         for i in range(qList.count()):
             newfont = qList.item(i).font()
             if qList.item(i) == item and state:

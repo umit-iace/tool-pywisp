@@ -229,8 +229,7 @@ class TcpConnection(Connection, QtCore.QThread):
     def writeData(self, data):
         """
         Writes a data frame to the socket connection
-        :param data:
-        :return:
+        :param data: to send data frame
         """
         try:
             outputData = struct.pack('>B', data['id']) + data['msg']

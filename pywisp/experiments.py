@@ -15,6 +15,9 @@ class ExperimentException(Exception):
 
 
 class ExperimentModel(QStandardItemModel):
+    """
+    Model to provide item model that includes an additional name attribute
+    """
     def __init__(self, parent=None):
         QStandardItemModel.__init__(self, parent)
         self._name = None
