@@ -2,6 +2,7 @@
 import logging
 import os
 from copy import deepcopy
+from pathlib import Path
 
 import pkg_resources
 import serial.tools.list_ports
@@ -387,6 +388,7 @@ class MainGui(QMainWindow):
         :param settings: serial connection settings
         :param connMenu: serial connection menu
         """
+
         def setBaud(baud):
             def fn():
                 settings['baud'] = baud
@@ -427,6 +429,7 @@ class MainGui(QMainWindow):
         :param settings:
         :param connMenu:
         """
+
         def setPort(port):
             def fn():
                 settings['port'] = port
@@ -644,9 +647,8 @@ class MainGui(QMainWindow):
         for item in self.dataPointListWidget.selectedItems():
             for data in dataPointBuffers:
                 if data.name == item.text():
-                    dataPoint = {data.name: [data.time, data.value]}
-                    dataPoints.append(dataPoint)
-                    continue
+                    dataPoints.append(data)
+                    break
 
         self.export(dataPoints)
 
@@ -676,7 +678,7 @@ class MainGui(QMainWindow):
         title = item.text(0)
 
         if self._currentLastMeasItem is None:
-            self._logger.error("No Measurement to plot!")
+            self._logger.warning("No Measurement to plot!")
             return
 
         idx = self.lastMeasList.row(self._currentLastMeasItem)
@@ -830,15 +832,15 @@ class MainGui(QMainWindow):
         chart.enableAutoRange()
 
     def exportPlotItem(self, plotItem):
-        dataPoints = {}
+        dataPoints = []
         for i, c in enumerate(plotItem.curves):
             if c.getData() is None:
                 continue
             if len(c.getData()) > 2:
                 self._logger.warning('Can not handle the amount of data!')
                 continue
-            dataPoints[c.name()] = c.getData()[1]
-        dataPoints['time'] = c.getData()[0]
+            dataPoint = DataPointBuffer(name=c.name(), time=c.getData()[0], values=c.getData()[1])
+            dataPoints.append(dataPoint)
 
         self.export(dataPoints)
 
@@ -849,7 +851,7 @@ class MainGui(QMainWindow):
             self._logger.error("Can't instantiate exporter! " + str(e))
             return
 
-        defaultPath = os.getenv('HOME')
+        defaultPath = str(Path.home())
         defaultFile = os.path.join(defaultPath, 'export.csv')
         filename = QFileDialog.getSaveFileName(self,
                                                "Export as ...",
@@ -1088,7 +1090,7 @@ class MainGui(QMainWindow):
         for conn, connInstance in self.connections.items():
             if connInstance and data['id'] == 1:
                 connInstance.writeData(data)
-            elif connInstance and data['connection'] == conn:
+            elif connInstance and data['connection'] == conn.__name__:
                 connInstance.writeData(data)
             else:
                 self._logger.error('No connection available!')

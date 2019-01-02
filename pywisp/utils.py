@@ -66,10 +66,16 @@ class DataPointBuffer(object):
     Buffer object to store the values of the data points
     """
 
-    def __init__(self, name):
+    def __init__(self, name, time=None, values=None):
         self.name = name
-        self.values = []
-        self.time = []
+        if time is None:
+            self.time = []
+        else:
+            self.time = time
+        if values is None:
+            self.values = []
+        else:
+            self.values = values
 
     def addValue(self, time, value):
         """
@@ -159,14 +165,15 @@ class Exporter(object):
             raise Exception("Given data points are None!")
 
         # build pandas data frame
-        if isinstance(dataPoints, list):
-            for dataPoint in dataPoints:
-                self.df = pd.DataFrame.from_dict(dataPoint)
-        else:
-            self.df = pd.DataFrame.from_dict(dataPoints)
+        self.df = None
+        for dataPoint in dataPoints:
+            if self.df is None:
+                self.df = pd.DataFrame(index=dataPoint.time, data={dataPoint.name: dataPoint.values})
+            else:
+                newDf = pd.DataFrame(index=dataPoint.time, data={dataPoint.name: dataPoint.values})
+                self.df = self.df.join(newDf, how='outer')
 
-        if 'time' in self.df.columns:
-            self.df.set_index('time', inplace=True)
+        self.df.index.name = 'time'
 
     def exportPng(self, fileName):
         """
