@@ -29,11 +29,6 @@ class Connection(object):
         self.isConnected = False
         self._logger = logging.getLogger(self.__class__.__name__)
 
-    @property
-    @abstractmethod
-    def settings(self):
-        pass
-
     @abstractmethod
     def connect(self):
         pass
@@ -197,27 +192,22 @@ class TcpConnection(Connection, QtCore.QThread):
         Endless loop of the thread
         """
         while True and self.isConnected:
-            self.readData()
+            self.readData(None)
             if not self.inputQueue.empty():
                 self.writeData(self.inputQueue.get())
             time.sleep(0.001)
 
     def readData(self, frames):
         """
-        Reads the data frame, build a min frame and emit it
-        :param frames: tcp frame
+        Reads a data frame from the socket connection, builds a min frame and emits it.
+        :param frames: nothing
         """
         try:
             data = self.sock.recv(self.payloadLen + 1)
-            if data == b'\x32':  # TODO what is this
-                self.isConnected = False
-                self.writeData({'id': 1, 'msg': b'\x32'})
-            elif data == b'':
-                pass
             if data:
                 if len(data) != self.payloadLen + 1:
                     self._logger.error("Length of data differs from payload length!")
-                frame = MINFrame(data[0], data[1:], 0, 0)
+                frame = MINFrame(data[0], data[1:], 0, False)
                 self.received.emit(frame)
         except socket.timeout:
             # if nothing is to read, get on

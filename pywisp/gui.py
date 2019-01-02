@@ -640,12 +640,12 @@ class MainGui(QMainWindow):
         idx = self.lastMeasList.row(self._currentLastMeasItem)
         dataPointBuffers = self.measurements[idx]['dataPointBuffers']
 
-        dataPoints = {}
+        dataPoints = []
         for item in self.dataPointListWidget.selectedItems():
             for data in dataPointBuffers:
                 if data.name == item.text():
-                    dataPoints.append(data)
-                    dataPoints[item.text()] = [data.time, data.values]
+                    dataPoint = {data.name: [data.time, data.value]}
+                    dataPoints.append(dataPoint)
                     continue
 
         self.export(dataPoints)

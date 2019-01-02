@@ -159,8 +159,11 @@ class Exporter(object):
             raise Exception("Given data points are None!")
 
         # build pandas data frame
-        # TODO list of data for time selection
-        self.df = pd.DataFrame.from_dict(dataPoints)
+        if isinstance(dataPoints, list):
+            for dataPoint in dataPoints:
+                self.df = pd.DataFrame.from_dict(dataPoint)
+        else:
+            self.df = pd.DataFrame.from_dict(dataPoints)
 
         if 'time' in self.df.columns:
             self.df.set_index('time', inplace=True)
