@@ -231,7 +231,6 @@ class DataIntDialog(QDialog):
         labelLayout.addWidget(maxLabel)
         mainLayout.addLayout(labelLayout)
 
-        # nice widget for editing the date
         self.data = QLineEdit(self)
         self.data.setText(str(self.currentValue))
         self.data.setValidator(QIntValidator(self.minValue, self.maxValue, self))
@@ -267,8 +266,8 @@ class DataTcpIpDialog(QDialog):
         parent = kwargs.get('parent', None)
         super(DataTcpIpDialog, self).__init__(parent)
 
-        self.ipValue = kwargs.get("ip", 0)
-        self.portValue = kwargs.get("prt", 0)
+        self.ipValue = kwargs.get("ip", '127.0.0.1')
+        self.portValue = kwargs.get("port", 0)
 
         ipRange = "(?:[0-1]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])"  # Part of the regular expression
         # regular expression
@@ -281,7 +280,15 @@ class DataTcpIpDialog(QDialog):
         self.ipData.setText(str(self.ipValue))
         self.ipData.setValidator(ipValidator)
 
-        mainLayout.addWidget(self.ipData)
+        self.portData = QLineEdit(self)
+        self.portData.setText(str(self.portValue))
+        self.portData.setValidator(QIntValidator(0, 65535, self))
+
+        horizonalLayout = QHBoxLayout()
+
+        horizonalLayout.addWidget(self.ipData)
+        horizonalLayout.addWidget(self.portData)
+        mainLayout.addLayout(horizonalLayout)
 
         # OK and Cancel buttons
         buttons = QDialogButtonBox(
@@ -292,12 +299,12 @@ class DataTcpIpDialog(QDialog):
         mainLayout.addWidget(buttons)
 
     def _getData(self):
-        return self.ipData.text()
+        return self.ipData.text(), self.portData.text()
 
     @staticmethod
     def getData(**kwargs):
         dialog = DataTcpIpDialog(**kwargs)
         result = dialog.exec_()
-        ipData = dialog._getData()
+        ipData, portData = dialog._getData()
 
-        return ipData, result == QDialog.Accepted
+        return ipData, portData, result == QDialog.Accepted

@@ -138,11 +138,13 @@ class TcpConnection(Connection, QtCore.QThread):
     payloadLen = 80
 
     def __init__(self,
-                 ipAddr):
+                 ip,
+                 port):
         super(TcpConnection, self).__init__()
         QtCore.QThread.__init__(self)
 
-        self.ipAddr = ipAddr
+        self.ip = ip
+        self.port = port
         self.sock = None
         self.moveToThread(self)
 
@@ -168,7 +170,7 @@ class TcpConnection(Connection, QtCore.QThread):
         """
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            self.sock.connect((self.ipAddr, self.port))
+            self.sock.connect((self.ip, self.port))
         except socket.error:
             self._logger.error("Connection to the server is not possible!")
             self.sock.close()

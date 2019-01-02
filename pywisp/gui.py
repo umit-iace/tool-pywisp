@@ -366,10 +366,11 @@ class MainGui(QMainWindow):
 
     def _getTcpMenu(self, settings):
         # ip and port
-        ip, ok = DataTcpIpDialog.getData(ip=settings['ip'])
+        ip, port, ok = DataTcpIpDialog.getData(ip=settings['ip'], port=settings['port'])
 
         if ok:
             settings['ip'] = ip
+            settings['port'] = port
 
     def _getSerialMenu(self, serialMenu, settings):
         # port
