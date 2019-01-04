@@ -68,8 +68,11 @@ target/
 # Rope
 .ropeproject
 
-# Pycharm
+# Pycharm / Clion
 .idea
+
+# CMake
+cmake-build-*/
 
 # MacOSX Files
 .DS_Store
