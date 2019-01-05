@@ -3,6 +3,7 @@
 
 #include "PeriodicTask.h"
 #include "Transport.h"
+#include "TcpServer.h"
 
 const unsigned long lDt = 10;          ///< Sampling step [s]
 
@@ -18,10 +19,20 @@ void fContLoop() {
 
 int main(int argc, char const *argv[])
 {
-    PeriodicScheduler scheduler;
-    scheduler.addTask("fContLoop", boost::bind(fContLoop), 1);
+    try
+    {
+        boost::asio::io_service ioService;
 
-    scheduler.run();
+        PeriodicScheduler scheduler(std::ref(ioService));
+        scheduler.addTask("fContLoop", boost::bind(fContLoop), 1);
+
+        TcpServer server(ioService);
+        ioService.run();
+    }
+    catch (std::exception& e)
+    {
+        std::cerr << e.what() << std::endl;
+    }
 
     return 0;
 }
