@@ -151,8 +151,6 @@ class TcpConnection(Connection, QtCore.QThread):
     def disconnect(self):
         self.isConnected = False
         time.sleep(1)
-        while not self.inputQueue.empty():
-            self.writeData(self.inputQueue.get())
         if self.sock is not None:
             self.sock.close()
         self._reset()
@@ -170,7 +168,7 @@ class TcpConnection(Connection, QtCore.QThread):
         """
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            self.sock.connect((self.ip, self.port))
+            self.sock.connect((self.ip, int(self.port)))
         except socket.error:
             self._logger.error("Connection to the server is not possible!")
             self.sock.close()
@@ -195,8 +193,6 @@ class TcpConnection(Connection, QtCore.QThread):
         """
         while True and self.isConnected:
             self.readData(None)
-            if not self.inputQueue.empty():
-                self.writeData(self.inputQueue.get())
             time.sleep(0.001)
 
     def readData(self, frames):
@@ -206,7 +202,8 @@ class TcpConnection(Connection, QtCore.QThread):
         """
         try:
             data = self.sock.recv(self.payloadLen + 1)
-            if data:
+            if data and data != b'':
+                print(data)
                 if len(data) != self.payloadLen + 1:
                     self._logger.error("Length of data differs from payload length!")
                 frame = MINFrame(data[0], data[1:], 0, False)

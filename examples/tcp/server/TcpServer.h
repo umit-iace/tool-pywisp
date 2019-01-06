@@ -24,35 +24,63 @@ public:
     }
 
     boost::asio::ip::tcp::socket &socket() {
-        return socket_;
+        return tSocket;
     }
 
     void start() {
+        receiveLoop();
+        sendLoop();
 
-        message_ = "111234.0";
-        boost::asio::async_write(socket_, boost::asio::buffer(message_),
-                                 boost::bind(&TcpConnection::handle_write, shared_from_this(),
-                                             boost::asio::placeholders::error,
-                                             boost::asio::placeholders::bytes_transferred));
     }
 
 private:
     TcpConnection(boost::asio::io_context &ioContext)
-            : socket_(ioContext) {
+            : tSocket(ioContext), dlTimer(ioContext) {
     }
 
-    void handle_write(const boost::system::error_code & /*error*/,
-                      size_t /*bytes_transferred*/) {
+    std::string _ping = "ping\n";
+
+    void receiveLoop() {
+        auto This = shared_from_this();
+        boost::asio::async_read_until(tSocket, sBuffer, "\n",
+                                      [This, this](boost::system::error_code::error_code ec, size_t) {
+                                          if (ec) {
+                                              std::cerr << "Receive error: " << ec.message() << "\n";
+                                          } else {
+                                              std::cout << "Received '" << &sBuffer << "'\n";
+
+                                              // chain
+                                              receiveLoop();
+                                          }
+                                      });
     }
 
-    boost::asio::ip::tcp::socket socket_;
-    std::string message_;
+    void sendLoop() {
+        dlTimer.expires_from_now(boost::posix_time::seconds(1));
+        auto This = shared_from_this();
+
+        dlTimer.async_wait([This, this](boost::system::error_code::error_code ec) {
+            if (!ec) {
+                boost::asio::async_write(tSocket, boost::asio::buffer(_ping),
+                                         [This, this](boost::system::error_code::error_code, size_t) {});
+
+                // chain
+                sendLoop();
+            }
+        });
+    }
+
+    boost::asio::ip::tcp::socket tSocket;
+    boost::asio::deadline_timer dlTimer;
+    boost::asio::streambuf sBuffer;
+
 };
 
 class TcpServer {
 public:
-    TcpServer(boost::asio::io_context &io_context)
-            : acceptor_(io_context, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), 50007)) {
+    TcpServer(boost::asio::io_context &ioContext)
+            : ioContext(ioContext),
+              acceptor_(ioContext, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), 50007)) {
         startAccept();
     }
 
@@ -62,12 +90,12 @@ private:
                 TcpConnection::create(acceptor_.get_executor().context());
 
         acceptor_.async_accept(newConnection->socket(),
-                               boost::bind(&TcpServer::handle_accept, this, newConnection,
+                               boost::bind(&TcpServer::handleAccept, this, newConnection,
                                            boost::asio::placeholders::error));
     }
 
-    void handle_accept(TcpConnection::pointer newConnection,
-                       const boost::system::error_code &error) {
+    void handleAccept(TcpConnection::pointer newConnection,
+                      const boost::system::error_code &error) {
         if (!error) {
             // TODO pointer auf threadsafe queue an start übergeben
             newConnection->start();
@@ -76,6 +104,7 @@ private:
         startAccept();
     }
 
+    boost::asio::io_context &ioContext;
     boost::asio::ip::tcp::acceptor acceptor_;
 };
 

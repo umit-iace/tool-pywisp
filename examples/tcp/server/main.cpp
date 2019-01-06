@@ -1,5 +1,6 @@
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
+#include <boost/thread.hpp>
 
 #include "PeriodicTask.h"
 #include "Transport.h"
@@ -27,7 +28,12 @@ int main(int argc, char const *argv[])
         scheduler.addTask("fContLoop", boost::bind(fContLoop), 1);
 
         TcpServer server(ioService);
-        ioService.run();
+
+        boost::thread_group threads;
+        for (int i = 0; i < 2; ++i) {
+            threads.create_thread(boost::bind(&boost::asio::io_service::run, &ioService));
+        }
+        threads.join_all();
     }
     catch (std::exception& e)
     {

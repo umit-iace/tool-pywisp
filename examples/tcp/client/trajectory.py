@@ -44,11 +44,10 @@ class ConstTrajectory(ExperimentModule):
         return dataPoint
 
     def getParams(self, data):
-        payload = struct.pack('>fffh',
+        payload = struct.pack('>fff',
                               data[0],
                               data[1] * 1000,
-                              data[2],
-                              int(bool(data[3])))
+                              data[2])
         dataPoint = {'id': 45,
                      'msg': payload
                      }

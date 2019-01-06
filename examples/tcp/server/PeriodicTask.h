@@ -22,7 +22,7 @@ public:
             task();
 
             timer.expires_at(timer.expires_at() + boost::posix_time::seconds(interval));
-            start_wait();
+            startWait();
         }
     }
 
@@ -30,11 +30,11 @@ public:
         task();
 
         timer.expires_from_now(boost::posix_time::seconds(interval));
-        start_wait();
+        startWait();
     }
 
 private:
-    void start_wait() {
+    void startWait() {
         timer.async_wait(boost::bind(&PeriodicTask::execute, this, boost::asio::placeholders::error));
     }
 
