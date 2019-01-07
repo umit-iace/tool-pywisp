@@ -9,7 +9,10 @@
 #include <mutex>
 #include <condition_variable>
 
+#define MAX_PAYLOAD (80)
+
 void logText(std::string const &text);
+
 
 template<typename T>
 class Queue {
@@ -39,6 +42,10 @@ public:
         queue_.push(item);
         mlock.unlock();
         cond_.notify_one();
+    }
+
+    bool empty() {
+        return queue_.empty();
     }
 
     Queue() = default;

@@ -5,29 +5,33 @@
 #include "PeriodicTask.h"
 #include "Transport.h"
 #include "TcpServer.h"
+#include "utils.h"
 
 const unsigned long lDt = 10;          ///< Sampling step [s]
 
-Transport transport;
-
-void fContLoop() {
-    if (transport.runExp()) {
-        transport._benchData.lTime += lDt;
-        transport.sendData();
+void fContLoop(Transport *transport) {
+    if (transport->runExp()) {
+        transport->_benchData.lTime += lDt;
+        transport->sendData();
     }
 }
 
 
 int main(int argc, char const *argv[])
 {
+    Queue<Frame> intputQueue;
+    Queue<Frame> outputQueue;
+
+    Transport transport(std::ref(outputQueue));
+
     try
     {
         boost::asio::io_service ioService;
 
         PeriodicScheduler scheduler(std::ref(ioService));
-        scheduler.addTask("fContLoop", boost::bind(fContLoop), 1);
+        scheduler.addTask("fContLoop", boost::bind(fContLoop, &transport), 1);
 
-        TcpServer server(ioService);
+        TcpServer server(ioService, std::ref(outputQueue));
 
         boost::thread_group threads;
         for (int i = 0; i < 2; ++i) {
