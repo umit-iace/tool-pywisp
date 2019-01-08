@@ -19,8 +19,8 @@ class TcpConnection
 public:
     typedef boost::shared_ptr<TcpConnection> pointer;
 
-    static pointer create(boost::asio::io_context &ioContext, Queue<Frame> &outputQueue) {
-        return pointer(new TcpConnection(ioContext, outputQueue));
+    static pointer create(boost::asio::io_context &ioContext, Queue<Frame> &inputQueue, Queue<Frame> &outputQueue) {
+        return pointer(new TcpConnection(ioContext, inputQueue, outputQueue));
     }
 
     boost::asio::ip::tcp::socket &socket() {
@@ -34,21 +34,25 @@ public:
     }
 
 private:
-    TcpConnection(boost::asio::io_context &ioContext, Queue<Frame> &outputQueue)
-            : tSocket(ioContext), dlTimer(ioContext), outputQueue(outputQueue) {
+    TcpConnection(boost::asio::io_context &ioContext, Queue<Frame> &inputQueue, Queue<Frame> &outputQueue)
+            : tSocket(ioContext), dlTimer(ioContext), inputQueue(inputQueue), outputQueue(outputQueue) {
     }
 
     void receiveLoop() {
         auto This = shared_from_this();
-        boost::asio::async_read(tSocket, sBuffer, boost::asio::transfer_exactly(MAX_PAYLOAD+1),
+        boost::asio::async_read(tSocket, sBuffer, boost::asio::transfer_exactly(MAX_PAYLOAD + 1),
                                 [This, this](boost::system::error_code ec, std::size_t transferred) {
                                     if (ec) {
                                         std::cerr << "Receive error: " << ec.message() << "\n";
                                     } else {
-                                        std::cout << "tt '" << sBuffer.size() << "'\n";
                                         const char *bufPtr = boost::asio::buffer_cast<const char *>(sBuffer.data());
-                                        std::cout << "Received '" << (int) bufPtr++[0] << "'\n";
-                                        sBuffer.consume(MAX_PAYLOAD+1);
+                                        Frame frame;
+                                        frame.id = (unsigned char) bufPtr++[0];
+                                        for (int i = 0; i < MAX_PAYLOAD; i++) {
+                                            frame.payload[i] = (unsigned char) *bufPtr++;
+                                        }
+                                        this->inputQueue.push(frame);
+                                        sBuffer.consume(MAX_PAYLOAD + 1);
                                         // chain
                                         receiveLoop();
                                     }
@@ -59,16 +63,22 @@ private:
         dlTimer.expires_from_now(boost::posix_time::milliseconds(100));
         auto This = shared_from_this();
 
-        dlTimer.async_wait([This, this](boost::system::error_code::error_code ec) {
+        bool writeError = false;
+
+        dlTimer.async_wait([This, this](boost::system::error_code ec) {
             if (!ec) {
                 if (!outputQueue.empty()) {
                     Frame frame = outputQueue.pop();
                     const char *px = reinterpret_cast<const char *>(&frame);
-                    boost::asio::async_write(tSocket, boost::asio::buffer(px, sizeof(Frame)),
-                                             [This, this](boost::system::error_code::error_code, size_t) {});
+                    boost::asio::write(tSocket, boost::asio::buffer(px, sizeof(Frame)), ec);
                 }
-                // chain
-                sendLoop();
+
+                if (ec) {
+                    std::cerr << "Write error: " << ec.message() << "\n";
+                } else {
+                    // chain
+                    sendLoop();
+                }
             }
         });
     }
@@ -76,15 +86,17 @@ private:
     boost::asio::ip::tcp::socket tSocket;
     boost::asio::deadline_timer dlTimer;
     boost::asio::streambuf sBuffer;
+    Queue<Frame> &inputQueue;
     Queue<Frame> &outputQueue;
 
 };
 
 class TcpServer {
 public:
-    TcpServer(boost::asio::io_context &ioContext, Queue<Frame> &outputQueue)
+    TcpServer(boost::asio::io_context &ioContext, Queue<Frame> &inputQueue, Queue<Frame> &outputQueue)
             : ioContext(ioContext),
               acceptor_(ioContext, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), 50007)),
+              inputQueue(inputQueue),
               outputQueue(outputQueue) {
         startAccept();
     }
@@ -92,7 +104,7 @@ public:
 private:
     void startAccept() {
         TcpConnection::pointer newConnection =
-                TcpConnection::create(acceptor_.get_executor().context(), std::ref(outputQueue));
+                TcpConnection::create(acceptor_.get_executor().context(), std::ref(inputQueue), std::ref(outputQueue));
 
         acceptor_.async_accept(newConnection->socket(),
                                boost::bind(&TcpServer::handleAccept, this, newConnection,
@@ -110,6 +122,7 @@ private:
 
     boost::asio::io_context &ioContext;
     boost::asio::ip::tcp::acceptor acceptor_;
+    Queue<Frame> &inputQueue;
     Queue<Frame> &outputQueue;
 };
 

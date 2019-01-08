@@ -4,11 +4,16 @@
 
 #include "Transport.h"
 
-/**< Macros zum Setzen der Cursoren damit Buffer geschrieben werden*/
 #define DECLARE_BUF() unsigned char m_buf[MAX_PAYLOAD], m_cursor = 0
-
+#define PACK8(v) (m_buf[m_cursor] = (v), m_cursor++)
+#define PACK16(v) (encode_16(*((unsigned long*)&(v)), m_buf + m_cursor), m_cursor += 2)
 #define PACK32(v) (encode_32(*((unsigned long*)&(v)), m_buf + m_cursor), m_cursor += 4)
 #define PACK64(v) (encode((v), m_buf + m_cursor), m_cursor +=8)
+
+#define DECLARE_UNPACK() unsigned char m_cursor = 0
+#define UNPACK8(v) (v) = payload[m_cursor]; m_cursor++
+#define UNPACK32(v) (decode((v), payload + m_cursor), m_cursor += 4)
+#define UNPACK64(v) (decode((v), payload + m_cursor), m_cursor += 8)
 
 #define SEND_FRAME(v) (sendFrame((v), m_buf))
 
@@ -26,12 +31,30 @@ void encode_32(unsigned long data, unsigned char buf[]) {
     buf[3] = (unsigned char) (data & 0x000000ffUL);
 }
 
+void encode_16(unsigned long data, unsigned char buf[]) {
+    buf[0] = (unsigned char) ((data & 0x0000ff00UL) >> 8);
+    buf[1] = (unsigned char) (data & 0x000000ffUL);
+}
+
+void decode(float &var, unsigned char buf[]) {
+    for (int i = 0; i < 4; ++i)
+        packunion.var_byte[7 - i] = buf[i];
+    var = packunion.var_float;
+}
+
+void decode(double &var, unsigned char buf[]) {
+    for (int i = 0; i < 8; ++i)
+        packunion.var_byte[7 - i] = buf[i];
+    var = packunion.var_double;
+}
+
+void decode(unsigned long &var, unsigned char buf[]) {
+    for (int i = 0; i < 4; ++i)
+        packunion.var_byte[7 - i] = buf[i];
+    var = packunion.var_ulong;
+}
 
 void Transport::sendData() {
-//    logText("Sende Daten:");
-//    logText(std::to_string(this->_benchData.lTime));
-//    logText(std::to_string(this->_benchData.dValue1));
-
     {
         DECLARE_BUF();
         PACK32(this->_benchData.lTime);
@@ -40,7 +63,6 @@ void Transport::sendData() {
     }
 }
 
-
 void Transport::sendFrame(unsigned char id, unsigned char payload[MAX_PAYLOAD]) {
     Frame frame;
     frame.id = id;
@@ -48,4 +70,27 @@ void Transport::sendFrame(unsigned char id, unsigned char payload[MAX_PAYLOAD]) 
         frame.payload[i] = payload[i];
     }
     this->outputQueue.push(frame);
+}
+
+void Transport::handleFrames() {
+    while (!inputQueue.empty()) {
+        Frame frame = inputQueue.pop();
+
+        switch (frame.id) {
+            case 1:
+                unpackExp(frame.payload);
+                break;
+            case 12:
+                break;
+            case 13:
+                break;
+            default:;
+        }
+    }
+}
+
+void Transport::unpackExp(unsigned char *payload) {
+    DECLARE_UNPACK();
+    UNPACK8(this->bActivateExperiment);
+    this->_benchData.lTime = 0;
 }

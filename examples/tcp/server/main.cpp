@@ -22,7 +22,7 @@ int main(int argc, char const *argv[])
     Queue<Frame> intputQueue;
     Queue<Frame> outputQueue;
 
-    Transport transport(std::ref(outputQueue));
+    Transport transport(std::ref(inputQueue), std::ref(outputQueue));
 
     try
     {
@@ -31,7 +31,7 @@ int main(int argc, char const *argv[])
         PeriodicScheduler scheduler(std::ref(ioService));
         scheduler.addTask("fContLoop", boost::bind(fContLoop, &transport), 1);
 
-        TcpServer server(ioService, std::ref(outputQueue));
+        TcpServer server(ioService, std::ref(inputQueue), std::ref(outputQueue));
 
         boost::thread_group threads;
         for (int i = 0; i < 2; ++i) {

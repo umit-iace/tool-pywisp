@@ -193,7 +193,7 @@ class TcpConnection(Connection, QtCore.QThread):
         """
         while True and self.isConnected:
             self.readData(None)
-            time.sleep(0.001)
+            time.sleep(0.01)
 
     def readData(self, frames):
         """

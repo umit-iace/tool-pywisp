@@ -40,7 +40,8 @@ struct Frame {
 
 class Transport {
 public:
-    Transport(Queue<Frame> &outputQueue) : outputQueue(outputQueue) {
+    Transport(Queue<Frame> &inputQueue, Queue<Frame> &outputQueue) : inputQueue(inputQueue),
+                                                                     outputQueue(outputQueue) {
     }
 
     bool runExp() { return this->bActivateExperiment; }
@@ -58,7 +59,11 @@ public:
 
 private:
     bool bActivateExperiment = true;
+    Queue<Frame> &inputQueue;
     Queue<Frame> &outputQueue;
+
+    void handleFrames();
+    void unpackExp(unsigned char *payload);
 
     void sendFrame(unsigned char id, unsigned char payload[MAX_PAYLOAD]);
 };

@@ -25,7 +25,7 @@ spezifischen ID markiert.
     * - 1
       - 1x uint
       - Experiment starten/beenden
-      - zum µC
+      - zum Server
       -
     * - 10
       - unsigned long + 1x byte + 1x long + 1x float + 1x real
