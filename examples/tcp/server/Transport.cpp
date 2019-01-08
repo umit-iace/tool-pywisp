@@ -28,7 +28,7 @@ void encode_32(unsigned long data, unsigned char buf[]) {
 
 
 void Transport::sendData() {
-    logText("Sende Daten:");
+//    logText("Sende Daten:");
 //    logText(std::to_string(this->_benchData.lTime));
 //    logText(std::to_string(this->_benchData.dValue1));
 
@@ -36,7 +36,7 @@ void Transport::sendData() {
         DECLARE_BUF();
         PACK32(this->_benchData.lTime);
         PACK64(this->_benchData.dValue1);
-        SEND_FRAME(11);
+        SEND_FRAME(46);
     }
 }
 
@@ -47,7 +47,5 @@ void Transport::sendFrame(unsigned char id, unsigned char payload[MAX_PAYLOAD]) 
     for (int i = 0; i < MAX_PAYLOAD; i++) {
         frame.payload[i] = payload[i];
     }
-    std::string test = frame.toString();
-    logText(test);
     this->outputQueue.push(frame);
 }

@@ -58,7 +58,7 @@ class ConstTrajectory(ExperimentModule):
         dataPoints = {}
         fid = frame.min_id
         if fid == 46:
-            data = struct.unpack('>Lf', frame.payload)
+            data = struct.unpack('>Ld', frame.payload[:12])
             dataPoints['Zeit'] = data[0]
             dataPoints['Punkte'] = {'TrajHeaterOutput': data[1]}
         else:

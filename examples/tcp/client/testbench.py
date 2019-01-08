@@ -7,10 +7,10 @@ from pywisp.experimentModules import ExperimentModule
 
 
 class TestTCP(ExperimentModule):
-    dataPoints = ['Wert1',
-                  'Wert2',
-                  'Wert3',
-                  'Wert4',
+    dataPoints = ['Value1',
+                  'Value2',
+                  'Value3',
+                  'Value4',
                   ]
 
     publicSettings = OrderedDict()
@@ -32,7 +32,7 @@ class TestTCP(ExperimentModule):
 
         """
         payload = struct.pack('h',
-                              int(bool(data[0])))
+                              int(bool(1)))
         dataPoint = {'id': 14,
                      'msg': payload
                      }
@@ -45,10 +45,10 @@ class TestTCP(ExperimentModule):
         if fid == 10:
             data = struct.unpack('>Lffff', frame.payload)
             dataPoints['Zeit'] = data[0]
-            dataPoints['Punkte'] = {'Wert1': data[1],
-                                    'Wert2': data[2],
-                                    'Wert3': data[3],
-                                    'Wert4': data[4],
+            dataPoints['Punkte'] = {'Value1': data[1],
+                                    'Value2': data[2],
+                                    'Value3': data[3],
+                                    'Value4': data[4],
                                     }
         else:
             dataPoints = None

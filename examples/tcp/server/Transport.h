@@ -36,14 +36,6 @@ union {
 struct Frame {
     unsigned char id;
     unsigned char payload[MAX_PAYLOAD];
-
-    std::string toString() {
-        std::string sData(id, 1);
-        std::string sPayload(reinterpret_cast<char*>(payload), MAX_PAYLOAD);
-        sData.append(sPayload);
-
-        return sData;
-    }
 };
 
 class Transport {

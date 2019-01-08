@@ -40,17 +40,19 @@ private:
 
     void receiveLoop() {
         auto This = shared_from_this();
-        boost::asio::async_read_until(tSocket, sBuffer, "\n",
-                                      [This, this](boost::system::error_code::error_code ec, size_t) {
-                                          if (ec) {
-                                              std::cerr << "Receive error: " << ec.message() << "\n";
-                                          } else {
-                                              std::cout << "Received '" << &sBuffer << "'\n";
-
-                                              // chain
-                                              receiveLoop();
-                                          }
-                                      });
+        boost::asio::async_read(tSocket, sBuffer, boost::asio::transfer_exactly(MAX_PAYLOAD+1),
+                                [This, this](boost::system::error_code ec, std::size_t transferred) {
+                                    if (ec) {
+                                        std::cerr << "Receive error: " << ec.message() << "\n";
+                                    } else {
+                                        std::cout << "tt '" << sBuffer.size() << "'\n";
+                                        const char *bufPtr = boost::asio::buffer_cast<const char *>(sBuffer.data());
+                                        std::cout << "Received '" << (int) bufPtr++[0] << "'\n";
+                                        sBuffer.consume(MAX_PAYLOAD+1);
+                                        // chain
+                                        receiveLoop();
+                                    }
+                                });
     }
 
     void sendLoop() {
@@ -60,8 +62,9 @@ private:
         dlTimer.async_wait([This, this](boost::system::error_code::error_code ec) {
             if (!ec) {
                 if (!outputQueue.empty()) {
-                    std::string sData = outputQueue.pop().toString();
-                    boost::asio::async_write(tSocket, boost::asio::buffer(sData),
+                    Frame frame = outputQueue.pop();
+                    const char *px = reinterpret_cast<const char *>(&frame);
+                    boost::asio::async_write(tSocket, boost::asio::buffer(px, sizeof(Frame)),
                                              [This, this](boost::system::error_code::error_code, size_t) {});
                 }
                 // chain

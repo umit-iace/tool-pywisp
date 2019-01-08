@@ -203,7 +203,6 @@ class TcpConnection(Connection, QtCore.QThread):
         try:
             data = self.sock.recv(self.payloadLen + 1)
             if data and data != b'':
-                print(data)
                 if len(data) != self.payloadLen + 1:
                     self._logger.error("Length of data {} differs from payload length {}!".format(len(data), self.payloadLen + 1))
                 frame = MINFrame(data[0], data[1:], 0, False)
