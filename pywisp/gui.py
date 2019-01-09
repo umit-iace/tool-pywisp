@@ -294,8 +294,7 @@ class MainGui(QMainWindow):
                     self.setDefaultComPort(conn.settings, serialCnt)
                 serialCnt += 1
             elif issubclass(conn, TcpConnection):
-                actTcp = QAction(conn.__name__)
-                self.connMenu.addAction(actTcp)
+                actTcp = self.connMenu.addAction(conn.__name__)
                 actTcp.triggered.connect(lambda: self._getTcpMenu(conn.settings))
             else:
                 self._logger.warning("Cannot handle the connection type!")
@@ -1137,6 +1136,7 @@ class MainGui(QMainWindow):
         dataPoints = data['Punkte']
         names = data['Punkte'].keys()
 
+        print(data)
         for buffer in self._currentDataPointBuffers:
             if buffer.name in names:
                 buffer.addValue(time, dataPoints[buffer.name])
