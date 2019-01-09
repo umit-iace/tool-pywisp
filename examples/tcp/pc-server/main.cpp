@@ -15,14 +15,14 @@ const unsigned long lDt = 1;          ///< Sampling step [s]
  */
 void fTrajectory(struct Transport::benchData *_benchData, struct Transport::trajData *_trajData)
 {
-    std::cout << _trajData->dStartValue << std::endl;
-    std::cout << _trajData->lStartTime << std::endl;
-    std::cout << _trajData->dEndValue << std::endl;
-    std::cout << _trajData->lEndTime << std::endl;
-    std::cout << _benchData->dValue1 << std::endl;
-    std::cout << _benchData->fValue2 << std::endl;
-    std::cout << _benchData->iValue3 << std::endl;
-    std::cout << _benchData->cValue4 << std::endl;
+//    std::cout << _trajData->dStartValue << std::endl;
+//    std::cout << _trajData->lStartTime << std::endl;
+//    std::cout << _trajData->dEndValue << std::endl;
+//    std::cout << _trajData->lEndTime << std::endl;
+//    std::cout << _benchData->dValue1 << std::endl;
+//    std::cout << _benchData->fValue2 << std::endl;
+//    std::cout << _benchData->iValue3 << std::endl;
+//    std::cout << _benchData->cValue4 << std::endl;
 
     if (_benchData->lTime < _trajData->lStartTime)
     {

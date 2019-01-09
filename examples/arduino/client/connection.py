@@ -4,7 +4,7 @@ from collections import OrderedDict
 from pywisp.connection import SerialConnection
 
 
-class ConnBallInTube(SerialConnection):
+class ConnTestSerial(SerialConnection):
     settings = OrderedDict([("port", '/dev/uart0'),
                             ("baud", 115200),
                             ])
