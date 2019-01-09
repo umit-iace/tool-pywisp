@@ -6,12 +6,13 @@ from connection import ConnTestTCP
 from pywisp.experimentModules import ExperimentModule
 
 
-class ConstTrajectory(ExperimentModule):
-    dataPoints = ['TrajHeaterOutput']
+class RampTrajectory(ExperimentModule):
+    dataPoints = ['TrajOutput']
 
     publicSettings = OrderedDict([("Startwert", 0.0),
-                                  ("Startzeit", 101.0),
-                                  ("Endwert", 0.7)])
+                                  ("Startzeit", 10),
+                                  ("Endwert", 0.7),
+                                  ("Endzeit", 15)])
 
     connection = ConnTestTCP.__name__
 
@@ -19,36 +20,19 @@ class ConstTrajectory(ExperimentModule):
         ExperimentModule.__init__(self)
 
     def getStartParams(self):
-        """
-        Status byte with
-        0 0 0 0 0 0 0 0
-        7 6 5 4 3 2 1 0
-
-        0 - manuel flag
-        1 - const start flag
-        Returns
-        -------
-
-        """
-        payload = bytes([3])
-        dataPoint = {'id': 44,
-                     'msg': payload
-                     }
-        return dataPoint
+        pass
 
     def getStopParams(self):
-        payload = bytes([0])
-        dataPoint = {'id': 44,
-                     'msg': payload
-                     }
-        return dataPoint
+        pass
 
     def getParams(self, data):
-        payload = struct.pack('>fff',
+        payload = struct.pack('>dLdL',
                               data[0],
-                              data[1] * 1000,
-                              data[2])
-        dataPoint = {'id': 45,
+                              data[1],
+                              data[2],
+                              data[3])
+        print(payload)
+        dataPoint = {'id': 13,
                      'msg': payload
                      }
         return dataPoint
@@ -57,10 +41,10 @@ class ConstTrajectory(ExperimentModule):
     def handleFrame(frame):
         dataPoints = {}
         fid = frame.min_id
-        if fid == 46:
+        if fid == 11:
             data = struct.unpack('>Ld', frame.payload[:12])
             dataPoints['Zeit'] = data[0]
-            dataPoints['Punkte'] = {'TrajHeaterOutput': data[1]}
+            dataPoints['Punkte'] = {'TrajOutput': data[1]}
         else:
             dataPoints = None
 

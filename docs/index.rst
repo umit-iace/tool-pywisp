@@ -8,6 +8,7 @@ Contents:
 
   installation
   guide/index
+  transport/index
   examples/index
   modules/index
   contributing

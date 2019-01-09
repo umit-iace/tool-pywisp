@@ -2,9 +2,14 @@
 
 - Name: SprungSystem
 
-  ConstTrajectory:
-   Endwert: 7.0
-   Startzeit: 2
-   Startwert: 0.0
+  RampTrajectory:
+   Startzeit: 5
+   Startwert: 28.0
+   Endzeit: 70
+   Endwert: 5.0
 
   TestTCP:
+    Value1: 11.2
+    Value2: 22.1
+    Value3: 4
+    Value4: 1

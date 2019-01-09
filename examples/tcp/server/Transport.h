@@ -19,18 +19,7 @@ union {
         float var_float2;
         float var_float;
     };
-    struct {
-        unsigned long var_ulong2;
-        unsigned long var_ulong;
-    };
-    struct {
-        int var_int2;
-        int :16;
-        int :16;
-        int var_int;
-    };
     unsigned char var_byte[8];
-
 } packunion;
 
 struct Frame {
@@ -46,6 +35,8 @@ public:
 
     bool runExp() { return this->bActivateExperiment; }
 
+    void handleFrames();
+
     void sendData();
 
     /**
@@ -54,16 +45,32 @@ public:
     struct benchData {
         unsigned long lTime = 0;                    ///< milliseconds since start of experiment
         double dValue1 = 11.2;
-        bool bReset = false;                        ///< reset flag for new experiment start
+        float fValue2 = 0.0;
+        int iValue3 = 0;
+        unsigned char cValue4 = 0;
     } _benchData;
 
+    /**
+     * @brief struct of trajectory data
+     */
+    struct trajData {
+        double dStartValue = 0.0;          ///< start value of the trajectory
+        unsigned long lStartTime = 0;      ///< start time of the trajectory
+        double dEndValue = 0.0;            ///< end value of the trajectory
+        unsigned long lEndTime = 0;        ///< end time of the trajectory
+        double dOutput = 0.0;              ///< output value of the trajectory
+    } _trajData;
+
 private:
-    bool bActivateExperiment = true;
+    bool bActivateExperiment = false;
     Queue<Frame> &inputQueue;
     Queue<Frame> &outputQueue;
 
-    void handleFrames();
     void unpackExp(unsigned char *payload);
+
+    void unpackBenchData(unsigned char *payload);
+
+    void unpackTrajRampData(unsigned char *payload);
 
     void sendFrame(unsigned char id, unsigned char payload[MAX_PAYLOAD]);
 };

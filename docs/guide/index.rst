@@ -11,7 +11,7 @@ To visulize and control a test rig with pywisp a project is needed. Each project
 - Files for the experiment modules: It is recommended to have one file each module, i.e. controller, testbench. For detailed information see the example section.
 
 ExperimentModule
-~~~~~~~~~~~~~~~~
+----------------
 
 The experiment module class is needed to implement the different parts of the test rig, like trajectory, controller and
 testbench handling itself.
@@ -32,7 +32,7 @@ testbench handling itself.
 For detailed information see the example section.
 
 Connection
-~~~~~~~~~~
+----------
 
 It is necessary to implement the used connection types, where the class name specify the name used in the GUI and the
 default settings. The settings can be changed in the GUI directly. All implementations mus derived from `py:MplVisualizer`.
@@ -66,7 +66,7 @@ Currently two connection types are available and can implemented exemplary:
                                    self.settings['ip'])
 
 Visualizer
-~~~~~~~~~~
+----------
 
 It is possible to have different visualizers registered. They can be selected in GUI at runtime. Currently only
 visualizers based on matplotlib are available. For the implementation the base class `py:MplVisualizer` must be

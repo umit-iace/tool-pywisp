@@ -51,7 +51,7 @@ private:
                                         for (int i = 0; i < MAX_PAYLOAD; i++) {
                                             frame.payload[i] = (unsigned char) *bufPtr++;
                                         }
-                                        this->inputQueue.push(frame);
+                                        inputQueue.push(frame);
                                         sBuffer.consume(MAX_PAYLOAD + 1);
                                         // chain
                                         receiveLoop();

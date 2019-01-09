@@ -13,7 +13,10 @@ class TestTCP(ExperimentModule):
                   'Value4',
                   ]
 
-    publicSettings = OrderedDict()
+    publicSettings = OrderedDict([("Value1", 0.0),
+                                  ("Value2", 10.0),
+                                  ("Value3", 320),
+                                  ("Value4", 10)])
 
     connection = ConnTestTCP.__name__
 
@@ -21,19 +24,12 @@ class TestTCP(ExperimentModule):
         ExperimentModule.__init__(self)
 
     def getParams(self, data):
-        """
-        Status byte with
-        0 0 0 0 0 0 0 0
-        7 6 5 4 3 2 1 0
-
-        0 - analog read of AirFlowMeter dv meter
-        Returns
-        -------
-
-        """
-        payload = struct.pack('h',
-                              int(bool(1)))
-        dataPoint = {'id': 14,
+        payload = struct.pack('>dfhc',
+                              data[0],
+                              data[1],
+                              data[2],
+                              bytes(data[3]))
+        dataPoint = {'id': 12,
                      'msg': payload
                      }
         return dataPoint
@@ -43,7 +39,7 @@ class TestTCP(ExperimentModule):
         dataPoints = {}
         fid = frame.min_id
         if fid == 10:
-            data = struct.unpack('>Lffff', frame.payload)
+            data = struct.unpack('>Ldfhc', frame.payload[:19])
             dataPoints['Zeit'] = data[0]
             dataPoints['Punkte'] = {'Value1': data[1],
                                     'Value2': data[2],
