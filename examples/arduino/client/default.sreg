@@ -1,6 +1,6 @@
 # default experiment file that is loaded when the gui starts up
 
-- Name: SprungSystem
+- Name: RunSystem
 
   RampTrajectory:
    Startzeit: 5

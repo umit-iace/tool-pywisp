@@ -13,7 +13,7 @@ Transport Class
 MIN-Frame
 ---------
 
-Each `MIN-Frame` has the structure
+Each `MIN-Frame` data has the structure
 
 .. list-table::
     :widths: 50 50

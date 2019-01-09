@@ -1,21 +1,14 @@
 Examples
 ========
 
-In the following sections it can be found example projects for the different connection types,
-to show the recommended structure of a `pywisp` project.
+In the following examples for serial and Tcp/IP communications can be found with a running server and client for the
+accordingly system and can be used as starting point for own implementations. The examples use the same program at the
+client and server side. If the experiment is started, a ramp trajectory is simulated and data (double, float, int, char)
+is send to the GUI and can be changed by user interaction.
 
-Serial Communication
---------------------
-
-.. toctree::
-  :maxdepth: 1
-
-  ballintube
-
-TCP/IP Communication
---------------------
 
 .. toctree::
   :maxdepth: 1
 
-  pendulum
+  serial
+  tcp
