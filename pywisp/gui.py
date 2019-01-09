@@ -1136,7 +1136,6 @@ class MainGui(QMainWindow):
         dataPoints = data['Punkte']
         names = data['Punkte'].keys()
 
-        print(data)
         for buffer in self._currentDataPointBuffers:
             if buffer.name in names:
                 buffer.addValue(time, dataPoints[buffer.name])

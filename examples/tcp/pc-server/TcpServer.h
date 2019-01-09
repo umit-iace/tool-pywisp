@@ -1,7 +1,3 @@
-//
-// Created by Jens Wurm on 05.01.19.
-//
-
 #ifndef TCPSERVER_H
 #define TCPSERVER_H
 
@@ -47,9 +43,9 @@ private:
                                     } else {
                                         const char *bufPtr = boost::asio::buffer_cast<const char *>(sBuffer.data());
                                         Frame frame;
-                                        frame.id = (unsigned char) bufPtr++[0];
+                                        frame.data.id = (unsigned char) bufPtr++[0];
                                         for (int i = 0; i < MAX_PAYLOAD; i++) {
-                                            frame.payload[i] = (unsigned char) *bufPtr++;
+                                            frame.data.payload[i] = (unsigned char) *bufPtr++;
                                         }
                                         inputQueue.push(frame);
                                         sBuffer.consume(MAX_PAYLOAD + 1);
@@ -69,8 +65,8 @@ private:
             if (!ec) {
                 if (!outputQueue.empty()) {
                     Frame frame = outputQueue.pop();
-                    const char *px = reinterpret_cast<const char *>(&frame);
-                    boost::asio::write(tSocket, boost::asio::buffer(px, sizeof(Frame)), ec);
+                    const char *px = reinterpret_cast<const char *>(&frame.data);
+                    boost::asio::write(tSocket, boost::asio::buffer(px, sizeof(frame.data)), ec);
                 }
 
                 if (ec) {
@@ -93,9 +89,9 @@ private:
 
 class TcpServer {
 public:
-    TcpServer(boost::asio::io_context &ioContext, Queue<Frame> &inputQueue, Queue<Frame> &outputQueue)
+    TcpServer(boost::asio::io_context &ioContext, Queue<Frame> &inputQueue, Queue<Frame> &outputQueue, short sPort)
             : ioContext(ioContext),
-              acceptor_(ioContext, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), 50007)),
+              acceptor_(ioContext, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), sPort)),
               inputQueue(inputQueue),
               outputQueue(outputQueue) {
         startAccept();

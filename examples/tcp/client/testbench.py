@@ -39,7 +39,7 @@ class TestTCP(ExperimentModule):
         dataPoints = {}
         fid = frame.min_id
         if fid == 10:
-            data = struct.unpack('>Ldfhc', frame.payload[:19])
+            data = struct.unpack('>Ldfhb', frame.payload[:19])
             dataPoints['Zeit'] = data[0]
             dataPoints['Punkte'] = {'Value1': data[1],
                                     'Value2': data[2],

@@ -9,43 +9,28 @@
 const unsigned long lDt = 1;          ///< Sampling step [s]
 
 /**
- * @brief Method that calculates the trajectory value and writes the return value in _trajData->dOutput
+ * @brief Method that calculates a trajectory value and writes the return value in _trajData->dOutput
  * @param _benchData pointer to test rig data struct
  * @param _trajData pointer to trajectory struct
  */
-void fTrajectory(struct Transport::benchData *_benchData, struct Transport::trajData *_trajData)
-{
-//    std::cout << _trajData->dStartValue << std::endl;
-//    std::cout << _trajData->lStartTime << std::endl;
-//    std::cout << _trajData->dEndValue << std::endl;
-//    std::cout << _trajData->lEndTime << std::endl;
-//    std::cout << _benchData->dValue1 << std::endl;
-//    std::cout << _benchData->fValue2 << std::endl;
-//    std::cout << _benchData->iValue3 << std::endl;
-//    std::cout << _benchData->cValue4 << std::endl;
-
-    if (_benchData->lTime < _trajData->lStartTime)
-    {
+void fTrajectory(struct Transport::benchData *_benchData, struct Transport::trajData *_trajData) {
+    if (_benchData->lTime < _trajData->lStartTime) {
         _trajData->dOutput = _trajData->dStartValue;
-    }
-    else
-    {
-        if (_benchData->lTime < _trajData->lEndTime)
-        {
+    } else {
+        if (_benchData->lTime < _trajData->lEndTime) {
             double dM = (_trajData->dEndValue - _trajData->dStartValue) / (_trajData->lEndTime - _trajData->lStartTime);
             double dN = _trajData->dEndValue - dM * _trajData->lEndTime;
             _trajData->dOutput = dM * _benchData->lTime + dN;
-        }
-        else
-        {
+        } else {
             _trajData->dOutput = _trajData->dEndValue;
         }
     }
 }
 //----------------------------------------------------------------------
 
-/*
- * @brief
+/**
+ * @brief Timer loop method, that implements a control loop
+ * @param transport pointer to Transport class instance
  */
 void fContLoop(Transport *transport) {
     transport->handleFrames();
@@ -61,21 +46,19 @@ void fContLoop(Transport *transport) {
 //----------------------------------------------------------------------
 
 
-int main(int argc, char const *argv[])
-{
+int main(int argc, char const *argv[]) {
     Queue<Frame> inputQueue;
     Queue<Frame> outputQueue;
 
     Transport transport(std::ref(inputQueue), std::ref(outputQueue));
 
-    try
-    {
+    try {
         boost::asio::io_service ioService;
 
         PeriodicScheduler scheduler(std::ref(ioService));
         scheduler.addTask("fContLoop", boost::bind(fContLoop, &transport), 1);
 
-        TcpServer server(ioService, std::ref(inputQueue), std::ref(outputQueue));
+        TcpServer server(ioService, std::ref(inputQueue), std::ref(outputQueue), PORT);
 
         boost::thread_group threads;
         for (int i = 0; i < 2; ++i) {
@@ -83,8 +66,7 @@ int main(int argc, char const *argv[])
         }
         threads.join_all();
     }
-    catch (std::exception& e)
-    {
+    catch (std::exception &e) {
         std::cerr << e.what() << std::endl;
     }
 

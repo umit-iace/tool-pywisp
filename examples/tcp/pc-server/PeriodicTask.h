@@ -48,7 +48,7 @@ private:
 
 class PeriodicScheduler : boost::noncopyable {
 public:
-    PeriodicScheduler(boost::asio::io_service &ioService): ioService(ioService){
+    PeriodicScheduler(boost::asio::io_service &ioService) : ioService(ioService) {
 
     }
 

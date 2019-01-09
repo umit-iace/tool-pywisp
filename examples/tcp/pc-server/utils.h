@@ -9,10 +9,8 @@
 #include <mutex>
 #include <condition_variable>
 
-#define MAX_PAYLOAD (80)
-
-void logText(std::string const &text);
-
+#define MAX_PAYLOAD (80)            ///< maximal data size of frame
+#define PORT (50007)                ///< tcp port of server
 
 template<typename T>
 class Queue {

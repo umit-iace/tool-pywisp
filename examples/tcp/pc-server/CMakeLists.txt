@@ -8,7 +8,7 @@ if (Boost_FOUND)
     include_directories(${Boost_INCLUDE_DIRS})
     add_executable(server
             main.cpp
-            utils.h PeriodicTask.h Transport.cpp Transport.h main.cpp TcpServer.h utils.cpp)
+            utils.h PeriodicTask.h Transport.cpp Transport.h main.cpp TcpServer.h)
     target_link_libraries(server ${Boost_LIBRARIES})
 
 endif ()
