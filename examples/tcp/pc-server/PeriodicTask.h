@@ -1,24 +1,31 @@
-//
-// Created by Jens Wurm on 04.01.19.
-//
-
+/** @file PeriodicTask.h
+ *
+ * Copyright (c) 2018 IACE
+ */
 #ifndef PERIODIC_H
 #define PERIODIC_H
 
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 
+/**
+ *@brief Class, that realizes a periodic task.
+ */
 class PeriodicTask : boost::noncopyable {
 public:
-    typedef std::function<void()> handler_fn;
+    typedef std::function<void()> handlerFunction;
 
-    PeriodicTask(boost::asio::io_service &ioService, std::string const &name, int interval, handler_fn task)
+    PeriodicTask(boost::asio::io_service &ioService, std::string const &name, int interval, handlerFunction task)
             : ioService(ioService), interval(interval), task(task), name(name), timer(ioService) {
         ioService.post(boost::bind(&PeriodicTask::start, this));
     }
 
-    void execute(boost::system::error_code const &e) {
-        if (e != boost::asio::error::operation_aborted) {
+    /**
+     * @brief Executes the task.
+     * @param ec error of the task execution.
+     */
+    void execute(boost::system::error_code const &ec) {
+        if (ec != boost::asio::error::operation_aborted) {
             task();
 
             timer.expires_at(timer.expires_at() + boost::posix_time::seconds(interval));
@@ -26,6 +33,9 @@ public:
         }
     }
 
+    /**
+     * @brief Starts the timer of the task.
+     */
     void start() {
         task();
 
@@ -41,18 +51,27 @@ private:
 private:
     boost::asio::io_service &ioService;
     boost::asio::deadline_timer timer;
-    handler_fn task;
+    handlerFunction task;
     std::string name;
     int interval;
 };
 
+/**
+ * @Brief Class, that realizes a periodic scheduler of different task.
+ */
 class PeriodicScheduler : boost::noncopyable {
 public:
     PeriodicScheduler(boost::asio::io_service &ioService) : ioService(ioService) {
 
     }
 
-    void addTask(std::string const &name, PeriodicTask::handler_fn const &task, int interval) {
+    /**
+     * @brief Adds a periodic task. The task is started if the io_context object runs.
+     * @param name name of the task.
+     * @param task task function, that is processed in task.
+     * @param interval time intervall of the periddic task.
+     */
+    void addTask(std::string const &name, PeriodicTask::handlerFunction const &task, int interval) {
         tasks.push_back(std::make_unique<PeriodicTask>(std::ref(ioService), name, interval, task));
     }
 

@@ -1,3 +1,7 @@
+/** @file TcpServer.h
+ *
+ * Copyright (c) 2018 IACE
+ */
 #ifndef TCPSERVER_H
 #define TCPSERVER_H
 
@@ -9,7 +13,10 @@
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/asio.hpp>
 
-
+/**
+ * @brief Tcp connection class to connect a client. Send and receive data from the client. Input and
+ * output data is stored in two queues.
+ */
 class TcpConnection
         : public boost::enable_shared_from_this<TcpConnection> {
 public:
@@ -23,6 +30,9 @@ public:
         return tSocket;
     }
 
+    /**
+     * @brief Starts the send and receive loop after client is connected.
+     */
     void start() {
         receiveLoop();
         sendLoop();
@@ -34,6 +44,9 @@ private:
             : tSocket(ioContext), dlTimer(ioContext), inputQueue(inputQueue), outputQueue(outputQueue) {
     }
 
+    /**
+     * @brief Receives asyncronous data from the socket and write it to input queue.
+     */
     void receiveLoop() {
         auto This = shared_from_this();
         boost::asio::async_read(tSocket, sBuffer, boost::asio::transfer_exactly(MAX_PAYLOAD + 1),
@@ -55,6 +68,9 @@ private:
                                 });
     }
 
+    /**
+     * @brief Sends syncronous data to the socket from the output queue in a 100 ms timer.
+     */
     void sendLoop() {
         dlTimer.expires_from_now(boost::posix_time::milliseconds(100));
         auto This = shared_from_this();
@@ -87,6 +103,9 @@ private:
 
 };
 
+/**
+ * @brief Tcp server class, that realize a Tcp server where clients can connect. Port is specifiable.
+ */
 class TcpServer {
 public:
     TcpServer(boost::asio::io_context &ioContext, Queue<Frame> &inputQueue, Queue<Frame> &outputQueue, short sPort)
@@ -98,6 +117,9 @@ public:
     }
 
 private:
+    /**
+     * @brief Accepts a new client connection.
+     */
     void startAccept() {
         TcpConnection::pointer newConnection =
                 TcpConnection::create(acceptor_.get_executor().context(), std::ref(inputQueue), std::ref(outputQueue));
@@ -107,6 +129,9 @@ private:
                                            boost::asio::placeholders::error));
     }
 
+    /**
+     * @brief Handles a client connection.
+     */
     void handleAccept(TcpConnection::pointer newConnection,
                       const boost::system::error_code &error) {
         if (!error) {

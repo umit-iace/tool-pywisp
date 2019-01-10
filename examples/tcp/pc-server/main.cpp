@@ -1,3 +1,7 @@
+/** @file main.cpp
+ *
+ * Copyright (c) 2018 IACE
+ */
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 #include <boost/thread.hpp>

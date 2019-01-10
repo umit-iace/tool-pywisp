@@ -1,3 +1,7 @@
+/** @file Transport.cpp
+ *
+ * Copyright (c) 2018 IACE
+ */
 #include "Transport.h"
 
 void Transport::sendData() {

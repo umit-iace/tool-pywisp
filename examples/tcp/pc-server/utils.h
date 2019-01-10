@@ -1,3 +1,7 @@
+/** @file utils.h
+ *
+ * Copyright (c) 2018 IACE
+ */
 #ifndef UTILS_H
 #define UTILS_H
 
@@ -12,10 +16,17 @@
 #define MAX_PAYLOAD (80)            ///< maximal data size of frame
 #define PORT (50007)                ///< tcp port of server
 
+/**
+ * @brief Class implements a general threadsafe queue.
+ */
 template<typename T>
 class Queue {
 public:
 
+    /**
+     * Returns the current item from queue.
+     * @return the current item
+     */
     T pop() {
         std::unique_lock<std::mutex> mlock(mutex_);
         while (queue_.empty()) {
@@ -26,6 +37,10 @@ public:
         return val;
     }
 
+    /**
+     * @brief Return the current item to a given item.
+     * @param item specific item with last queue item.
+     */
     void pop(T &item) {
         std::unique_lock<std::mutex> mlock(mutex_);
         while (queue_.empty()) {
@@ -35,6 +50,10 @@ public:
         queue_.pop();
     }
 
+    /**
+     * Pushs an item to the queue.
+     * @param item is pushed in queue.
+     */
     void push(const T &item) {
         std::unique_lock<std::mutex> mlock(mutex_);
         queue_.push(item);
@@ -42,6 +61,10 @@ public:
         cond_.notify_one();
     }
 
+    /**
+     * Check if queue is empty.
+     * @return True if empty, otherwise false.
+     */
     bool empty() {
         return queue_.empty();
     }
