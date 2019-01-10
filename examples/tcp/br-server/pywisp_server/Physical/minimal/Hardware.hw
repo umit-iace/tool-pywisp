@@ -1,0 +1,5 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<?AutomationStudio Version=4.4.4.112?>
+<Hardware xmlns="http://br-automation.co.at/AS/Hardware">
+  <Module Name="X20CP1586" Type="X20CP1586" Version="1.4.2.0" />
+</Hardware>
