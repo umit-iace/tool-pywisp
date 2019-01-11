@@ -1,6 +1,5 @@
 /** @file TcpServer.h
  *
- * Copyright (c) 2018 IACE
  */
 #ifndef TCPSERVER_H
 #define TCPSERVER_H
@@ -12,6 +11,8 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/asio.hpp>
+
+//----------------------------------------------------------------------
 
 /**
  * @brief Tcp connection class to connect a client. Send and receive data from the client. Input and

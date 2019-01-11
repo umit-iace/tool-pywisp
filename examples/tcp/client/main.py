@@ -10,7 +10,7 @@ import pywisp as pw
 
 if __name__ == '__main__':
     pw.registerConnection(ConnTestTCP)
-    pw.registerExperimentModule(testbench.TestTCP)
+    pw.registerExperimentModule(testbench.Test)
     pw.registerExperimentModule(trajectory.RampTrajectory)
     app = QApplication(sys.argv)
     form = pw.MainGui()

@@ -1,6 +1,5 @@
-/** @file utils.h
+/** @file Utils.h
  *
- * Copyright (c) 2018 IACE
  */
 #ifndef UTILS_H
 #define UTILS_H
@@ -13,8 +12,11 @@
 #include <mutex>
 #include <condition_variable>
 
+//----------------------------------------------------------------------
+
 #define MAX_PAYLOAD (80)            ///< maximal data size of frame
 #define PORT (50007)                ///< tcp port of server
+//----------------------------------------------------------------------
 
 /**
  * @brief Class implements a general threadsafe queue.

@@ -1,0 +1,153 @@
+/** @file Transport.h
+ *
+ */
+#ifndef TRANSPORT_H
+#define TRANSPORT_H
+
+#if defined(ARDUINO) && ARDUINO >= 100
+#include "Arduino.h"
+#else
+
+#include "WProgram.h"
+
+#endif
+
+#include "Min.h"
+
+#include "Frame.h"
+#define BUFLEN (64)     ///< length of serial buffer
+
+/**
+ * @brief Layer class for the min protocol communication between the host the micro controller
+ */
+class Transport {
+public:
+    void init();        ///< initialize Transport class
+    void run();         ///< must be called periodically, to ensure correct
+                        ///< functionality of the class
+    /**
+     * @brief Function for reading activity status of the experiment
+     * @return Experiment active
+     */
+    bool runExp() { return this->bActivateExperiment; }
+
+    /**
+     * @brief Function for sending the \ref benchData to the Host
+     */
+    void sendData();
+
+    void handleFrame(Frame frame);
+    ///< internally used function
+
+    /**
+     * @brief struct of test rig data
+     */
+    struct benchData {
+        unsigned long lTime = 0;                    ///< seconds since start of experiment
+        double dValue1 = 21342354.2213;
+        float fValue2 = 556.2;
+        int iValue3 = 244;
+        unsigned char cValue4 = 12;
+    } _benchData;
+
+    /**
+     * @brief struct of trajectory data
+     */
+    struct trajData {
+        double dStartValue = 0.0;          ///< start value of the trajectory
+        unsigned long lStartTime = 0;      ///< start time of the trajectory
+        double dEndValue = 0.0;            ///< end value of the trajectory
+        unsigned long lEndTime = 0;        ///< end time of the trajectory
+        double dOutput = 85.0;             ///< output value of the trajectory
+    } _trajData;
+
+    /**
+     * Adds a double value to payload
+     * @param dValue value that is packed in payload
+     */
+    void pack(double dValue);
+
+    /**
+     * Adds an unsigned long value to payload
+     * @param lValue value that is packed in payload
+     */
+    void pack(unsigned long lValue);
+
+    /**
+     * Adds a float value to payload
+     * @param fValue value that is packed in payload
+     */
+    void pack(float fValue);
+
+    /**
+     * Adds an integer value to payload
+     * @param iValue value that is packed in payload
+     */
+    void pack(int iValue);
+
+    /**
+     * Adds an unsigned char value to payload
+     * @param cValue value that is packed in payload
+     */
+    void pack(unsigned char cValue);
+
+    /**
+     * Return a double value from payload
+     * @param dValue value with unpacked data
+     */
+    void unPack(double &dValue);
+
+    /**
+     * Return an unsigned long value from payload
+     * @param lValue value with unpacked data
+     */
+    void unPack(unsigned long &lValue);
+
+    /**
+     * Return a float value from payload
+     * @param fValue value with unpacked data
+     */
+    void unPack(float &fValue);
+
+    /**
+     * Return an integer value from payload
+     * @param iValue value with unpacked data
+     */
+    void unPack(int &iValue);
+
+    /**
+     * Return an unsigned char value from payload
+     * @param cValue value with unpacked data
+     */
+    void unPack(unsigned char &cValue);
+
+    /**
+     * Return a bool value from payload
+     * @param bValue value with unpacked data
+     */
+    void unPack(bool &bValue);
+
+private:
+    uint8_t serialBuf[BUFLEN];
+    bool bActivateExperiment = false;
+    struct min_context ctx;
+    unsigned char cCursor = 0;
+    uint8_t *payload;
+
+    void startFrame(uint8_t *payload);
+
+    void sendFrame(unsigned char id);
+
+    void unpackExp(Frame frame);
+
+    void unpackBenchData(Frame frame);
+
+    void unpackTrajRampData(Frame frame);
+};
+
+/**
+ * @brief external instance of the transport layer class must be declared in main
+ */
+extern Transport transport;
+
+#endif // TRANSPORT_H

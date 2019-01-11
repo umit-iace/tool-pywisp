@@ -6,7 +6,7 @@ from connection import ConnTestTCP
 from pywisp.experimentModules import ExperimentModule
 
 
-class TestTCP(ExperimentModule):
+class Test(ExperimentModule):
     dataPoints = ['Value1',
                   'Value2',
                   'Value3',

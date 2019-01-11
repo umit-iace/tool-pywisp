@@ -2,11 +2,11 @@
 from collections import OrderedDict
 
 import struct
-from connection import ConnTestTCP
+from connection import ConnTestSerial
 from pywisp.experimentModules import ExperimentModule
 
 
-class TestTCP(ExperimentModule):
+class Test(ExperimentModule):
     dataPoints = ['Value1',
                   'Value2',
                   'Value3',
@@ -18,7 +18,7 @@ class TestTCP(ExperimentModule):
                                   ("Value3", 320),
                                   ("Value4", 10)])
 
-    connection = ConnTestTCP.__name__
+    connection = ConnTestSerial.__name__
 
     def __init__(self):
         ExperimentModule.__init__(self)
@@ -39,7 +39,7 @@ class TestTCP(ExperimentModule):
         dataPoints = {}
         fid = frame.min_id
         if fid == 10:
-            data = struct.unpack('>Ldfhc', frame.payload[:19])
+            data = struct.unpack('>Ldfhb', frame.payload[:19])
             dataPoints['Zeit'] = data[0]
             dataPoints['Punkte'] = {'Value1': data[1],
                                     'Value2': data[2],

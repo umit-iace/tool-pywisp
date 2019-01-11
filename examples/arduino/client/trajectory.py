@@ -2,7 +2,7 @@
 from collections import OrderedDict
 
 import struct
-from connection import ConnTestTCP
+from connection import ConnTestSerial
 from pywisp.experimentModules import ExperimentModule
 
 
@@ -14,7 +14,7 @@ class RampTrajectory(ExperimentModule):
                                   ("Endwert", 0.7),
                                   ("Endzeit", 15)])
 
-    connection = ConnTestTCP.__name__
+    connection = ConnTestSerial.__name__
 
     def __init__(self):
         ExperimentModule.__init__(self)

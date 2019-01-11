@@ -1,6 +1,5 @@
 /** @file main.cpp
  *
- * Copyright (c) 2018 IACE
  */
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
@@ -10,7 +9,10 @@
 #include "Transport.h"
 #include "TcpServer.h"
 
-const unsigned long lDt = 1;          ///< Sampling step [s]
+//----------------------------------------------------------------------
+
+const unsigned long lDt = 1000;          ///< Sampling step [ms]
+//----------------------------------------------------------------------
 
 /**
  * @brief Method that calculates a trajectory value and writes the return value in _trajData->dOutput

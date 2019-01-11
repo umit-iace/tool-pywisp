@@ -1,12 +1,13 @@
 /** @file PeriodicTask.h
  *
- * Copyright (c) 2018 IACE
  */
 #ifndef PERIODIC_H
 #define PERIODIC_H
 
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
+
+//----------------------------------------------------------------------
 
 /**
  *@brief Class, that realizes a periodic task.
