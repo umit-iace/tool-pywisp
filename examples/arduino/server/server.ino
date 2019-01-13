@@ -44,7 +44,7 @@ void fContLoop() {
     if (transport.runExp()) {
         transport._benchData.lTime += lDt;
 
-        fTrajectory(&transport->_benchData, &transport->_trajData);
+        fTrajectory(&transport._benchData, &transport._trajData);
 
         transport.sendData();
     }

@@ -2,6 +2,6 @@
 
 BOARD_TAG    	= uno
 
-ARDUINO_DIR     = /usr/share/arduino
+ARDUINO_DIR   	= /Applications/Arduino.app/Contents/Java
 
-include $(HOME)/git/Arduino-Makefile/Arduino.mk
+include $(HOME)/Documents/development/git/Arduino-Makefile/Arduino.mk

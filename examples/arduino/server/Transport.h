@@ -12,9 +12,9 @@
 
 #endif
 
-#include "Min.h"
-
-#include "Frame.h"
+extern "C" {
+    #include "Min.h"
+}
 #define BUFLEN (64)     ///< length of serial buffer
 
 /**
@@ -24,7 +24,7 @@ class Transport {
 public:
     void init();        ///< initialize Transport class
     void run();         ///< must be called periodically, to ensure correct
-                        ///< functionality of the class
+    ///< functionality of the class
     /**
      * @brief Function for reading activity status of the experiment
      * @return Experiment active
@@ -36,7 +36,7 @@ public:
      */
     void sendData();
 
-    void handleFrame(Frame frame);
+    void handleFrame(uint8_t id, uint8_t *payload, uint8_t payloadLen);
     ///< internally used function
 
     /**
@@ -134,15 +134,16 @@ private:
     unsigned char cCursor = 0;
     uint8_t *payload;
 
+    void startFrame(uint8_t iSize);
     void startFrame(uint8_t *payload);
 
     void sendFrame(unsigned char id);
 
-    void unpackExp(Frame frame);
+    void unpackExp(uint8_t *payload);
 
-    void unpackBenchData(Frame frame);
+    void unpackBenchData(uint8_t *payload);
 
-    void unpackTrajRampData(Frame frame);
+    void unpackTrajRampData(uint8_t *payload);
 };
 
 /**
