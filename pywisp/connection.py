@@ -28,6 +28,7 @@ class Connection(object):
     def __init__(self):
         self.isConnected = False
         self._logger = logging.getLogger(self.__class__.__name__)
+        self.doRead = False
 
     @abstractmethod
     def connect(self):
@@ -63,7 +64,6 @@ class SerialConnection(Connection, QtCore.QThread):
         self.min = None
         self.baud = baud
         self.port = port
-        self.doRead = False
         self.moveToThread(self)
 
     def run(self):
@@ -192,7 +192,8 @@ class TcpConnection(Connection, QtCore.QThread):
         Endless loop of the thread
         """
         while True and self.isConnected:
-            self.readData(None)
+            if self.doRead:
+                self.readData(None)
             time.sleep(0.01)
 
     def readData(self, frames):

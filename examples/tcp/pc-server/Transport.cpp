@@ -43,6 +43,12 @@ void Transport::handleFrames() {
 void Transport::unpackExp(Frame frame) {
     frame.unPack(this->bActivateExperiment);
     this->_benchData.lTime = 0;
+    while (!inputQueue.empty()) {
+        inputQueue.pop();
+    }
+    while (!outputQueue.empty()) {
+        outputQueue.pop();
+    }
 }
 //----------------------------------------------------------------------
 

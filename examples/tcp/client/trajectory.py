@@ -28,9 +28,9 @@ class RampTrajectory(ExperimentModule):
     def getParams(self, data):
         payload = struct.pack('>dLdL',
                               data[0],
-                              data[1],
+                              data[1] * 1000,
                               data[2],
-                              data[3])
+                              data[3] * 1000)
         dataPoint = {'id': 13,
                      'msg': payload
                      }

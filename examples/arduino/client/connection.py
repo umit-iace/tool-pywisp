@@ -5,7 +5,7 @@ from pywisp.connection import SerialConnection
 
 
 class ConnTestSerial(SerialConnection):
-    settings = OrderedDict([("port", '/dev/uart0'),
+    settings = OrderedDict([("port", '/dev/cu.usbmodem1451'),
                             ("baud", 115200),
                             ])
 

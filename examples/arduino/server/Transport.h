@@ -44,7 +44,7 @@ public:
      */
     struct benchData {
         unsigned long lTime = 0;                    ///< seconds since start of experiment
-        double dValue1 = 21342354.2213;
+        double dValue1 = 21454.23123;
         float fValue2 = 556.2;
         int iValue3 = 244;
         unsigned char cValue4 = 12;
@@ -56,7 +56,7 @@ public:
     struct trajData {
         double dStartValue = 0.0;          ///< start value of the trajectory
         unsigned long lStartTime = 0;      ///< start time of the trajectory
-        double dEndValue = 0.0;            ///< end value of the trajectory
+        double dEndValue = 127.34;         ///< end value of the trajectory
         unsigned long lEndTime = 0;        ///< end time of the trajectory
         double dOutput = 85.0;             ///< output value of the trajectory
     } _trajData;
@@ -90,6 +90,19 @@ public:
      * @param cValue value that is packed in payload
      */
     void pack(unsigned char cValue);
+
+    /**
+     * Convert a unsigned 32 bit unsigned integer in a byte array
+     * @param data the 32 bit integer
+     * @param payload byte array
+     */
+    void pack32(uint32_t data, uint8_t payload[]);
+
+    /**
+     * Convert a 4 byte array to a 32 bit unsigned integer
+     * @return the 32 bit unsigned integer
+     */
+    uint32_t unPack32();
 
     /**
      * Return a double value from payload
@@ -133,8 +146,9 @@ private:
     struct min_context ctx;
     unsigned char cCursor = 0;
     uint8_t *payload;
+    uint8_t payloadSize;
 
-    void startFrame(uint8_t iSize);
+    void startFrame(unsigned char cSize);
     void startFrame(uint8_t *payload);
 
     void sendFrame(unsigned char id);

@@ -1052,8 +1052,7 @@ class MainGui(QMainWindow):
         :param QCloseEvent:
         """
         if self.isConnected:
-            for conn, connInstance in self.connections.items():
-                connInstance.disconnect()
+            self.disconnect()
         self._logger.info("Close Event received, shutting down.")
         logging.getLogger().removeHandler(self.textLogger)
         super().closeEvent(QCloseEvent)
