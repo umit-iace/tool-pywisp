@@ -2,7 +2,6 @@
 import logging
 import os
 from copy import deepcopy
-from pathlib import Path
 
 import pkg_resources
 import serial.tools.list_ports
@@ -503,6 +502,10 @@ class MainGui(QMainWindow):
         """
         Provides initial settings for view, plot and log management.
         """
+        # path management
+        self._add_setting("path", "previous_plot_export", os.path.curdir)
+        self._add_setting("path", "previous_plot_format", ".csv")
+
         # view management
         self._addSetting("view", "show_coordinates", "True")
 
@@ -851,14 +854,22 @@ class MainGui(QMainWindow):
             self._logger.error("Can't instantiate exporter! " + str(e))
             return
 
-        defaultPath = str(Path.home())
-        defaultFile = os.path.join(defaultPath, 'export.csv')
+        lastPath = self._settings.value("path/previous_plot_export")
+        lastFormat = self._settings.value("path/previous_plot_format")
+        exportFormats = ["CSV Data (*.csv)", "PNG Image (*.png)"]
+        if lastFormat == ".png":
+            exportFormats[:] = exportFormats[::-1]
+        formatStr = ";;".join(exportFormats)
+        defaultFile = os.path.join(lastPath, "export" + lastFormat)
         filename = QFileDialog.getSaveFileName(self,
                                                "Export as ...",
                                                defaultFile,
-                                               "CSV Data (*.csv);;PNG Image (*.png)")
+                                               formatStr)
+
         if filename[0]:
-            _, ext = os.path.splitext(filename[0])
+            file, ext = os.path.splitext(filename[0])
+            self._settings.setValue("path/previous_plot_export",
+                                    os.path.dirname(file))
             if ext == '.csv':
                 exporter.exportCsv(filename[0])
             elif ext == '.png':
