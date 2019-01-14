@@ -294,7 +294,7 @@ class MainGui(QMainWindow):
                 serialCnt += 1
             elif issubclass(conn, TcpConnection):
                 actTcp = self.connMenu.addAction(conn.__name__)
-                actTcp.triggered.connect(lambda: self._getTcpMenu(conn.settings))
+                actTcp.triggered.connect(lambda _, settings=conn.settings: self._getTcpMenu(settings))
             else:
                 self._logger.warning("Cannot handle the connection type!")
             self.connMenu.addSeparator()
@@ -503,8 +503,8 @@ class MainGui(QMainWindow):
         Provides initial settings for view, plot and log management.
         """
         # path management
-        self._add_setting("path", "previous_plot_export", os.path.curdir)
-        self._add_setting("path", "previous_plot_format", ".csv")
+        self._addSetting("path", "previous_plot_export", os.path.curdir)
+        self._addSetting("path", "previous_plot_format", ".csv")
 
         # view management
         self._addSetting("view", "show_coordinates", "True")
@@ -1088,7 +1088,7 @@ class MainGui(QMainWindow):
                 connInstance.start()
                 self.isConnected = True
             else:
-                self._logger.warning("No connection for {} established! Check your settings!".format(conn))
+                self._logger.warning("No connection for {} established! Check your settings!".format(conn.__name__))
                 self.isConnected = False
                 return
 
