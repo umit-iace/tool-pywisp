@@ -13,7 +13,7 @@
 #endif
 
 extern "C" {
-    #include "Min.h"
+#include "Min.h"
 }
 #define BUFLEN (64)     ///< length of serial buffer
 
@@ -32,12 +32,17 @@ public:
     bool runExp() { return this->bActivateExperiment; }
 
     /**
+     * Handles incoming data frames.
+     * @param id frame identifier
+     * @param payload frame data as pointer
+     * @param payloadLen length of frame data
+     */
+    void handleFrame(uint8_t id, uint8_t *payload, uint8_t payloadLen);
+
+    /**
      * @brief Function for sending the \ref benchData to the Host
      */
     void sendData();
-
-    void handleFrame(uint8_t id, uint8_t *payload, uint8_t payloadLen);
-    ///< internally used function
 
     /**
      * @brief struct of test rig data
@@ -61,10 +66,30 @@ public:
         double dOutput = 85.0;             ///< output value of the trajectory
     } _trajData;
 
+private:
+    uint8_t serialBuf[BUFLEN];
+    bool bActivateExperiment = false;
+    struct min_context ctx;
+    unsigned char cCursor = 0;
+    uint8_t *payload;
+    uint8_t payloadSize;
+
+    void startFrame(unsigned char cSize);
+
+    void startFrame(uint8_t *payload);
+
+    void sendFrame(unsigned char id);
+
+    void unpackExp(uint8_t *payload);
+
+    void unpackBenchData(uint8_t *payload);
+
+    void unpackTrajRampData(uint8_t *payload);
+
     /**
-     * Adds a double value to payload
-     * @param dValue value that is packed in payload
-     */
+ * Adds a double value to payload
+ * @param dValue value that is packed in payload
+ */
     void pack(double dValue);
 
     /**
@@ -140,24 +165,6 @@ public:
      */
     void unPack(bool &bValue);
 
-private:
-    uint8_t serialBuf[BUFLEN];
-    bool bActivateExperiment = false;
-    struct min_context ctx;
-    unsigned char cCursor = 0;
-    uint8_t *payload;
-    uint8_t payloadSize;
-
-    void startFrame(unsigned char cSize);
-    void startFrame(uint8_t *payload);
-
-    void sendFrame(unsigned char id);
-
-    void unpackExp(uint8_t *payload);
-
-    void unpackBenchData(uint8_t *payload);
-
-    void unpackTrajRampData(uint8_t *payload);
 };
 
 /**
