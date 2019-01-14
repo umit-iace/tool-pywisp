@@ -68,16 +68,6 @@ void _CYCLIC ProgramCyclic(void)
         default:
             break;
     }
-    /**< Sende jede Sekunde Messdaten zu Pywisp*/
-	if (transport.runExp()) {
-    	if (counter_tcp >= 10) {        
-            transport.sendData();
-            transport.lTime += 1000;
-			counter_tcp = 0;
-		} else {
-			counter_tcp += 1;
-        }
-	}
 }
 
 void _EXIT ProgramExit(void)

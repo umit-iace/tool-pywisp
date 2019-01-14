@@ -162,7 +162,7 @@ TCPServer::Status TCPServer::write()
 	/**< Schreibe Daten an Client*/
 	TcpSend_0.ident = client_ident;
 	TcpSend_0.pData = (unsigned long) buffer_out;
-	TcpSend_0.datalen = sizeof(struct frame) * outc;
+	TcpSend_0.datalen = (MAX_PAYLOAD + 1) * outc;
 	TcpSend_0.flags = 0;
 	TcpSend_0.enable = true;
 	TcpSend(&TcpSend_0);
@@ -185,11 +185,11 @@ TCPServer::Status TCPServer::write()
 	return BUSY;
 }
 
-void TCPServer::handleFrame(unsigned char id, unsigned char payload[MAX_PAYLOAD])
+void TCPServer::handleFrame(Frame frame)
 {
-	this->buffer_out[this->outc].id = id;
+	this->buffer_out[this->outc].data.id = frame.data.id;
 	for (int i = 0; i < MAX_PAYLOAD; ++i) {
-		this->buffer_out[this->outc].payload[i] = payload[i];
+		this->buffer_out[this->outc].data.payload[i] =frame.data.payload[i];
 	}
 	this->outc++;
 }
@@ -207,11 +207,10 @@ void TCPServer::sync()
 					if (this->recvlength > 0) {
 						unsigned char *pointer = buffer_in;
 						while (pointer - buffer_in < this->recvlength) {
-							struct frame f;
-							f.id = pointer++[0];
+							Frame frame(pointer++[0]);
 							for (int i = 0; i < MAX_PAYLOAD; ++i)
-								f.payload[i] = *pointer++;
-							this->transp->handleFrame(f.id, f.payload);
+								frame.data.payload[i] = *pointer++;
+							this->transp->handleFrame(frame);
 						}
 						recvlength = 0;
 					}

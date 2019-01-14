@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<?AutomationStudio Version=4.4.4.112?>
+<?AutomationStudio Version=4.4.6.71 SP?>
 <Package xmlns="http://br-automation.co.at/AS/Package">
   <Objects>
     <Object Type="Library" Language="Binary" Description="This library contains function interfaces for IEC 61131-3 operator functions. For the most part, these are mathematical and logical functions.">operator</Object>
@@ -12,5 +12,6 @@
     <Object Type="Library" Language="ANSIC">TCPServer</Object>
     <Object Type="Library" Language="ANSIC">Transport</Object>
     <Object Type="File">Comm.h</Object>
+    <Object Type="Library" Language="ANSIC">Frame</Object>
   </Objects>
 </Package>

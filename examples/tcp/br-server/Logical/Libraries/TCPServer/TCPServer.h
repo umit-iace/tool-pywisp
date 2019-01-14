@@ -7,6 +7,7 @@
 #include <AsTCP.h>
 #include <AsIOTime.h>
 #include "../Comm.h"
+#include "../Frame/Frame.h"
 
 /** \file TCPServer.h
  *  \class TCPServer
@@ -51,7 +52,7 @@ class TCPServer: public Comm{
 	struct tcpLINGER_typ linger_opt;
 	unsigned int linger_opt_len;
 	/**< Sende- und Empfangsbuffer mit Längen und cursor*/
-	struct frame buffer_out[255];
+	Frame buffer_out[255];
 	unsigned int outc;
 	unsigned char buffer_in[255 * (MAX_PAYLOAD + 1)];
 	unsigned int recvlength;
@@ -76,7 +77,7 @@ class TCPServer: public Comm{
 	/**< Readonly methode um Status zu lesen*/
 	const Status &status;
 	/** Method to queue communication frame */
-	void handleFrame(unsigned char id, unsigned char buf[MAX_PAYLOAD]);
+	void handleFrame(Frame frame);
 	void registerListener(Comm *transp);
 };
 #endif //TCPSERVER_CLASS_H
