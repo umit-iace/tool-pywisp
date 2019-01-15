@@ -1,4 +1,3 @@
-
 #define _BUR_USE_DECLARATION_IN_IEC
 #ifdef _DEFAULT_INCLUDES
 	#include "AsDefault.h"
@@ -68,6 +67,10 @@ void _CYCLIC ProgramCyclic(void)
         default:
             break;
     }
+	
+//	if (expData.bActivateExperiment) {
+//		transport.sendData();
+//	}
 }
 
 void _EXIT ProgramExit(void)

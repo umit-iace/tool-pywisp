@@ -2,7 +2,7 @@
 #define TRANSPORT_CLASS_H
 
 #include "../Comm.h"
-#include "../Frame/Frame.h"
+#include "Frame.h"
 /** \file Transport.h
  *  \class Transport
  *  \brief Klasse zum Ent- und Packen der Kommunikationsdaten zu Pywisp
@@ -18,36 +18,16 @@
  *  ob ein Experiment ausgeführt werden soll.
  */
 
-class Transport: public Comm{
+class Transport: public Comm {
 	public:
-	/**< Rückgabe des Experimenten Flags*/
-	bool runExp() { return this->bActivateExperiment; }
-
 	void handleFrame(Frame frame);
 
 	void sendData();
 	
 	void registerServer(Comm *serv);
 
-	struct benchData {
-		unsigned long lTime;                    ///< seconds since start of experiment
-		double dValue1;
-		float fValue2;
-		int iValue3;
-		unsigned char cValue4;
-	} _benchData;
-
-	struct trajData {
-		double dStartValue;          ///< start value of the trajectory
-		unsigned long lStartTime;      ///< start time of the trajectory
-		double dEndValue;            ///< end value of the trajectory
-		unsigned long lEndTime;        ///< end time of the trajectory
-		double dOutput;             ///< output value of the trajectory
-	} _trajData;
-
 	private:
 	Comm *tcp;
-	bool bActivateExperiment;
 
 	void unpackExp(Frame frame);
 

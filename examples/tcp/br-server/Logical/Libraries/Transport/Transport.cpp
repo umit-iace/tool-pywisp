@@ -1,25 +1,21 @@
-
 #define _BUR_USE_DECLARATION_IN_IEC
 #ifdef _DEFAULT_INCLUDES
 #include "AsDefault.h"
 #endif
 #include "Transport.h"
-/** \file Transport.cpp
- *  \brief Implementierung der Transport Klasse
- */
 
 void Transport::sendData() {
 	Frame benchFrame(10);
-	benchFrame.pack(this->_benchData.lTime);
-	benchFrame.pack(this->_benchData.dValue1);
-	benchFrame.pack(this->_benchData.fValue2);
-	benchFrame.pack(this->_benchData.iValue3);
-	benchFrame.pack(this->_benchData.cValue4);
+	benchFrame.pack(benchData.lTime);
+	benchFrame.pack(benchData.dValue1);
+	benchFrame.pack(benchData.fValue2);
+	benchFrame.pack(benchData.iValue3);
+	benchFrame.pack(benchData.cValue4);
 	tcp->handleFrame(benchFrame);
 
 	Frame trajFrame(11);
-	trajFrame.pack(this->_benchData.lTime);
-	trajFrame.pack(this->_trajData.dOutput);
+	trajFrame.pack(benchData.lTime);
+	trajFrame.pack(trajData.dOutput);
 	tcp->handleFrame(trajFrame);
 }
 
@@ -40,22 +36,22 @@ void Transport::handleFrame(Frame frame)
 }
 
 void Transport::unpackExp(Frame frame) {
-	frame.unPack(this->bActivateExperiment);
-	this->_benchData.lTime = 0;
+	frame.unPack(expData.bActivateExperiment);
+	benchData.lTime = 0;
 }
 
 void Transport::unpackBenchData(Frame frame) {
-	frame.unPack(this->_benchData.dValue1);
-	frame.unPack(this->_benchData.fValue2);
-	frame.unPack(this->_benchData.iValue3);
-	frame.unPack(this->_benchData.cValue4);
+	frame.unPack(benchData.dValue1);
+	frame.unPack(benchData.fValue2);
+	frame.unPack(benchData.iValue3);
+	frame.unPack(benchData.cValue4);
 }
 
 void Transport::unpackTrajRampData(Frame frame) {
-	frame.unPack(this->_trajData.dStartValue);
-	frame.unPack(this->_trajData.lStartTime);
-	frame.unPack(this->_trajData.dEndValue);
-	frame.unPack(this->_trajData.lEndTime);
+	frame.unPack(trajData.dStartValue);
+	frame.unPack(trajData.lStartTime);
+	frame.unPack(trajData.dEndValue);
+	frame.unPack(trajData.lEndTime);
 }
 
 void Transport::registerServer(Comm *serv)

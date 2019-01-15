@@ -7,7 +7,7 @@
 #include <AsTCP.h>
 #include <AsIOTime.h>
 #include "../Comm.h"
-#include "../Frame/Frame.h"
+#include "../Transport/Frame.h"
 
 /** \file TCPServer.h
  *  \class TCPServer

@@ -12,6 +12,5 @@
     <Object Type="Library" Language="ANSIC">TCPServer</Object>
     <Object Type="Library" Language="ANSIC">Transport</Object>
     <Object Type="File">Comm.h</Object>
-    <Object Type="Library" Language="ANSIC">Frame</Object>
   </Objects>
 </Package>

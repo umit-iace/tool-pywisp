@@ -4,8 +4,9 @@
   <Module Name="X20CP1586" Type="X20CP1586" Version="1.4.2.0">
     <Connector Name="IF2">
       <Parameter ID="ActivateDevice" Value="1" />
+      <Parameter ID="Mode" Value="Manual" />
+      <Parameter ID="InternetAddress" Value="127.0.0.1" />
     </Connector>
     <Parameter ID="ConfigurationID" Value="br_server_minimal" />
-    <Parameter ID="Simulation" Value="1" />
   </Module>
 </Hardware>

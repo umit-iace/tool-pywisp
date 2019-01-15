@@ -1,12 +1,10 @@
-
+#include <bur/plc.h>
 #include <bur/plctypes.h>
-#include "../Libraries/Transport/Transport.h"
-
 #ifdef _DEFAULT_INCLUDES
 	#include <AsDefault.h>
 #endif
 
-Transport transport;
+#include "../Libraries/Transport/Transport.h"
 
 // amount of memory to be allocated for heap storage must be specified for every ANSI C++ program with the bur_heap_size variable
 unsigned long bur_heap_size = 0xFFFF; 
@@ -17,34 +15,41 @@ const unsigned long lDt = 1000;          ///< Sampling step [ms]
  * @param _benchData pointer to test rig data struct
  * @param _trajData pointer to trajectory struct
  */
-void fTrajectory(struct Transport::benchData *_benchData, struct Transport::trajData *_trajData) {
-	if (_benchData->lTime < _trajData->lStartTime) {
-		_trajData->dOutput = _trajData->dStartValue;
+void fTrajectory() {
+	if ( benchData.lTime < trajData.lStartTime ) {
+		trajData.dOutput = trajData.dStartValue;
 	} else {
-		if (_benchData->lTime < _trajData->lEndTime) {
-			double dM = (_trajData->dEndValue - _trajData->dStartValue) / (_trajData->lEndTime - _trajData->lStartTime);
-			double dN = _trajData->dEndValue - dM * _trajData->lEndTime;
-			_trajData->dOutput = dM * _benchData->lTime + dN;
+		if (benchData.lTime < trajData.lEndTime) {
+			double dM = (trajData.dEndValue - trajData.dStartValue) / (trajData.lEndTime - trajData.lStartTime);
+			double dN = trajData.dEndValue - dM * trajData.lEndTime;
+			trajData.dOutput = dM * benchData.lTime + dN;
 		} else {
-			_trajData->dOutput = _trajData->dEndValue;
+			trajData.dOutput = trajData.dEndValue;
 		}
 	}
 }
 
 void _INIT ProgramInit(void)
 {
-	// Insert code here 
-
+	benchData.lTime = 0;
+	benchData.dValue1 = 0;
+	benchData.fValue2 = 0;
+	benchData.iValue3 = 0;
+	benchData.cValue4 = 0;
+	
+	trajData.dStartValue = 0;
+	trajData.lStartTime = 0;
+	trajData.dEndValue = 0;
+	trajData.lEndTime = 0;
+	trajData.dOutput = 0;
 }
 
 void _CYCLIC ProgramCyclic(void)
 {
-	if (transport.runExp()) {
-		transport._benchData.lTime += lDt;
+	if (expData.bActivateExperiment) {
+		benchData.lTime += lDt;
 
-		fTrajectory(&transport._benchData, &transport._trajData);
-
-		transport.sendData();
+		fTrajectory();
 	}
 }
 

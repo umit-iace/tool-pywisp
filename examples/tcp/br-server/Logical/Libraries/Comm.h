@@ -1,7 +1,7 @@
 #ifndef COMM_H
 #define COMM_H
 
-#include "Frame/Frame.h"
+#include "Transport/Frame.h"
 
 #define MAX_PAYLOAD (80)
 

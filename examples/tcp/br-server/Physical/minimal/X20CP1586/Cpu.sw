@@ -20,6 +20,5 @@
     <LibraryObject Name="runtime" Source="Libraries.runtime.lby" Memory="UserROM" Language="Binary" Debugging="true" />
     <LibraryObject Name="TCPServer" Source="Libraries.TCPServer.lby" Memory="None" Language="ANSIC" Debugging="true" />
     <LibraryObject Name="Transport" Source="Libraries.Transport.lby" Memory="None" Language="ANSIC" Debugging="true" />
-    <LibraryObject Name="Frame" Source="Libraries.Frame.lby" Memory="None" Language="ANSIC" Debugging="true" />
   </Libraries>
 </SwConfiguration>
