@@ -9,8 +9,8 @@
 #include "../Comm.h"
 #include "../Transport/Frame.h"
 
-/** \file TCPServer.h
- *  \class TCPServer
+/** \file TcpServer.h
+ *  \class TcpServer
  *  \brief Klasse Aufsetzen eines TCP Servers
  *
  *  Über die AsTCP Bibliothek wird der TCP Server initialisiert und ausgeführt.
@@ -18,7 +18,7 @@
  *  aufgerufen. Zudem wird der Eventlogger verwendet, um evtl. Fehler zu loggen.
  */
 
-class TCPServer: public Comm{
+class TcpIpServer: public Comm{
 	public:
 	/** Status definition der Klasse*/
 	enum Status
@@ -43,16 +43,16 @@ class TCPServer: public Comm{
 	Status _status;
 	Status _status_sub;
 	/* Pointer auf Funktionsblöcke*/
-	struct TcpOpen TcpOpen_0;
-	struct TcpServer TcpServer_0;
-	struct TcpIoctl TcpIoctl_0;
-	struct TcpRecv TcpRecv_0;
-	struct TcpSend TcpSend_0;
-	struct TcpClose TcpClose_0;
-	struct tcpLINGER_typ linger_opt;
+	struct TcpOpen *TcpOpen_0;
+	struct TcpServer *TcpServer_0;
+	struct TcpIoctl *TcpIoctl_0;
+	struct TcpRecv *TcpRecv_0;
+	struct TcpSend *TcpSend_0;
+	struct TcpClose *TcpClose_0;
+	struct tcpLINGER_typ *linger_opt;
 	unsigned int linger_opt_len;
 	/**< Sende- und Empfangsbuffer mit Längen und cursor*/
-	Frame buffer_out[255];
+	unsigned char buffer_out[255 * (MAX_PAYLOAD + 1)];
 	unsigned int outc;
 	unsigned char buffer_in[255 * (MAX_PAYLOAD + 1)];
 	unsigned int recvlength;
@@ -63,8 +63,17 @@ class TCPServer: public Comm{
 	Comm *transp;
     
 	public:
-	TCPServer(int port)
+	TcpIpServer(int port,
+		TcpServer_instances *tcp_inst)
 		:server_port(port),
+		TcpOpen_0(&(tcp_inst->TcpOpen_0)),
+		TcpServer_0(&(tcp_inst->TcpServer_0)),
+		TcpIoctl_0(&(tcp_inst->TcpIoctl_0)),
+		TcpRecv_0(&(tcp_inst->TcpRecv_0)),
+		TcpSend_0(&(tcp_inst->TcpSend_0)),
+		TcpClose_0(&(tcp_inst->TcpClose_0)),
+		linger_opt(&(tcp_inst->linger_opt)),
+		linger_opt_len(sizeof(tcp_inst->linger_opt)),
 		status(_status)
 	{};
 	/**< Initialisierungsmethode*/

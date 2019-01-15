@@ -2,7 +2,7 @@
 <?AutomationStudio Version=4.4.6.71 SP?>
 <Library xmlns="http://br-automation.co.at/AS/Library">
   <Files>
-    <File>TcpServer.cpp</File>
-    <File>TcpServer.h</File>
+    <File>TcpIpServer.cpp</File>
+    <File>TcpIpServer.h</File>
   </Files>
 </Library>

@@ -5,7 +5,7 @@
   <TaskClass Name="Cyclic#2" />
   <TaskClass Name="Cyclic#3" />
   <TaskClass Name="Cyclic#4">
-    <Task Name="TCP_Server" Source="TCP_Server.prg" Memory="UserROM" Language="ANSIC" Debugging="true" />
+    <Task Name="TCP_Server" Source="TcpIpServer.prg" Memory="UserROM" Language="ANSIC" Debugging="true" />
   </TaskClass>
   <TaskClass Name="Cyclic#5" />
   <TaskClass Name="Cyclic#6" />
@@ -18,7 +18,7 @@
     <LibraryObject Name="AsIOTime" Source="Libraries.AsIOTime.lby" Memory="UserROM" Language="Binary" Debugging="true" />
     <LibraryObject Name="AsTCP" Source="Libraries.AsTCP.lby" Memory="UserROM" Language="Binary" Debugging="true" />
     <LibraryObject Name="runtime" Source="Libraries.runtime.lby" Memory="UserROM" Language="Binary" Debugging="true" />
-    <LibraryObject Name="TCPServer" Source="Libraries.TCPServer.lby" Memory="None" Language="ANSIC" Debugging="true" />
+    <LibraryObject Name="TcpIp" Source="Libraries.TcpIp.lby" Memory="None" Language="ANSIC" Debugging="true" />
     <LibraryObject Name="Transport" Source="Libraries.Transport.lby" Memory="None" Language="ANSIC" Debugging="true" />
   </Libraries>
 </SwConfiguration>

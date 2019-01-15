@@ -9,6 +9,6 @@
       <Parameter ID="SubnetMask" Value="255.255.255.0" />
     </Connector>
     <Parameter ID="ConfigurationID" Value="br_server_minimal" />
-    <Parameter ID="SimulationIPAddress" Value="10.4.22.176" />
+    <Parameter ID="Simulation" Value="1" />
   </Module>
 </Hardware>

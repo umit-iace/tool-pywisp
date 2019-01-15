@@ -5,7 +5,7 @@
     <Object Type="File" Description="Global data types">Global.typ</Object>
     <Object Type="File" Description="Global variables">Global.var</Object>
     <Object Type="Package" Description="Global libraries">Libraries</Object>
-    <Object Type="Program" Language="ANSIC">TCP_Server</Object>
+    <Object Type="Program" Language="ANSIC">TcpIpServer</Object>
     <Object Type="Program" Language="ANSIC">ControlLoop</Object>
   </Objects>
 </Package>
