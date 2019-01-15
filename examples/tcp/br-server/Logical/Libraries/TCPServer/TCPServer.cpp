@@ -94,7 +94,7 @@ void TCPServer::init()
 			TcpIoctl_0.ident = this->client_ident;
 			TcpIoctl_0.ioctl = tcpSO_LINGER_SET;
 			TcpIoctl_0.pData = (unsigned long) &this->linger_opt;
-			TcpIoctl_0.datalen = this->linger_opt_len;
+			TcpIoctl_0.datalen = this->linger_opt_len; // TODO always 0? seems wrong
 			TcpIoctl_0.enable = true;
 			TcpIoctl(&TcpIoctl_0);
 			if (TcpIoctl_0.status == ERR_OK) {
@@ -264,6 +264,7 @@ void TCPServer::sync()
 void TCPServer::close_sockets()
 {
 	_status = BUSY;
+	static int tcp_step = 0;
 	switch (tcp_step)
 	{
 		case 0:

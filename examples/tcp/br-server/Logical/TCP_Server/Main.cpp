@@ -26,6 +26,9 @@ void _INIT ProgramInit(void)
 	TCPS_0.registerListener(&transport);
 	transport.registerServer(&TCPS_0);
 	TCPS_0.deinit();
+	for (long int i = 0; i < 0xFFFFFFFF; ++i)
+		;
+	
 }
 
 void _CYCLIC ProgramCyclic(void)
@@ -36,17 +39,17 @@ void _CYCLIC ProgramCyclic(void)
             /**< Starte Server und warte auf Client*/
             TCPS_0.init();
             if (TCPS_0.status == TCPServer::READY)
-                Main_state = 1;
+				;//Main_state = 1; TODO DEBUG
             else if ((TCPS_0.status == TCPServer::STOP) || (TCPS_0.status == TCPServer::ERROR))
-                Main_state = 255;
+				;//Main_state = 255; TODO DEBUG
             break;
         case 1:
             /**< Lese und Schreibe mit Client*/
             TCPS_0.sync();
             if (TCPS_0.status == TCPServer::READY)
-                Main_state = 1;
+				Main_state = 1;
             else if ((TCPS_0.status == TCPServer::STOP) || (TCPS_0.status == TCPServer::ERROR))
-                Main_state = 10;
+				Main_state = 10;
             break;
         case 10:
             /**< Schließe Verbindung*/
@@ -67,10 +70,14 @@ void _CYCLIC ProgramCyclic(void)
         default:
             break;
     }
-	
-//	if (expData.bActivateExperiment) {
-//		transport.sendData();
-//	}
+	if (expData.bActivateExperiment) {
+		if (counter_tcp >= 10) {        
+			transport.sendData();
+			counter_tcp = 0;
+		} else {
+			counter_tcp += 1;
+		}
+	}
 }
 
 void _EXIT ProgramExit(void)
