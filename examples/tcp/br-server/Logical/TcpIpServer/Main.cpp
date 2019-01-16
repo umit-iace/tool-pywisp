@@ -69,12 +69,8 @@ void _CYCLIC ProgramCyclic(void)
 	}
 	/**< Sende alle 100 ms Messdaten zu Pywisp*/
 	if (expData.bActivateExperiment) {
-		if (counter_tcp >= 10) {        
-			transport.sendData();
-			counter_tcp = 0;
-		} else {
-			counter_tcp += 1;
-		}
+		transport.sendData();
+		benchData.lTime += 100;
 	}
 }
 

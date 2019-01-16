@@ -46,11 +46,7 @@ void _INIT ProgramInit(void)
 
 void _CYCLIC ProgramCyclic(void)
 {
-	if (expData.bActivateExperiment) {
-		benchData.lTime += lDt;
-
 		fTrajectory();
-	}
 }
 
 void _EXIT ProgramExit(void)
