@@ -304,3 +304,14 @@ void TcpIpServer::registerListener(Comm *t)
 {
 	transp = t;
 }
+
+void TcpIpServer::resetBuffs(void)
+{
+	outc = 0;
+	recvlength = 0;
+	for (int i = 0; i < 255 * (MAX_PAYLOAD + 1); ++i) {
+		buffer_out[i] = 0;
+		buffer_in[i] = 0;
+	}
+}
+	

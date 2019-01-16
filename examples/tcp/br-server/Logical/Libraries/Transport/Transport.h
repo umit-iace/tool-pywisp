@@ -34,6 +34,7 @@ class Transport: public Comm {
 	void unpackBenchData(Frame frame);
 
 	void unpackTrajRampData(Frame frame);
+	void resetBuffs(void);
 
 };
 

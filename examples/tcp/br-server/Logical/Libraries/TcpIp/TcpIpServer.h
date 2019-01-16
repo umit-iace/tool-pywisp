@@ -77,5 +77,6 @@ class TcpIpServer: public Comm{
 	/** Method to queue communication frame */
 	void handleFrame(Frame frame);
 	void registerListener(Comm *transp);
+	void resetBuffs(void);
 };
 #endif //TCPSERVER_CLASS_H

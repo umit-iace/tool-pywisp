@@ -6,8 +6,9 @@
 #define MAX_PAYLOAD (80)
 
 class Comm {
-public:
+	public:
 	virtual void handleFrame(Frame frame) = 0;
+	virtual void resetBuffs(void) = 0;
 };
 
 #endif
