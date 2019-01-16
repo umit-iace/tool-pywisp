@@ -49,7 +49,6 @@ class TcpIpServer: public Comm{
 	struct TcpRecv TcpRecv_0;
 	struct TcpSend TcpSend_0;
 	struct TcpClose TcpClose_0;
-	struct tcpLINGER_typ linger_opt;
 	/**< Sende- und Empfangsbuffer mit Längen und cursor*/
 	unsigned char buffer_out[255 * (MAX_PAYLOAD + 1)];
 	unsigned int outc;

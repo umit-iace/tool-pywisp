@@ -1,5 +1,7 @@
 #include "TcpIpServer.h"
 
+#define LINGER_ON (1)
+
 /** \file TcpIpServer.cpp
  *  \brief Implementation der TcpServer Klasse
  */
@@ -24,6 +26,7 @@ void TcpIpServer::deinit()
 void TcpIpServer::init()
 {
 	this->_status = BUSY;
+	static const struct tcpLINGER_typ linger_opt = {LINGER_ON, 0};			
 	switch(tcp_step) {
 		case 0:
 			deinit();
@@ -195,7 +198,7 @@ void TcpIpServer::sync()
 				case READY:
 					if (this->recvlength > 0) {
 						unsigned char *pointer = buffer_in;
-						while (pointer - buffer_in < this->recvlength) {
+						while (pointer - buffer_in < (signed long)this->recvlength) {
 							Frame frame(pointer++[0]);
 							for (int i = 0; i < MAX_PAYLOAD; ++i)
 								frame.data.payload[i] = *pointer++;

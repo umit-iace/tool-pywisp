@@ -1,4 +1,3 @@
 VAR
-	TcpServer_instance_0  : TcpServer_instances;
 	Main_state : USINT := 0;
 END_VAR

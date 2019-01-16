@@ -13,7 +13,7 @@ unsigned long bur_heap_size = 0xFFFFF;
 int counter_close = 0;
 int counter_tcp = 0;
 /**< Instanz der Tcp Server Klasse*/
-TcpIpServer TCPS_0(50007, &TcpServer_instance_0); 
+TcpIpServer TCPS_0(50007); 
 
 /**< Instanz der Transport Klasse*/
 Transport transport;
@@ -56,7 +56,7 @@ void _CYCLIC ProgramCyclic(void)
 			break;
 		case 11:
 			/**< Warte 5 Sekunden und starte Server erneut*/
-			if (counter_close > 500)
+			if (counter_close > 50)
 			{
 				counter_close = 0;
 				Main_state = 0;
