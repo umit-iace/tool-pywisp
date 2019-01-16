@@ -43,14 +43,13 @@ class TcpIpServer: public Comm{
 	Status _status;
 	Status _status_sub;
 	/* Pointer auf Funktionsblöcke*/
-	struct TcpOpen *TcpOpen_0;
-	struct TcpServer *TcpServer_0;
-	struct TcpIoctl *TcpIoctl_0;
-	struct TcpRecv *TcpRecv_0;
-	struct TcpSend *TcpSend_0;
-	struct TcpClose *TcpClose_0;
-	struct tcpLINGER_typ *linger_opt;
-	unsigned int linger_opt_len;
+	struct TcpOpen TcpOpen_0;
+	struct TcpServer TcpServer_0;
+	struct TcpIoctl TcpIoctl_0;
+	struct TcpRecv TcpRecv_0;
+	struct TcpSend TcpSend_0;
+	struct TcpClose TcpClose_0;
+	struct tcpLINGER_typ linger_opt;
 	/**< Sende- und Empfangsbuffer mit Längen und cursor*/
 	unsigned char buffer_out[255 * (MAX_PAYLOAD + 1)];
 	unsigned int outc;
@@ -63,17 +62,8 @@ class TcpIpServer: public Comm{
 	Comm *transp;
     
 	public:
-	TcpIpServer(int port,
-		TcpServer_instances *tcp_inst)
+	TcpIpServer(int port)
 		:server_port(port),
-		TcpOpen_0(&(tcp_inst->TcpOpen_0)),
-		TcpServer_0(&(tcp_inst->TcpServer_0)),
-		TcpIoctl_0(&(tcp_inst->TcpIoctl_0)),
-		TcpRecv_0(&(tcp_inst->TcpRecv_0)),
-		TcpSend_0(&(tcp_inst->TcpSend_0)),
-		TcpClose_0(&(tcp_inst->TcpClose_0)),
-		linger_opt(&(tcp_inst->linger_opt)),
-		linger_opt_len(sizeof(tcp_inst->linger_opt)),
 		status(_status)
 	{};
 	/**< Initialisierungsmethode*/
