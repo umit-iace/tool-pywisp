@@ -953,15 +953,15 @@ class MainGui(QMainWindow):
             self.experimentList.item(i).setBackground(QBrush(Qt.white))
         self.experimentList.repaint()
 
-        for conn, connInstance in self.connections.items():
-            connInstance.doRead = False
-
         self.timer.stop()
         self.exp.stopExperiment()
 
+        time.sleep(1)
+        
         for conn, connInstance in self.connections.items():
+            connInstance.doRead = False
             connInstance.clear()
-
+            
     def sendParameter(self):
         """
         Sends all parameters of the current experiment with `ExperimentInteractor` function `sendParameterExperiment`
