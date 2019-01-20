@@ -5,6 +5,7 @@ from copy import deepcopy
 
 import pkg_resources
 import serial.tools.list_ports
+import time
 import yaml
 from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QSettings, QCoreApplication
 from PyQt5.QtGui import *
@@ -957,11 +958,11 @@ class MainGui(QMainWindow):
         self.exp.stopExperiment()
 
         time.sleep(1)
-        
+
         for conn, connInstance in self.connections.items():
             connInstance.doRead = False
             connInstance.clear()
-            
+
     def sendParameter(self):
         """
         Sends all parameters of the current experiment with `ExperimentInteractor` function `sendParameterExperiment`

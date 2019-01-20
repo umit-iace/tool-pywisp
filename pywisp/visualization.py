@@ -36,5 +36,5 @@ class MplVisualizer(Visualizer):
         self.qLayout.addWidget(self.canvas)
         self.qWidget.setLayout(self.qLayout)
 
-    def update(self, x):
+    def update(self, dataPoints):
         pass

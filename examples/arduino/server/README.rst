@@ -1,36 +1,28 @@
-=============================================
-Visualisierung für den Longpipe Versuchsstand
-=============================================
+==============================
+Server for the Arduino example
+==============================
 
-Zur Nutzung des Arduino-Codes sind die folgenden Programme notwendig:
+For the usage of the Arduino code the following programs are needed:
 
 - Arduino IDE
 - Python
 - make
 
-Zusätzlich werden die folgenden Repositories benötigt:
+Additionally to this the following repository must be cloned:
 
-- `avrlib <https://github.com/umit-iace/tool-avrlib>`_
 - `Arduino-Makefile <https://github.com/sudar/Arduino-Makefile>`_
 
-Nähere Informationen zur Installation entnehmen Sie der Dokumentation.
+Useage
+------
 
-
-Benutzung
----------
-
-Es ist zu beachten das nach klonen des Repositories das `makefile` nicht
-mehr getrackt werden muss, da jeder Nutzer spezifische Änderungen vornehmen
-muss. Zum Abschalten des Trackings muss das folgende ausgeführt werden:
+To compile the code:
 
 .. code:: bash
 
-    git update-index --assume-unchanged makefile
+    make
 
-Falls es notwendig sein sollte Änderungen einzuchecken, kann das Tracking mittels
+To upload the code to Arduino:
 
 .. code:: bash
 
-    git update-index --no-assume-unchanged makefile
-
-eingeschaltet werden.
+    make upload

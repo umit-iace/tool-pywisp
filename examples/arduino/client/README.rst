@@ -1,16 +1,13 @@
-======================================
-Visualisierung für Test TCP Verbindung
-======================================
+=====================================
+Visualization for the Arduino example
+=====================================
 
-Es wird das pyWisp-Packet benötigt.
+This `pyWisp` example can be used for the Arduino example.
 
-.. sphinx-marker
+Communication
+-------------
 
-Kommunikation mit Mikrocontroller
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Zur Kommunikation mit dem Mikrocontroller werden die folgenden Frames verwendet. Jedes Frame wird mittels einer
-spezifischen ID markiert.
+For the communication the following frames are used:
 
 
 .. list-table::
@@ -47,24 +44,3 @@ spezifischen ID markiert.
       - Startwert, Startzeit, Endwert, Endzeit
       - zum Server
       - RampTrajectory (Trajectory)
-
-Installation
-^^^^^^^^^^^^
-
-Für Benutzer:
-
-.. code-block:: bash
-
-    $ git clone https://github.com/umit-iace/tool-pywisp pywisp
-    $ cd pywisp
-    $ python setup.py install
-
-Für Entwickler:
-
-.. code-block:: bash
-
-    $ virtualenv pywisp
-    $ git clone https://github.com/umit-iace/tool-pywisp pywisp
-    $ cd pywisp/
-    $ python setup.py develop
-
