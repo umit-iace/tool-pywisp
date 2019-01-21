@@ -25,10 +25,10 @@ class Test(ExperimentModule):
 
     def getParams(self, data):
         payload = struct.pack('>dfhB',
-                              data[0],
-                              data[1],
-                              data[2],
-                              data[3])
+                              float(data[0]),
+                              float(data[1]),
+                              int(data[2]),
+                              int(data[3]) % 256)
         dataPoint = {'id': 12,
                      'msg': payload
                      }
