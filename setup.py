@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-
 try:
     from setuptools import setup
 except ImportError:
@@ -18,14 +17,14 @@ test_requirements = [
 
 setup(
     name="pywisp",
-    version="0.0.1",
+    version="0.1.0",
     description="Weird visualisation of test bench prototypes",
     long_description="Weird visualisation of test bench prototypes",
     classifiers=[
         "Natural Language :: English",
         "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
     ],
     keywords="pywisp visualisation arduino tcpip",
     url="https://github.com/umit-iace/tool-pywisp",
