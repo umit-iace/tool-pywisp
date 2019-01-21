@@ -38,7 +38,6 @@ void Transport::handleFrame(Frame frame)
 void Transport::unpackExp(Frame frame) {
 	frame.unPack(expData.bActivateExperiment);
 	benchData.lTime = 0;
-	this->tcp->resetBuffs();
 }
 
 void Transport::unpackBenchData(Frame frame) {
@@ -58,9 +57,4 @@ void Transport::unpackTrajRampData(Frame frame) {
 void Transport::registerServer(Comm *serv)
 {
 	this->tcp = serv;
-}
-
-void Transport::resetBuffs(void)
-{
-	// intentionally empty
 }

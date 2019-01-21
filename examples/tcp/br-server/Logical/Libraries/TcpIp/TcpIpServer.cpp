@@ -325,19 +325,3 @@ void TcpIpServer::registerListener(Comm *t)
 {
 	this->transp = t;
 }
-
-/**
- * @brief resets buffers to make sure we don't accidentally send stale data
- */
-void TcpIpServer::resetBuffs(void)
-{
-	this->outBufferLen[0] = 0;
-	this->outBufferLen[1] = 0;
-	this->inBufferLen = 0;
-	for (int i = 0; i < 255 * (MAX_PAYLOAD + 1); ++i) {
-		this->outBuffer[0][i] = 0;
-		this->outBuffer[1][i] = 0;
-		this->inBuffer[i] = 0;
-	}
-}
-	

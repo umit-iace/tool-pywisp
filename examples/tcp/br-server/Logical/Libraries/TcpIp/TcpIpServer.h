@@ -74,7 +74,5 @@ class TcpIpServer: public Comm{
 	void handleFrame(Frame frame);
 	/** Method to register the transport protocol instance */
 	void registerListener(Comm *transp);
-	/** Method to reset buffers upon experiment end */
-	void resetBuffs(void);
 };
 #endif //TCPSERVER_CLASS_H
