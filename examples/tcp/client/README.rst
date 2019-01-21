@@ -4,8 +4,10 @@ Visualization for the TCP example
 
 This `pyWisp` example can be used for the PC and for the B&R example.
 
+.. sphinx-marker
+
 Communication
--------------
+^^^^^^^^^^^^^
 
 For the communication the following frames are used:
 

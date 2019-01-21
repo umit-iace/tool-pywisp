@@ -4,8 +4,10 @@ Visualization for the Arduino example
 
 This `pyWisp` example can be used for the Arduino example.
 
+.. sphinx-marker
+
 Communication
--------------
+^^^^^^^^^^^^^
 
 For the communication the following frames are used:
 

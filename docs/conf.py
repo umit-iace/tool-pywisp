@@ -72,7 +72,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'pywisp'
+project = u'pyWisp'
 copyright = u'2018, IACE'
 
 # The version info for the project you're documenting, acts as replacement
@@ -159,12 +159,12 @@ if not on_rtd:  # only import and set the theme if we're building docs locally
 
 # The name of an image file (relative to this directory) to place at the
 # top of the sidebar.
-# html_logo = None
+html_logo = "../pywisp/resources/icons/icon128.png"
 
 # The name of an image file (within the static path) to use as favicon
 # of the docs.  This file should be a Windows icon file (.ico) being
 # 16x16 or 32x32 pixels large.
-# html_favicon = "../pywisp/resources/icons/mosquito_small.ico"
+html_favicon = "../pywisp/resources/icons/icon.ico"
 
 # Add any paths that contain custom static files (such as style sheets)
 # here, relative to this directory. They are copied after the builtin
@@ -237,13 +237,13 @@ latex_elements = {
 # [howto/manual]).
 latex_documents = [
     ('index', 'pywisp.tex',
-     u'pywisp Documentation',
+     u'pyWisp Documentation',
      u'IACE', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at
 # the top of the title page.
-latex_logo = "../pywisp/resources/icons/no-mosquito.pdf"
+latex_logo = "../pywisp/resources/icons/icon.pdf"
 
 # For "manual" documents, if this is true, then toplevel headings
 # are parts, not chapters.
@@ -267,8 +267,8 @@ latex_logo = "../pywisp/resources/icons/no-mosquito.pdf"
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'pywisp',
-     u'pywisp Documentation',
+    ('index', 'pyWisp',
+     u'pyWisp Documentation',
      [u'IACE'], 1)
 ]
 
@@ -282,11 +282,14 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    ('index', 'pywisp',
-     u'pywisp Documentation',
+    ('index', 'pyWisp',
+     u'pyWisp Documentation',
      u'IACE',
-     'pywisp',
-     'One line description of project.',
+     'pyWisp',
+     'PyWisp stands for Weird visualisation of test bench prototypes and is targeted at students and researchers '
+     'working in control engineering. It helps to implement and run a communication and visualization for a test bench.'
+     'Based on PyMoskito GUI it is easy to use, if you run your simulations in it. It uses the same modular structure '
+     'to design a control flow for the test bench.',
      'Miscellaneous'),
 ]
 

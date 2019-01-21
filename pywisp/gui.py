@@ -53,9 +53,9 @@ class MainGui(QMainWindow):
         self._experiments = []
 
         # window properties
-        icon_size = QSize(25, 25)
-        res_path = get_resource("icon.png")
-        icon = QIcon(res_path)
+        iconSize = QSize(25, 25)
+        resPath = get_resource("icon.svg")
+        icon = QIcon(resPath)
         self.setWindowIcon(icon)
         self.resize(1000, 700)
         self.setWindowTitle('Visualization')
@@ -327,7 +327,7 @@ class MainGui(QMainWindow):
         self.toolbarExp = QToolBar("Experiment")
         self.toolbarExp.setContextMenuPolicy(Qt.PreventContextMenu)
         self.toolbarExp.setMovable(False)
-        self.toolbarExp.setIconSize(icon_size)
+        self.toolbarExp.setIconSize(iconSize)
         self.addToolBar(self.toolbarExp)
         self.toolbarExp.addAction(self.actConnect)
         self.toolbarExp.addAction(self.actDisconnect)
