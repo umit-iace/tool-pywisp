@@ -33,7 +33,7 @@ deploy:
     - pip install -r requirements.txt
     - pip install -U twine
     - python setup.py sdist bdist_wheel
-    - twine upload -r nexus dist/* --config-file /etc/pypirc
+    - twine upload dist/* --config-file /etc/pypirc
     - rm -rf *
   only:
     - tags
