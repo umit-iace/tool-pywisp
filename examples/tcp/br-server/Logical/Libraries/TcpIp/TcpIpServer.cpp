@@ -67,7 +67,6 @@ void TcpIpServer::init()
 			TcpIoctl_0.enable = true;
 			TcpIoctl(&TcpIoctl_0);
 			if (TcpIoctl_0.status == ERR_OK) {
-				//this->outlen = TcpIoctl_0.outlen;
 				tcp_step = 3;
 			} else if (TcpIoctl_0.status == ERR_FUB_BUSY) {
 				// intentionally blank
@@ -85,7 +84,6 @@ void TcpIpServer::init()
 			TcpServer(&TcpServer_0);
 			if (TcpServer_0.status == ERR_OK) {
 				this->clientID = TcpServer_0.identclnt;
-				//this->clientPort = TcpServer_0.portclnt;
 				tcp_step = 4;
 			} else if (TcpServer_0.status == ERR_FUB_BUSY) {
 				//intentionally blank
@@ -103,7 +101,6 @@ void TcpIpServer::init()
 			TcpIoctl_0.enable = true;
 			TcpIoctl(&TcpIoctl_0);
 			if (TcpIoctl_0.status == ERR_OK) {
-			//	this->client_outlen = TcpIoctl_0.outlen;
 				this->_status = READY;
 				tcp_step = 0;
 			} else if (TcpIoctl_0.status == ERR_FUB_BUSY) {
@@ -202,12 +199,15 @@ void TcpIpServer::handleFrame(Frame frame)
 	}
 }
 	
+/**
+ * @brief reads and writes data from and to client
+ */
 void TcpIpServer::sync()
 {
 	this->_status = BUSY;
 	switch (tcp_step) {
 		case 0:
-			/**< Lese von Client*/
+			/* read from client */
 			this->_status_sub = read();
 			switch (this->_status_sub) {
 				case READY:
@@ -221,8 +221,8 @@ void TcpIpServer::sync()
 						}
 						this->inBufferLen = 0;
 					}
-					/**< Sende Daten falls vorhanden*/
-					if (1){//this->outBufferLen[this->cOutBuf] > 0) {
+					/* send data if available */
+					if (this->outBufferLen[this->cOutBuf] || this->outBufferLen[!this->cOutBuf]) {
 						tcp_step = 1;
 					} else {
 						tcp_step = 0;
@@ -243,7 +243,7 @@ void TcpIpServer::sync()
 			}
 			break;
 		case 1:
-			/**< Schreibe Daten an Client*/
+			/* send data to client */
 			_status_sub = write();
 			switch (_status_sub) {
 				case READY:
@@ -268,13 +268,16 @@ void TcpIpServer::sync()
 	}
 }
 
+/**
+ * @brief closes sockets upon client disconnect
+ */
 void TcpIpServer::closeSockets()
 {
 	_status = BUSY;
 	switch (tcp_step)
 	{
 		case 0:
-			/**< Schließe Client Socket*/
+			/* close client socket */
 			TcpClose_0.ident = this->clientID;
 			TcpClose_0.how = 0;
 			TcpClose_0.enable = true;
@@ -292,7 +295,7 @@ void TcpIpServer::closeSockets()
 			}
 			break;
 		case 1:
-			/**< Schließe Server*/
+			/* end server */
 			TcpClose_0.ident = this->serverID;
 			TcpClose_0.how = 0;
 			TcpClose_0.enable = true;
@@ -315,11 +318,17 @@ void TcpIpServer::closeSockets()
 	}  
 }
 
+/**
+ * @brief registers transport protocol for handling incoming data
+ */
 void TcpIpServer::registerListener(Comm *t)
 {
 	this->transp = t;
 }
 
+/**
+ * @brief resets buffers to make sure we don't accidentally send stale data
+ */
 void TcpIpServer::resetBuffs(void)
 {
 	this->outBufferLen[0] = 0;

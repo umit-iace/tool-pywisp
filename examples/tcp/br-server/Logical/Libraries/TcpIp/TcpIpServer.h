@@ -13,7 +13,7 @@
  *  @class TcpIpServer
  *  @brief Implementation of a simple TCP Server
  *
- *	The server is initialised and run using the AsTCP library.
+ *	The server is initialised and run using the BuR AsTCP library.
  */
 
 class TcpIpServer: public Comm{
@@ -29,11 +29,9 @@ class TcpIpServer: public Comm{
 	private:
 	const int serverPort;		///< port to be used by the server
 	unsigned long serverID;		///< server ID for function blocks
-	//unsigned long outlen;
+
 	unsigned long clientIp;		///< IP address of connected client
 	unsigned long clientID;		///< client ID for function blocks
-	//unsigned int clientPort;	///< port of client
-	//unsigned long client_outlen;
 
 	unsigned short tcp_step;		///< step variable for the server state-machine
 
@@ -47,13 +45,12 @@ class TcpIpServer: public Comm{
 	struct TcpSend TcpSend_0;
 	struct TcpClose TcpClose_0;
 
-
 	unsigned char outBuffer[2][255 * (MAX_PAYLOAD + 1)];
 	unsigned int outBufferLen[2];
 	unsigned char cOutBuf;
 	unsigned char inBuffer[255 * (MAX_PAYLOAD + 1)];
 	unsigned int inBufferLen;
-	/**< Tcp read und write Funktionen*/
+
 	Status read();
 	Status write();
 
@@ -64,14 +61,14 @@ class TcpIpServer: public Comm{
 		:serverPort(port),
 		status(_status)
 	{};
-	/**< Initialisierungsmethode*/
+
 	void deinit();
 	void init();
-	/**< Zyklische Lese- und Schreibmethode*/
+	/** cyclic read/write method */
 	void sync();
-	/**< Schließen der Sockets*/
+
 	void closeSockets();
-	/**< Readonly methode um Status zu lesen*/
+	/** readonly pointer to server status */
 	const Status &status;
 	/** Method to queue communication frame */
 	void handleFrame(Frame frame);
