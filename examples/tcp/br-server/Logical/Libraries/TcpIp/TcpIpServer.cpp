@@ -35,6 +35,7 @@ void TcpIpServer::init()
 	switch(tcp_step) {
 		case 0:
 			deinit();
+			this->cOutBuf = 0;
 			tcp_step = 1;
 			break;
 		case 1:
@@ -166,14 +167,15 @@ TcpIpServer::Status TcpIpServer::read()
 TcpIpServer::Status TcpIpServer::write()
 {
 	TcpSend_0.ident = this->clientID;
-	TcpSend_0.pData = (unsigned long) this->outBuffer;
-	TcpSend_0.datalen = this->outBufferLen;
+	TcpSend_0.pData = (unsigned long) this->outBuffer[cOutBuf];
+	TcpSend_0.datalen = this->outBufferLen[cOutBuf];
 	TcpSend_0.flags = 0;
 	TcpSend_0.enable = true;
 	TcpSend(&TcpSend_0);
 	if (TcpSend_0.status == ERR_OK)
 	{
-		this->outBufferLen = 0;
+		this->outBufferLen[cOutBuf] = 0;
+		cOutBuf = !cOutBuf;
 		return READY;
 	}
 	else if (TcpSend_0.status == ERR_FUB_BUSY)
@@ -188,15 +190,18 @@ TcpIpServer::Status TcpIpServer::write()
 	return BUSY;
 }
 
+/**
+ * @brief writes outgoing frames to the currently unused outBuffer
+ */
 void TcpIpServer::handleFrame(Frame frame)
 {
-	this->buffer_out[this->outc++] = frame.data.id;
+	unsigned char w = !this->cOutBuf; 
+	this->outBuffer[w][this->outBufferLen[w]++] = frame.data.id;
 	for (int i = 0; i < MAX_PAYLOAD; ++i) {
-		this->buffer_out[this->outc++] = frame.data.payload[i];
+		this->outBuffer[w][this->outBufferLen[w]++] = frame.data.payload[i];
 	}
 }
 	
-
 void TcpIpServer::sync()
 {
 	this->_status = BUSY;
@@ -217,7 +222,7 @@ void TcpIpServer::sync()
 						this->inBufferLen = 0;
 					}
 					/**< Sende Daten falls vorhanden*/
-					if (this->outBufferLen > 0) {
+					if (1){//this->outBufferLen[this->cOutBuf] > 0) {
 						tcp_step = 1;
 					} else {
 						tcp_step = 0;
@@ -317,10 +322,12 @@ void TcpIpServer::registerListener(Comm *t)
 
 void TcpIpServer::resetBuffs(void)
 {
-	this->outBufferLen = 0;
+	this->outBufferLen[0] = 0;
+	this->outBufferLen[1] = 0;
 	this->inBufferLen = 0;
 	for (int i = 0; i < 255 * (MAX_PAYLOAD + 1); ++i) {
-		this->outBuffer[i] = 0;
+		this->outBuffer[0][i] = 0;
+		this->outBuffer[1][i] = 0;
 		this->inBuffer[i] = 0;
 	}
 }

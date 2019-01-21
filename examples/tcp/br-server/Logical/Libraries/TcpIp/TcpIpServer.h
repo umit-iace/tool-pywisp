@@ -47,16 +47,18 @@ class TcpIpServer: public Comm{
 	struct TcpSend TcpSend_0;
 	struct TcpClose TcpClose_0;
 
-	unsigned char outBuffer[255 * (MAX_PAYLOAD + 1)];
-	unsigned int outBufferLen;
+
+	unsigned char outBuffer[2][255 * (MAX_PAYLOAD + 1)];
+	unsigned int outBufferLen[2];
+	unsigned char cOutBuf;
 	unsigned char inBuffer[255 * (MAX_PAYLOAD + 1)];
 	unsigned int inBufferLen;
 	/**< Tcp read und write Funktionen*/
 	Status read();
 	Status write();
-	
+
 	Comm *transp;
-    
+
 	public:
 	TcpIpServer(int port)
 		:serverPort(port),
