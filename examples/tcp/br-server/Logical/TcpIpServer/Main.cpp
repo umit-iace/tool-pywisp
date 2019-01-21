@@ -9,65 +9,63 @@
      every ANSI C++ program with the bur_heap_size variable */
 unsigned long bur_heap_size = 0xFFFFF; 
 
-/**< Zählervariablen*/
-int counter_close = 0;
-int counter_tcp = 0;
-/**< Instanz der Tcp Server Klasse*/
-TcpIpServer TCPS_0(50007); 
+int counterClose = 0;
+int counterTcp = 0;
 
-/**< Instanz der Transport Klasse*/
+/** TcpIpServer instance */
+TcpIpServer Server(50007); 
+
+/** Transport instance */
 Transport transport;
 
 void _INIT ProgramInit(void)
 {
-	Main_state = 0;
-	counter_close = 0;
-	counter_tcp = 0;
-	TCPS_0.registerListener(&transport);
-	transport.registerServer(&TCPS_0);
-	TCPS_0.deinit();
+	mainState = 0;
+	counterClose = 0;
+	counterTcp = 0;
+	Server.registerListener(&transport);
+	transport.registerServer(&Server);
+	Server.deinit();
 }
 
 void _CYCLIC ProgramCyclic(void)
 {
-	switch (Main_state)
+	switch (mainState)
 	{
 		case 0:
-			/**< Starte Server und warte auf Client*/
-			TCPS_0.init();
-			if (TCPS_0.status == TcpIpServer::READY)
-				Main_state = 1;
-			else if ((TCPS_0.status == TcpIpServer::STOP) || (TCPS_0.status == TcpIpServer::ERROR))
-				Main_state = 255;
+			/** start server and wait for client*/
+			Server.init();
+			if (Server.status == TcpIpServer::READY)
+				mainState = 1;
+			else if ((Server.status == TcpIpServer::STOP) || (Server.status == TcpIpServer::ERROR))
+				mainState = 255;
 			break;
 		case 1:
-			/**< Lese und Schreibe mit Client*/
-			TCPS_0.sync();
-			if (TCPS_0.status == TcpIpServer::READY)
-				Main_state = 1;
-			else if ((TCPS_0.status == TcpIpServer::STOP) || (TCPS_0.status == TcpIpServer::ERROR))
-				Main_state = 10;
+			/** read from and write to client */
+			Server.sync();
+			if (Server.status == TcpIpServer::READY)
+				mainState = 1;
+			else if ((Server.status == TcpIpServer::STOP) || (Server.status == TcpIpServer::ERROR))
+				mainState = 10;
 			break;
 		case 10:
-			/**< Schließe Verbindung*/
-			TCPS_0.close_sockets();
-			if (TCPS_0.status == TcpIpServer::READY)
-				Main_state = 11;
+			/** end connection*/
+			Server.closeSockets();
+			if (Server.status == TcpIpServer::READY)
+				mainState = 11;
 			break;
 		case 11:
-			/**< Warte 5 Sekunden und starte Server erneut*/
-			if (counter_close > 50)
+			/** wait 5 seconds, then restart server */
+			if (counterClose++ > 50)
 			{
-				counter_close = 0;
-				Main_state = 0;
+				counterClose = 0;
+				mainState = 0;
 			}
-			else
-				counter_close += 1;
 			break;
 		default:
 			break;
 	}
-	/**< Sende alle 100 ms Messdaten zu Pywisp*/
+	/** send data every 100ms */
 	if (expData.bActivateExperiment) {
 		transport.sendData();
 		benchData.lTime += 100;
@@ -76,5 +74,5 @@ void _CYCLIC ProgramCyclic(void)
 
 void _EXIT ProgramExit(void)
 {
-    TCPS_0.close_sockets();
+    Server.closeSockets();
 }

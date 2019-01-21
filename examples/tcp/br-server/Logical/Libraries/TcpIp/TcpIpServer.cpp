@@ -1,13 +1,15 @@
+/** @file TcpIpServer.cpp
+ *  @brief Implementation of the TcpIpServer Class
+ */
 #include "TcpIpServer.h"
 
 #define LINGER_ON (1)
 
-/** \file TcpIpServer.cpp
- *  \brief Implementation der TcpServer Klasse
- */
+/**
+*	@brief disable all function blocks
+*/
 void TcpIpServer::deinit()
 {
-	/**< Clearen aller Funktionsblöcke*/
 	TcpClose_0.enable = false;
 	TcpClose(&TcpClose_0);
 	TcpOpen_0.enable = false;
@@ -23,6 +25,9 @@ void TcpIpServer::deinit()
 	tcp_step = 0;
 }
 
+/**
+*	@brief initialize server
+*/
 void TcpIpServer::init()
 {
 	this->_status = BUSY;
@@ -33,14 +38,14 @@ void TcpIpServer::init()
 			tcp_step = 1;
 			break;
 		case 1:
-			/**< Öffnen des Tcp Sockets*/
+			/* Open TCP Socket */
 			TcpOpen_0.pIfAddr = 0;
-			TcpOpen_0.port = this->server_port;
+			TcpOpen_0.port = this->serverPort;
 			TcpOpen_0.options = tcpOPT_REUSEADDR;
 			TcpOpen_0.enable = true;
 			TcpOpen(&TcpOpen_0);
 			if (TcpOpen_0.status == ERR_OK) {
-				this->ident = TcpOpen_0.ident;
+				this->serverID = TcpOpen_0.ident;
 				tcp_step = 2;
 			} else if (TcpOpen_0.status == ERR_FUB_BUSY) {
 				// intentionally blank
@@ -50,18 +55,18 @@ void TcpIpServer::init()
 			}
 			break;
 		case 2:
-			/**< Nimm Einstellungen vor, siehe Hilfe von AsTCP*/
-			/**< Durch diese Einstellung wird die Verbindung direkt abgebrochen ohne Buffer zu leeren*/
-			
-			
-			TcpIoctl_0.ident = this->ident;
+			/* set server options */
+			/* these ensure that the connection gets closed directly, without waiting for timeouts */
+			/* see BuR AsTCP Help files for more information */
+				
+			TcpIoctl_0.ident = this->serverID;
 			TcpIoctl_0.ioctl = tcpSO_LINGER_SET;
 			TcpIoctl_0.pData = (unsigned long) &linger_opt;
 			TcpIoctl_0.datalen = sizeof(linger_opt);
 			TcpIoctl_0.enable = true;
 			TcpIoctl(&TcpIoctl_0);
 			if (TcpIoctl_0.status == ERR_OK) {
-				this->outlen = TcpIoctl_0.outlen;
+				//this->outlen = TcpIoctl_0.outlen;
 				tcp_step = 3;
 			} else if (TcpIoctl_0.status == ERR_FUB_BUSY) {
 				// intentionally blank
@@ -71,15 +76,15 @@ void TcpIpServer::init()
 			}
 			break;
 		case 3:
-			/**< Starte den Server und warte auf Client*/
-			TcpServer_0.ident = ident;
+			/* start server and wait for client */
+			TcpServer_0.ident = this->serverID;
 			TcpServer_0.backlog = 1;
-			TcpServer_0.pIpAddr = (unsigned long) this->client_ip;
+			TcpServer_0.pIpAddr = (unsigned long) this->clientIp;
 			TcpServer_0.enable = true;
 			TcpServer(&TcpServer_0);
 			if (TcpServer_0.status == ERR_OK) {
-				this->client_ident = TcpServer_0.identclnt;
-				this->client_port = TcpServer_0.portclnt;
+				this->clientID = TcpServer_0.identclnt;
+				//this->clientPort = TcpServer_0.portclnt;
 				tcp_step = 4;
 			} else if (TcpServer_0.status == ERR_FUB_BUSY) {
 				//intentionally blank
@@ -89,15 +94,15 @@ void TcpIpServer::init()
 			}
 			break;
 		case 4:
-			/**< Gleiche Einstellungen für Client*/
-			TcpIoctl_0.ident = this->client_ident;
+			/* set same options for client */
+			TcpIoctl_0.ident = this->clientID;
 			TcpIoctl_0.ioctl = tcpSO_LINGER_SET;
 			TcpIoctl_0.pData = (unsigned long) &linger_opt;
 			TcpIoctl_0.datalen = sizeof(linger_opt);
 			TcpIoctl_0.enable = true;
 			TcpIoctl(&TcpIoctl_0);
 			if (TcpIoctl_0.status == ERR_OK) {
-				this->client_outlen = TcpIoctl_0.outlen;
+			//	this->client_outlen = TcpIoctl_0.outlen;
 				this->_status = READY;
 				tcp_step = 0;
 			} else if (TcpIoctl_0.status == ERR_FUB_BUSY) {
@@ -112,21 +117,24 @@ void TcpIpServer::init()
 	}
 }
 
+/**
+ * @brief reads incoming data from client
+ * data gets saved to inBuffer, the data length is written to inBufferLen
+ */
 TcpIpServer::Status TcpIpServer::read()
 {
-	/**< Lese von Client*/
-	TcpRecv_0.ident = this->client_ident;
-	TcpRecv_0.pData = (unsigned long) this->buffer_in;
-	TcpRecv_0.datamax = sizeof(this->buffer_in);
+	TcpRecv_0.ident = this->clientID;
+	TcpRecv_0.pData = (unsigned long) this->inBuffer;
+	TcpRecv_0.datamax = sizeof(this->inBuffer);
 	TcpRecv_0.flags = 0;
 	TcpRecv_0.enable = true;
 	TcpRecv(&TcpRecv_0);
 	if (TcpRecv_0.status == ERR_OK)
 	{
-		this->recvlength = TcpRecv_0.recvlen;
-		if (this->recvlength == 0)
+		this->inBufferLen = TcpRecv_0.recvlen;
+		if (this->inBufferLen == 0)
 		{
-			/**< Client bereits geschlossen*/
+			/* client already disconnected */
 			return STOP;
 		}
 		else
@@ -136,13 +144,13 @@ TcpIpServer::Status TcpIpServer::read()
 		;
 	else if (TcpRecv_0.status == tcpERR_NO_DATA)
 	{
-		/**< Keine Daten empfangen*/
-		this->recvlength = 0;
+		/* no data received */
+		this->inBufferLen = 0;
 		return READY;
 	}
 	else if (TcpRecv_0.status == tcpERR_NOT_CONNECTED)
 	{
-		/**< Verbindung wurde getrennt*/
+		/* connection closed */
 		return STOP;
 	}
 	else
@@ -152,25 +160,27 @@ TcpIpServer::Status TcpIpServer::read()
 	return BUSY;
 }
 
+/**
+ * @brief write data from the current outBuffer to the client
+ */
 TcpIpServer::Status TcpIpServer::write()
 {
-	/**< Schreibe Daten an Client*/
-	TcpSend_0.ident = client_ident;
-	TcpSend_0.pData = (unsigned long) buffer_out;
-	TcpSend_0.datalen = outc;
+	TcpSend_0.ident = this->clientID;
+	TcpSend_0.pData = (unsigned long) this->outBuffer;
+	TcpSend_0.datalen = this->outBufferLen;
 	TcpSend_0.flags = 0;
 	TcpSend_0.enable = true;
 	TcpSend(&TcpSend_0);
 	if (TcpSend_0.status == ERR_OK)
 	{
-		outc = 0;
+		this->outBufferLen = 0;
 		return READY;
 	}
 	else if (TcpSend_0.status == ERR_FUB_BUSY)
 		;
 	else if (TcpSend_0.status == tcpERR_NOT_CONNECTED)
 	{
-		/**< Verbindung wurde getrennt*/
+		/* connection closed */
 		return STOP;        
 	}
 	else
@@ -196,18 +206,18 @@ void TcpIpServer::sync()
 			this->_status_sub = read();
 			switch (this->_status_sub) {
 				case READY:
-					if (this->recvlength > 0) {
-						unsigned char *pointer = buffer_in;
-						while (pointer - buffer_in < (signed long)this->recvlength) {
+					if (this->inBufferLen > 0) {
+						unsigned char *pointer = this->inBuffer;
+						while (pointer - this->inBuffer < (signed long)this->inBufferLen) {
 							Frame frame(pointer++[0]);
 							for (int i = 0; i < MAX_PAYLOAD; ++i)
 								frame.data.payload[i] = *pointer++;
 							this->transp->handleFrame(frame);
 						}
-						recvlength = 0;
+						this->inBufferLen = 0;
 					}
 					/**< Sende Daten falls vorhanden*/
-					if (this->outc > 0) {
+					if (this->outBufferLen > 0) {
 						tcp_step = 1;
 					} else {
 						tcp_step = 0;
@@ -253,14 +263,14 @@ void TcpIpServer::sync()
 	}
 }
 
-void TcpIpServer::close_sockets()
+void TcpIpServer::closeSockets()
 {
 	_status = BUSY;
 	switch (tcp_step)
 	{
 		case 0:
 			/**< Schließe Client Socket*/
-			TcpClose_0.ident = client_ident;
+			TcpClose_0.ident = this->clientID;
 			TcpClose_0.how = 0;
 			TcpClose_0.enable = true;
 			TcpClose(&TcpClose_0);
@@ -278,7 +288,7 @@ void TcpIpServer::close_sockets()
 			break;
 		case 1:
 			/**< Schließe Server*/
-			TcpClose_0.ident = ident;
+			TcpClose_0.ident = this->serverID;
 			TcpClose_0.how = 0;
 			TcpClose_0.enable = true;
 			TcpClose(&TcpClose_0);
@@ -302,16 +312,16 @@ void TcpIpServer::close_sockets()
 
 void TcpIpServer::registerListener(Comm *t)
 {
-	transp = t;
+	this->transp = t;
 }
 
 void TcpIpServer::resetBuffs(void)
 {
-	outc = 0;
-	recvlength = 0;
+	this->outBufferLen = 0;
+	this->inBufferLen = 0;
 	for (int i = 0; i < 255 * (MAX_PAYLOAD + 1); ++i) {
-		buffer_out[i] = 0;
-		buffer_in[i] = 0;
+		this->outBuffer[i] = 0;
+		this->inBuffer[i] = 0;
 	}
 }
 	
