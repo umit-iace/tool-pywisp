@@ -1,0 +1,39 @@
+stages:
+  - docu
+  - deploy
+
+docu:
+  stage: docu
+  tags:
+    - shell
+  script:
+    - virtualenv _venv
+    - source _venv/bin/activate
+    - pip install -r requirements.txt
+    - python setup.py develop
+    - cd docs
+    - make html
+    - rm -rf /srv/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
+    - mkdir -p /srv/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
+    - mv _build/html/* /srv/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
+    - cd ..
+    - pip uninstall -y pywisp
+    - deactivate
+    - rm -rf *
+  only:
+    - master
+
+deploy:
+  stage: deploy
+  tags:
+    - shell
+  script:
+    - virtualenv _venv
+    - source _venv/bin/activate
+    - pip install -r requirements.txt
+    - pip install -U twine
+    - python setup.py sdist bdist_wheel
+    - twine upload -r nexus dist/* --config-file /etc/pypirc
+    - rm -rf *
+  only:
+    - tags

@@ -1,21 +1,25 @@
 # -*- coding: utf-8 -*-
 import logging
-import numpy as np
 import os
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor, QIntValidator
+
+import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from PyQt5.QtCore import Qt, QRegExp
+from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout
 from pyqtgraph import mkPen
+
+__all__ = ["get_resource"]
 
 
 def get_resource(resName, resType="icons"):
     """
     Build absolute path to specified resource within the package
-    Args:
-        resName (str): name of the resource
-        resType (str): subdir
-    Return:
-        str: path to resource
+    :param resName: name of the ressource
+    :param resType: sub directory
+    :return: path to resource
     """
     own_path = os.path.dirname(__file__)
     resource_path = os.path.abspath(os.path.join(own_path, "resources", resType))
@@ -62,17 +66,23 @@ class DataPointBuffer(object):
     Buffer object to store the values of the data points
     """
 
-    def __init__(self, name):
+    def __init__(self, name, time=None, values=None):
         self.name = name
-        self.values = []
-        self.time = []
+        if time is None:
+            self.time = []
+        else:
+            self.time = time
+        if values is None:
+            self.values = []
+        else:
+            self.values = values
 
     def addValue(self, time, value):
         """
         Adds a new value to the data point buffer
-        Args:
-            time(float): time(stamp) of the corresponding value (x axis)
-            value(float): the new value for the data point (y axis)
+        :param time: time(stamp) of the corresponding value (x axis)
+        :param value: the new value for the data point (y axis)
+        :return:
         """
         self.time.append(time)
         self.values.append(value)
@@ -134,54 +144,74 @@ class PlotChart(object):
                         curve.setData(interpx, interpy)
 
     def clear(self):
+        """
+        Clears the data point and curve lists and the plot items
+        """
         if self.plotWidget:
             self.plotWidget.getPlotItem().clear()
             del self.dataPoints[:]
             del self.plotCurves[:]
 
 
-class CSVExporter(object):
-    def __init__(self, dataPoints):
-        self.dataPoints = dataPoints
-        self.sep = ','
+class Exporter(object):
+    """
+    Class exports data points from GUI to different formats (csv, png) as pandas dataframe.
+    """
 
-    def export(self, fileName):
+    def __init__(self, **kwargs):
+        dataPoints = kwargs.get('dataPoints', None)
 
-        fd = open(fileName, 'w')
-        data = []
-        header = []
+        if dataPoints is None:
+            raise Exception("Given data points are None!")
 
-        for dataPoint in self.dataPoints:
-            if dataPoint.time:
-                header.append('Zeit')
-                header.append(dataPoint.name)
-                data.append(dataPoint.time)
-                data.append(dataPoint.values)
+        # build pandas data frame
+        self.df = None
+        for dataPoint in dataPoints:
+            if self.df is None:
+                self.df = pd.DataFrame(index=dataPoint.time, data={dataPoint.name: dataPoint.values})
+            else:
+                newDf = pd.DataFrame(index=dataPoint.time, data={dataPoint.name: dataPoint.values})
+                self.df = self.df.join(newDf, how='outer')
 
-        numColumns = len(header)
-        if data:
-            numRows = len(max(data, key=len))
-        else:
-            fd.close()
-            return
+        self.df.index.name = 'time'
 
-        fd.write(self.sep.join(header) + '\n')
+    def exportPng(self, fileName):
+        """
+        Exports the data point dataframe as png with matplotlib.
+        :param fileName: name of file with extension
+        """
+        fig = plt.figure(figsize=(10, 6))
+        gs = gridspec.GridSpec(1, 1, hspace=0.1)
+        axes = plt.Subplot(fig, gs[0])
 
-        for i in range(numRows):
-            for j in range(numColumns):
-                if i < len(data[j]):
-                    fd.write(str(data[j][i]))
-                else:
-                    fd.write(str(np.nan))
+        for col in self.df.columns:
+            self.df[col].plot(ax=axes, label=col)
 
-                if j < numColumns:
-                    fd.write(self.sep)
+        axes.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=4,
+                    ncol=4, mode="expand", borderaxespad=0., framealpha=0.5)
 
-            fd.write('\n')
-        fd.close()
+        axes.grid(True)
+        if self.df.index.name == 'time':
+            axes.set_xlabel(r"Time (s)")
+
+        fig.add_subplot(axes)
+
+        fig.savefig(fileName, dpi=300)
+
+    def exportCsv(self, fileName, sep=','):
+        """
+        Exports the data point dataframe as csv
+        :param fileName: name of file with extension
+        :param sep: separator for csv (default: ,)
+        """
+        self.df.to_csv(fileName, sep=sep)
 
 
 class DataIntDialog(QDialog):
+    """
+    Qt Dialog handler for integer settings with a min and max value
+    """
+
     def __init__(self, **kwargs):
         parent = kwargs.get('parent', None)
         super(DataIntDialog, self).__init__(parent)
@@ -194,14 +224,13 @@ class DataIntDialog(QDialog):
         labelLayout = QHBoxLayout()
 
         minLabel = QLabel(self)
-        minLabel.setText("min. Wert: {}".format(self.minValue))
+        minLabel.setText("min. value: {}".format(self.minValue))
         labelLayout.addWidget(minLabel)
         maxLabel = QLabel(self)
-        maxLabel.setText("max. Wert: {}".format(self.maxValue))
+        maxLabel.setText("max. value: {}".format(self.maxValue))
         labelLayout.addWidget(maxLabel)
         mainLayout.addLayout(labelLayout)
 
-        # nice widget for editing the date
         self.data = QLineEdit(self)
         self.data.setText(str(self.currentValue))
         self.data.setValidator(QIntValidator(self.minValue, self.maxValue, self))
@@ -226,3 +255,56 @@ class DataIntDialog(QDialog):
         data = dialog._getData()
 
         return data, result == QDialog.Accepted
+
+
+class DataTcpIpDialog(QDialog):
+    """
+    Qt Dialog handler for tcp settings
+    """
+
+    def __init__(self, **kwargs):
+        parent = kwargs.get('parent', None)
+        super(DataTcpIpDialog, self).__init__(parent)
+
+        self.ipValue = kwargs.get("ip", '127.0.0.1')
+        self.portValue = kwargs.get("port", 0)
+
+        ipRange = "(?:[0-1]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])"  # Part of the regular expression
+        # regular expression
+        ipRegex = QRegExp("^" + ipRange + "\\." + ipRange + "\\." + ipRange + "\\." + ipRange + "$")
+        ipValidator = QRegExpValidator(ipRegex, self)
+
+        mainLayout = QVBoxLayout(self)
+
+        self.ipData = QLineEdit(self)
+        self.ipData.setText(str(self.ipValue))
+        self.ipData.setValidator(ipValidator)
+
+        self.portData = QLineEdit(self)
+        self.portData.setText(str(self.portValue))
+        self.portData.setValidator(QIntValidator(0, 65535, self))
+
+        horizonalLayout = QHBoxLayout()
+
+        horizonalLayout.addWidget(self.ipData)
+        horizonalLayout.addWidget(self.portData)
+        mainLayout.addLayout(horizonalLayout)
+
+        # OK and Cancel buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
+            Qt.Horizontal, self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        mainLayout.addWidget(buttons)
+
+    def _getData(self):
+        return self.ipData.text(), self.portData.text()
+
+    @staticmethod
+    def getData(**kwargs):
+        dialog = DataTcpIpDialog(**kwargs)
+        result = dialog.exec_()
+        ipData, portData = dialog._getData()
+
+        return ipData, portData, result == QDialog.Accepted

@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<?AutomationStudio Version=4.4.6.71 SP?>
+<Library xmlns="http://br-automation.co.at/AS/Library">
+  <Files>
+    <File>Transport.h</File>
+    <File>Transport.cpp</File>
+    <File>Frame.h</File>
+  </Files>
+</Library>

@@ -68,8 +68,11 @@ target/
 # Rope
 .ropeproject
 
-# Pycharm
+# Pycharm / Clion
 .idea
+
+# CMake
+cmake-build-*/
 
 # MacOSX Files
 .DS_Store
@@ -78,3 +81,19 @@ target/
 pywisp/.project
 pywisp/.pydevproject
 pywisp/.settings
+
+# Simulink BuR
+Diagnosis/
+Binaries/
+Temp/
+*_bur/
+slprj/
+*.set
+*.isopen
+*.mexw64
+*.autosave
+*.asv
+Thumbs.db
+
+# Arduino
+build-uno

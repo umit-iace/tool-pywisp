@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
+import ast
+import logging
 from collections import OrderedDict
 
-import ast
-from PyQt5.QtCore import Qt, QSize, pyqtSignal
+from PyQt5.QtCore import Qt, QSize, pyqtSignal, QObject
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QItemDelegate, QTreeView
 
-from . import experimentModules
 from .registry import *
 
 
@@ -15,6 +15,9 @@ class ExperimentException(Exception):
 
 
 class ExperimentModel(QStandardItemModel):
+    """
+    Model to provide item model that includes an additional name attribute
+    """
     def __init__(self, parent=None):
         QStandardItemModel.__init__(self, parent)
         self._name = None
@@ -30,28 +33,6 @@ class ExperimentModel(QStandardItemModel):
             return Qt.ItemIsEditable | Qt.ItemIsEnabled
         else:
             return Qt.ItemIsEnabled
-
-
-class ExperimentStateChange(object):
-    """
-    Object that is emitted when Experiment changes its state.
-
-    Keyword Args:
-        type: Keyword describing the state change, can be one of the following
-
-            * `init` Initialisation
-            * `start` : Start of Experiment
-            * `abort` : Abortion of Experiment
-
-        data: Data that is emitted on state change.
-        info: Further information.
-
-    """
-
-    def __init__(self, **kwargs):
-        assert "type" in kwargs.keys()
-        for key, val in kwargs.items():
-            setattr(self, key, val)
 
 
 class PropertyItem(QStandardItem):
@@ -145,11 +126,11 @@ class ExperimentInteractor(QObject):
     and the Experiment
     """
     expFinished = pyqtSignal()
+    sendData = pyqtSignal(object)
 
-    def __init__(self, inputQueue, targetView, parent=None):
+    def __init__(self, targetView, parent=None):
         QObject.__init__(self, parent)
         self._logger = logging.getLogger(self.__class__.__name__)
-        self.inputQueue = inputQueue
         self.targetView = targetView
         self.dataPoints = None
         self.runningExperiment = False
@@ -158,6 +139,10 @@ class ExperimentInteractor(QObject):
         self.targetModel.itemChanged.connect(self.itemChanged)
 
     def _addSettings(self, index):
+        """
+        Sets the settings from an experiment module.
+        :param index: the given experiment module index
+        """
         parent = index.model().itemFromIndex(index)
         moduleName = parent.data(role=PropertyItem.RawDataRole)
 
@@ -169,7 +154,9 @@ class ExperimentInteractor(QObject):
 
     def _readSettings(self, moduleName):
         """
-        Read the public settings from an experiment module
+        Reads the public settings from an experiment module.
+        :param moduleName: the given experiment module name
+        :return: settings of module or raise an exception if module is unknown
         """
         for module in getRegisteredExperimentModules():
             if module[1] == moduleName:
@@ -179,7 +166,9 @@ class ExperimentInteractor(QObject):
 
     def _readDataPoints(self, index):
         """
-        Read the data points from an experiment module
+        Reads the data points from an experiment module.
+        :param index: the given experiment module index
+        :return: data points of module or raise an exception if module is unknown
         """
         parent = index.model().itemFromIndex(index)
         moduleName = parent.data(role=PropertyItem.RawDataRole)
@@ -191,6 +180,10 @@ class ExperimentInteractor(QObject):
         raise ExperimentException("_readDataPoints(): No module called {} found!".format(moduleName))
 
     def itemChanged(self, item):
+        """
+        Updates settings of an experiment module.
+        :param item: the given experiment module
+        """
         if item.parent():
             return
 
@@ -203,10 +196,12 @@ class ExperimentInteractor(QObject):
         # insert new settings
         self._addSettings(moduleItem.index())
 
-        return
-
     def getSettings(self, item):
-
+        """
+        Returns a dict with all settings of the item of an experiment.
+        :param item: experiment module
+        :return: settings
+        """
         settings = OrderedDict()
         for row in range(item.rowCount()):
             propertyName = self.targetModel.data(item.child(row, 0).index(),
@@ -220,8 +215,8 @@ class ExperimentInteractor(QObject):
     def setExperiment(self, exp):
         """
         Load the given experiment settings into the target model.
-        Returns:
-            bool: `True` if successful, `False` if errors occurred.
+        :param exp: the given experiment
+        :return: `True` if successful, `False` if errors occurred.
         """
         if exp is None:
             return
@@ -234,8 +229,8 @@ class ExperimentInteractor(QObject):
     def _applyExperiment(self, exp):
         """
         Set all module settings to those provided in the experiment.
-        Returns:
-            bool: `True` if successful, `False` if errors occurred.
+        :param exp: the provided experiment
+        :return: `True` if successful, `False` if errors occurred.
         """
         self.dataPoints = []
         self.targetModel.clear()
@@ -279,7 +274,7 @@ class ExperimentInteractor(QObject):
                         break
                 else:
                     self._logger.warning("_applyExperiment(): Setting: '{0}' not "
-                                       "available for Module: '{1}'".format(
+                                         "available for Module: '{1}'".format(
                         valKey, moduleName))
 
         self.targetView.setModel(self.targetModel)
@@ -287,9 +282,19 @@ class ExperimentInteractor(QObject):
         return True
 
     def getDataPoints(self):
+        """
+        Returns all data points of the experiment.
+        :return: data points
+        """
         return self.dataPoints
 
-    def handleFrame(self, frame):
+    def handleFrame(self, frame, connection):
+        """
+        Returns the corresponding data points of a frame of the test rig.
+        :param frame: data from the test rig
+        :param connection: connection of the frame
+        :return: data points or None if nothing found
+        """
         for row in range(self.targetModel.rowCount()):
             index = self.targetModel.index(row, 0)
 
@@ -297,7 +302,7 @@ class ExperimentInteractor(QObject):
             moduleName = parent.data(role=PropertyItem.RawDataRole)
 
             for module in getRegisteredExperimentModules():
-                if module[1] == moduleName:
+                if module[1] == moduleName and module[0].connection == connection.__name__:
                     dataPoints = module[0].handleFrame(frame)
                     if dataPoints is not None:
                         return dataPoints
@@ -305,6 +310,10 @@ class ExperimentInteractor(QObject):
         return None
 
     def runExperiment(self):
+        """
+        Sends all start parameters of all modules that are registered in the target model to start an experiment and
+        adds and frame with id 1 and payload 1 as general start command.
+        """
         data = []
         self.runningExperiment = True
         for row in range(self.targetModel.rowCount()):
@@ -317,6 +326,7 @@ class ExperimentInteractor(QObject):
                 if module[1] == moduleName:
                     startParams = module[0].getStartParams(self)
                     if startParams is not None:
+                        startParams['connection'] = module[0].connection
                         data.append(startParams)
 
                     settings = self.getSettings(parent)
@@ -326,8 +336,8 @@ class ExperimentInteractor(QObject):
                             vals.append(val)
                     params = module[0].getParams(self, vals)
                     if params and not None:
+                        params['connection'] = module[0].connection
                         data.append(params)
-
                     break
 
         # start experiment
@@ -336,9 +346,12 @@ class ExperimentInteractor(QObject):
         data.append({'id': 1,
                      'msg': payload})
         for _data in data:
-            self.inputQueue.put(_data)
+            self.sendData.emit(_data)
 
     def sendParameterExperiment(self):
+        """
+        Sends all parameters of all modules that are registered in the target model to an experiment.
+        """
         data = []
         for row in range(self.targetModel.rowCount()):
             index = self.targetModel.index(row, 0)
@@ -355,14 +368,18 @@ class ExperimentInteractor(QObject):
                             vals.append(val)
                     params = module[0].getParams(self, vals)
                     if params and not None:
+                        params['connection'] = module[0].connection
                         data.append(params)
-
                     break
 
         for _data in data:
-            self.inputQueue.put(_data)
+            self.sendData.emit(_data)
 
     def stopExperiment(self):
+        """
+        Sends all stop parameters of all modules that are registered in the target model to stop an experiment and
+        adds and frame with id 1 and payload 0 as general stop command.
+        """
         data = []
 
         if not self.runningExperiment:
@@ -379,8 +396,8 @@ class ExperimentInteractor(QObject):
                 if module[1] == moduleName:
                     stopParams = module[0].getStopParams(self)
                     if stopParams is not None:
+                        stopParams['connection'] = module[0].connection
                         data.append(stopParams)
-
                     break
 
         # stop experiment
@@ -389,11 +406,15 @@ class ExperimentInteractor(QObject):
         data.append({'id': 1,
                      'msg': payload})
         for _data in data:
-            self.inputQueue.put(_data)
+            self.sendData.emit(_data)
 
         self.expFinished.emit()
 
     def getExperiment(self):
+        """
+        Returns an dict for the current experiment with all settings of it.
+        :return: experiment
+        """
         exp = {'Name': self.targetModel.getName()}
 
         for row in range(self.targetModel.rowCount()):
@@ -405,7 +426,6 @@ class ExperimentInteractor(QObject):
             for module in getRegisteredExperimentModules():
                 if module[1] == moduleName:
                     exp[moduleName] = self.getSettings(parent)
-
                     break
 
         return exp

@@ -1,0 +1,5 @@
+VAR
+	expData : _expData;
+	trajData : _trajData;
+	benchData : _benchData;
+END_VAR
