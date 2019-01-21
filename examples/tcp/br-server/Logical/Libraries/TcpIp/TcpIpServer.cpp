@@ -161,9 +161,9 @@ TcpIpServer::Status TcpIpServer::write()
 	TcpSend_0.flags = 0;
 	TcpSend_0.enable = true;
 	TcpSend(&TcpSend_0);
-	outc = 0;
 	if (TcpSend_0.status == ERR_OK)
 	{
+		outc = 0;
 		return READY;
 	}
 	else if (TcpSend_0.status == ERR_FUB_BUSY)

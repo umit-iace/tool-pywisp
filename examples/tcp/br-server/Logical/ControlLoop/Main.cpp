@@ -16,7 +16,7 @@ const unsigned long lDt = 1000;          ///< Sampling step [ms]
  * @param _trajData pointer to trajectory struct
  */
 void fTrajectory() {
-	if ( benchData.lTime < trajData.lStartTime ) {
+	if (benchData.lTime < trajData.lStartTime) {
 		trajData.dOutput = trajData.dStartValue;
 	} else {
 		if (benchData.lTime < trajData.lEndTime) {
