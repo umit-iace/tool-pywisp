@@ -17,7 +17,7 @@ test_requirements = [
 
 setup(
     name="pywisp",
-    version="0.1.0",
+    version="1.0",
     description="Weird visualisation of test bench prototypes",
     long_description="Weird visualisation of test bench prototypes",
     classifiers=[

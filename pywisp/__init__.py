@@ -21,7 +21,7 @@ from .visualization import *
 
 __author__ = 'IACE'
 __email__ = 'jens.wurm@umit.at'
-__version__ = '0.1.0'
+__version__ = '1.0'
 
 # configure logging
 with open(get_resource("logging.yaml", ""), "r") as f:
