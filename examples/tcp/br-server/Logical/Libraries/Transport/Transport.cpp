@@ -4,6 +4,9 @@
 #endif
 #include "Transport.h"
 
+/**
+ * @brief Method that defines and sends all testbench frames
+ */
 void Transport::sendData() {
 	Frame benchFrame(10);
 	benchFrame.pack(benchData.lTime);
@@ -19,6 +22,9 @@ void Transport::sendData() {
 	tcp->handleFrame(trajFrame);
 }
 
+/*
+ * @brief handles all frames arriving at the testbench
+ */
 void Transport::handleFrame(Frame frame)
 {
 	switch (frame.data.id) {
@@ -35,6 +41,9 @@ void Transport::handleFrame(Frame frame)
 	}
 }
 
+/**
+ * @brief unpacks experiment activation status and resets experiment time
+ */
 void Transport::unpackExp(Frame frame) {
 	frame.unPack(expData.bActivateExperiment);
 	benchData.lTime = 0;
@@ -54,6 +63,9 @@ void Transport::unpackTrajRampData(Frame frame) {
 	frame.unPack(trajData.lEndTime);
 }
 
+/**
+ * @brief registers Server for handling outgoing frames
+ */
 void Transport::registerServer(Comm *serv)
 {
 	this->tcp = serv;
