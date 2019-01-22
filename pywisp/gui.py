@@ -74,11 +74,17 @@ class MainGui(QMainWindow):
 
         # create docks
         self.experimentDock = Dock("Experiments")
+        self.experimentDock.setWindowIcon(icon)
         self.lastMeasDock = Dock("Last Measurements")
+        self.lastMeasDock.setWindowIcon(icon)
         self.propertyDock = Dock("Parameters")
+        self.propertyDock.setWindowIcon(icon)
         self.logDock = Dock("Log")
+        self.logDock.setWindowIcon(icon)
         self.dataDock = Dock("Data")
+        self.dataDock.setWindowIcon(icon)
         self.animationDock = Dock("Animation")
+        self.animationDock.setWindowIcon(icon)
 
         # arrange docks
         self.area.addDock(self.animationDock, "right")
