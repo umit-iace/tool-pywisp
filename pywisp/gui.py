@@ -283,7 +283,7 @@ class MainGui(QMainWindow):
                 self.connections[cls] = {}
         else:
             self._logger.error("No Connections found, return!")
-            return
+            #return
 
         serialCnt = 0
         for conn, connInstance in self.connections.items():
@@ -322,6 +322,18 @@ class MainGui(QMainWindow):
         self.expMenu.addAction(self.actStartExperiment)
         self.expMenu.addAction(self.actStopExperiment)
         self.expMenu.addAction(self.actSendParameter)
+        
+        # remote
+        self.remoteMenu = self.menuBar().addMenu('&Remote')
+        self.actRemoteVisible = QAction('Visible')
+        self.actRemoteVisible.setCheckable(True)
+        self.actRemoteVisible.setChecked(False)
+        self.remoteMenu.addAction(self.actRemoteVisible)
+        self.actRemoteVisible.triggered.connect(self.showRemote)
+        self.actRemoteAddWidget = QAction('Add widget')
+        self.remoteMenu.addAction(self.actRemoteAddWidget)
+        self.actRemoteAddWidget.setEnabled(False)
+        self.actRemoteAddWidget.triggered.connect(self.remoteAddWidget)
 
         # toolbar
         self.toolbarExp = QToolBar("Experiment")
@@ -1245,3 +1257,66 @@ class MainGui(QMainWindow):
                 newfont.setBold(0)
             qList.item(i).setFont(newfont)
         qList.repaint()
+
+    def createMovableWidget(self, type):
+        class MovableWidget(type):
+
+            def __init__(self, *args, **kwargs):
+                super(MovableWidget, self).__init__(*args, **kwargs)
+                self.setMinimumHeight(50)
+
+            def mousePressEvent(self, event):
+                self.__mousePressPos = None
+                self.__mouseMovePos = None
+                if event.button() == Qt.RightButton:
+                    self.__mousePressPos = event.globalPos()
+                    self.__mouseMovePos = event.globalPos()
+                else:
+                    super(MovableWidget, self).mousePressEvent(event)
+
+            def mouseMoveEvent(self, event):
+                if event.buttons() == Qt.RightButton:
+                    # adjust offset from clicked point to origin of widget
+                    currPos = self.mapToGlobal(self.pos())
+                    globalPos = event.globalPos()
+                    diff = globalPos - self.__mouseMovePos
+                    newPos = self.mapFromGlobal(currPos + diff)
+                    if self.parent().rect().contains(newPos):
+                        self.move(newPos)
+                        self.__mouseMovePos = globalPos
+
+                super(MovableWidget, self).mouseMoveEvent(event)
+
+            def contextMenuEvent(self, event):
+                if self.__mousePressPos is not None:
+                    moved = event.globalPos() - self.__mousePressPos
+                    if moved.manhattanLength() > 0:
+                        event.ignore()
+                        return
+
+                menu = QMenu(self)
+                testAction = menu.addAction("menu")
+                action = menu.exec_(self.mapToGlobal(event.pos()))
+                if action == testAction:
+                    print("menu")
+
+        return MovableWidget
+
+    def showRemote(self):
+        for title, dock in self.area.findAll()[1].items():
+            if title == 'Remote':
+                dock.close()
+                self.actRemoteAddWidget.setEnabled(False)
+                return
+
+        self.remotedock = Dock('Remote', closable=False)
+        self.remotewidget = QWidget()
+        self.remoteAddWidget()
+        self.remotedock.addWidget(self.remotewidget)
+        self.area.addDock(self.remotedock, "right", self.propertyDock)
+        self.actRemoteAddWidget.setEnabled(True)
+
+    def remoteAddWidget(self):
+        movablebutton = self.createMovableWidget(QPushButton)
+        button = movablebutton("Test",self.remotewidget)
+        button.clicked.connect(lambda: print("Klick!"))
