@@ -46,8 +46,7 @@ class TestTcpConnection(ut.TestCase):
         # set up client which should get tested
         self.inputQueue = Queue()
         self.outputQueue = Queue()
-        self.connection_tcp = TcpConnection(self.inputQueue, self.outputQueue,
-                                            self.server_port, self.server_ip)
+        self.connection_tcp = TcpConnection(self.server_ip, self.server_port)
         self.thread_server.start()
 
     def tearDown(self):
