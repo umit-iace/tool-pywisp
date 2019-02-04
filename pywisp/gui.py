@@ -330,10 +330,10 @@ class MainGui(QMainWindow):
         self.actRemoteVisible.setChecked(False)
         self.remoteMenu.addAction(self.actRemoteVisible)
         self.actRemoteVisible.triggered.connect(self.showRemote)
-        self.actRemoteAddWidget = QAction('Add widget')
+        self.actRemoteAddWidget = QAction('Add button')
         self.remoteMenu.addAction(self.actRemoteAddWidget)
         self.actRemoteAddWidget.setEnabled(False)
-        self.actRemoteAddWidget.triggered.connect(self.remoteAddWidget)
+        self.actRemoteAddWidget.triggered.connect(self.remoteAddButton)
 
         # toolbar
         self.toolbarExp = QToolBar("Experiment")
@@ -1261,9 +1261,14 @@ class MainGui(QMainWindow):
     def createMovableWidget(self, type):
         class MovableWidget(type):
 
-            def __init__(self, *args, **kwargs):
+            def __init__(self, gui, *args, **kwargs):
                 super(MovableWidget, self).__init__(*args, **kwargs)
                 self.setMinimumHeight(50)
+                self.setMaximumWidth(100)
+                self.parameter = None
+                self.value = None
+                self.name = None
+                self.gui = gui
 
             def mousePressEvent(self, event):
                 self.__mousePressPos = None
@@ -1287,6 +1292,13 @@ class MainGui(QMainWindow):
 
                 super(MovableWidget, self).mouseMoveEvent(event)
 
+            def mouseReleaseEvent(self, event):
+                if event.button() == Qt.LeftButton:
+                    if self.value == None or self.parameter == None:
+                        event.ignore()
+                        return
+                super(MovableWidget, self).mouseReleaseEvent(event)
+
             def contextMenuEvent(self, event):
                 if self.__mousePressPos is not None:
                     moved = event.globalPos() - self.__mousePressPos
@@ -1295,12 +1307,21 @@ class MainGui(QMainWindow):
                         return
 
                 menu = QMenu(self)
-                testAction = menu.addAction("menu")
+                removeaction = menu.addAction("Remove")
+                editaction = menu.addAction("Edit")
                 action = menu.exec_(self.mapToGlobal(event.pos()))
-                if action == testAction:
-                    print("menu")
+                if action == removeaction:
+                    self.deleteLater()
+                elif action == editaction:
+                    msg = remoteParamedit(self.name, self.parameter, self.value, self.gui)
+                    if msg.ok:
+                        self.value = msg.value
+                        self.parameter = msg.parameter
+                        self.name = msg.name
+                        self.setText(self.name)
 
         return MovableWidget
+
 
     def showRemote(self):
         for title, dock in self.area.findAll()[1].items():
@@ -1310,13 +1331,110 @@ class MainGui(QMainWindow):
                 return
 
         self.remotedock = Dock('Remote', closable=False)
+
         self.remotewidget = QWidget()
-        self.remoteAddWidget()
+        self.remotewidgetLayout = freeLayout()
+        self.remotewidget.setLayout(self.remotewidgetLayout)
         self.remotedock.addWidget(self.remotewidget)
         self.area.addDock(self.remotedock, "right", self.propertyDock)
         self.actRemoteAddWidget.setEnabled(True)
 
-    def remoteAddWidget(self):
+    def remoteAddButton(self):
         movablebutton = self.createMovableWidget(QPushButton)
-        button = movablebutton("Test",self.remotewidget)
-        button.clicked.connect(lambda: print("Klick!"))
+        button = movablebutton(self, "New", self.remotedock)
+        button.clicked.connect(lambda: self.remoteButtonPressed(button))
+        self.remotewidgetLayout.addWidget(button)
+
+    def remoteButtonPressed(self, button):
+        settings = deepcopy(self.exp.getExperiment())
+        for top in settings:
+            if not top == 'Name':
+                for key in settings[top]:
+                    if key == button.parameter:
+                        settings[top][key] = button.value
+                        self.exp.setExperiment(settings)
+                        if self.actSendParameter.isEnabled():
+                            self.sendParameter()
+                            self._logger.info("Parameter '{} = {}' sent".format(button.parameter, button.value))
+                        return
+        self._logger.warning("Parameter '{}' does not exist in actual experiment".format(button.parameter))
+
+
+class remoteParamedit(QDialog):
+    def __init__(self, name, param, value, gui):
+        super(QDialog, self).__init__()
+
+        self.ok = False
+        self.value = value
+        self.parameter = param
+        self.name = name
+        self.gui = gui
+
+        self.formlayout = QFormLayout()
+
+        self.nametext = QLineEdit(name)
+        self.formlayout.addRow(QLabel("Name"), self.nametext)
+
+        self.formlayout.addRow(QLabel("Actual experiment: "), QLabel(self.gui.exp.getExperiment()['Name']))
+        self.paramlist = QComboBox()
+        for top in self.gui.exp.getExperiment():
+            if not top == 'Name':
+                for key in self.gui.exp.getExperiment()[top]:
+                    self.paramlist.addItem(key)
+        if self.paramlist.findText(self.parameter):
+            self.paramlist.setCurrentIndex(self.paramlist.findText(self.parameter))
+
+        self.formlayout.addRow(QLabel("Parameter"), self.paramlist)
+
+        self.valuetext = QLineEdit(value)
+        self.formlayout.addRow(QLabel("Value"), self.valuetext)
+
+        self.formlayout.addRow(QLabel(' '), None)
+        self.formlayout.addRow(QLabel(' '), None)
+
+        self.btn_ok = QPushButton("Ok", self)
+        self.btn_ok.clicked.connect(self.button_press)
+        self.btn_cancel = QPushButton("Cancel", self)
+        self.btn_cancel.clicked.connect(self.button_press)
+
+        self.formlayout.addRow(self.btn_ok, self.btn_cancel)
+
+        self.setLayout(self.formlayout)
+        self.setWindowModality(Qt.ApplicationModal)
+        self.exec()
+
+    def button_press(self):
+        if self.sender() == self.btn_ok:
+            self.value = self.valuetext.text()
+            if self.value == '':
+                return
+            self.parameter = self.paramlist.currentText()
+            if not self.parameter:
+                return
+            self.name = self.nametext.text()
+            if self.name == '':
+                return
+            self.ok = True
+        self.close()
+
+
+class freeLayout(QLayout):
+    def __init__(self):
+        super(freeLayout, self).__init__()
+        self.count = 0
+
+    def count(self):
+        return self.count
+
+    def sizeHint(self):
+        return QSize()
+
+    def itemAt(self, p_int):
+        return
+
+    def addItem(self, QLayoutItem):
+        return
+
+    def addWidget(self, QWidget):
+        self.count += 1
+        super(freeLayout, self).addWidget(QWidget)
