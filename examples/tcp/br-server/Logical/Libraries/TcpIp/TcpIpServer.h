@@ -47,7 +47,7 @@ class TcpIpServer: public Comm{
 
 	unsigned char outBuffer[2][255 * (MAX_PAYLOAD + 1)];
 	unsigned int outBufferLen[2];
-	unsigned char cOutBuf;
+	unsigned char currentOutBuf;
 	unsigned char inBuffer[255 * (MAX_PAYLOAD + 1)];
 	unsigned int inBufferLen;
 
