@@ -464,7 +464,7 @@ class MainGui(QMainWindow):
 
     def setIntPoints(self):
         """
-        Sets the among of interpolation points in settings with a dialog.
+        Sets the amount of interpolation points in settings with a dialog.
         """
         self._settings.beginGroup('plot')
         intPoints, ok = DataIntDialog.getData(min=2, max=1000000, current=self._settings.value("interpolation_points"))
@@ -891,7 +891,7 @@ class MainGui(QMainWindow):
     @pyqtSlot()
     def startExperiment(self):
         """
-        Starts the experiment, the timer and the connections. Disables the start button.
+        Starts the experiment, the timer, and the connections. Disables the start button.
         """
         self._currentExperimentIndex = self.experimentList.row(self._currentExpListItem)
         self._currentExperimentName = self._experiments[self._currentExperimentIndex]["Name"]
@@ -945,7 +945,7 @@ class MainGui(QMainWindow):
     @pyqtSlot()
     def stopExperiment(self):
         """
-        Stops the experiment, the timer and clears the connections and enable start button.
+        Stops the experiment, the timer, clears the connections, and enables the start button.
         """
         self.actStartExperiment.setDisabled(False)
         self.actStopExperiment.setDisabled(True)
@@ -1127,7 +1127,7 @@ class MainGui(QMainWindow):
 
     def findAllPlotDocks(self):
         """
-        Finds all docks where plots inside
+        Finds all docks with plots inside
         :return: list of docks with plots
         """
         list = []

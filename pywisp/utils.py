@@ -28,7 +28,7 @@ def get_resource(resName, resType="icons"):
 
 class PlainTextLogger(logging.Handler):
     """
-    Logging handler hat formats log data for line display
+    Logging handler that formats log data for line display
     """
 
     def __init__(self, settings, level=logging.NOTSET):
