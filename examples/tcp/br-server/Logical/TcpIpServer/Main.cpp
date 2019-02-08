@@ -10,7 +10,6 @@
 unsigned long bur_heap_size = 0xFFFFF; 
 
 int counterClose = 0;
-int counterTcp = 0;
 
 /** TcpIpServer instance */
 TcpIpServer Server(50007); 
@@ -22,7 +21,6 @@ void _INIT ProgramInit(void)
 {
 	mainState = 0;
 	counterClose = 0;
-	counterTcp = 0;
 	Server.registerListener(&transport);
 	transport.registerServer(&Server);
 	Server.deinit();
