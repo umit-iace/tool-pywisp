@@ -66,8 +66,7 @@ class DataPointBuffer(object):
     Buffer object to store the values of the data points
     """
 
-    def __init__(self, name, time=None, values=None):
-        self.name = name
+    def __init__(self, time=None, values=None):
         if time is None:
             self.time = []
         else:
@@ -102,19 +101,19 @@ class PlotChart(object):
 
     def __init__(self, title, settings):
         self.title = title
-        self.dataPoints = []
+        self.dataPoints = dict()
         self.plotWidget = None
         self.plotCurves = []
         self.interpolationPoints = 100
         self.settings = settings
 
-    def addPlotCurve(self, dataPoint):
+    def addPlotCurve(self, name, data):
         """
         Adds a curve to the plot widget
         Args:
             dataPoint(DataPointBuffer): Data point which contains the data be added
         """
-        self.dataPoints.append(dataPoint)
+        self.dataPoints[name] = data
 
         self.settings.beginGroup('plot_colors')
         cKeys = self.settings.childKeys()
@@ -122,7 +121,7 @@ class PlotChart(object):
         colorItem = QColor(self.settings.value(cKeys[colorIdxItem]))
         self.settings.endGroup()
 
-        self.plotCurves.append(self.plotWidget.plot(name=dataPoint.name, pen=mkPen(colorItem, width=2)))
+        self.plotCurves.append(self.plotWidget.plot(name=name, pen=mkPen(colorItem, width=2)))
 
     def setInterpolationPoints(self, interpolationPoints):
         self.interpolationPoints = int(interpolationPoints)
@@ -133,8 +132,8 @@ class PlotChart(object):
         """
         if self.plotWidget:
             for indx, curve in enumerate(self.plotCurves):
-                datax = self.dataPoints[indx].time
-                datay = self.dataPoints[indx].values
+                datax = self.dataPoints[curve.name()].time
+                datay = self.dataPoints[curve.name()].values
                 if datax:
                     if len(datax) < self.interpolationPoints:
                         curve.setData(datax, datay)
@@ -149,7 +148,7 @@ class PlotChart(object):
         """
         if self.plotWidget:
             self.plotWidget.getPlotItem().clear()
-            del self.dataPoints[:]
+            self.dataPoints.clear()
             del self.plotCurves[:]
 
 
