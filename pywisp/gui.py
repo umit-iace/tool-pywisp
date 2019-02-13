@@ -647,11 +647,11 @@ class MainGui(QMainWindow):
         idx = self.lastMeasList.row(self._currentLastMeasItem)
         dataPointBuffers = self.measurements[idx]['dataPointBuffers']
 
-        dataPoints = []
+        dataPoints = dict()
         for item in self.dataPointListWidget.selectedItems():
-            for data in dataPointBuffers:
-                if data.name == item.text():
-                    dataPoints.append(data)
+            for key, value in dataPointBuffers.items():
+                if key == item.text():
+                    dataPoints[key] = value
                     break
 
         self.export(dataPoints)
@@ -719,7 +719,9 @@ class MainGui(QMainWindow):
         if title in openDocks:
             if self._currentLastMeasItem is None:
                 dataPointNames = self.exp.getDataPoints()
-                dataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
+                dataPointBuffers = dict()
+                for data in dataPointNames:
+                    dataPointBuffers[data] = DataPointBuffer()
             else:
                 idx = self.lastMeasList.row(self._currentLastMeasItem)
                 dataPointBuffers = self.measurements[idx]['dataPointBuffers']
@@ -838,15 +840,14 @@ class MainGui(QMainWindow):
         chart.enableAutoRange()
 
     def exportPlotItem(self, plotItem):
-        dataPoints = []
+        dataPoints = dict()
         for i, c in enumerate(plotItem.curves):
             if c.getData() is None:
                 continue
             if len(c.getData()) > 2:
                 self._logger.warning('Can not handle the amount of data!')
                 continue
-            dataPoint = DataPointBuffer(name=c.name(), time=c.getData()[0], values=c.getData()[1])
-            dataPoints.append(dataPoint)
+            dataPoints[c.name()] = DataPointBuffer(time=c.getData()[0], values=c.getData()[1])
 
         self.export(dataPoints)
 

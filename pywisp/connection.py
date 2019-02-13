@@ -74,7 +74,8 @@ class SerialConnection(Connection, QtCore.QThread):
             frames = self.min.poll()
             if frames and self.doRead:
                 self.readData(frames)
-            time.sleep(0.01)
+            else:
+                time.sleep(0.001)
 
     def connect(self):
         """
@@ -206,8 +207,9 @@ class TcpConnection(Connection, QtCore.QThread):
             if data and data != b'':
                 if len(data) != self.payloadLen + 1:
                     self._logger.error("Length of data {} differs from payload length {}!".format(len(data), self.payloadLen + 1))
-                frame = MINFrame(data[0], data[1:], 0, False)
-                self.received.emit(frame)
+                else:
+                    frame = MINFrame(data[0], data[1:], 0, False)
+                    self.received.emit(frame)
         except socket.timeout:
             # if nothing is to read, get on
             pass

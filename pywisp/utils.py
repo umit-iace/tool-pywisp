@@ -165,11 +165,11 @@ class Exporter(object):
 
         # build pandas data frame
         self.df = None
-        for dataPoint in dataPoints:
+        for key, value in dataPoints.items():
             if self.df is None:
-                self.df = pd.DataFrame(index=dataPoint.time, data={dataPoint.name: dataPoint.values})
+                self.df = pd.DataFrame(index=value.time, data={key: value.values})
             else:
-                newDf = pd.DataFrame(index=dataPoint.time, data={dataPoint.name: dataPoint.values})
+                newDf = pd.DataFrame(index=value.time, data={key: value.values})
                 self.df = self.df.join(newDf, how='outer')
 
         self.df.index.name = 'time'
