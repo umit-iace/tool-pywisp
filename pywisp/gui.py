@@ -1298,7 +1298,7 @@ class MainGui(QMainWindow):
                 widget.move((self.remoteWidgetLayout.count() % 2) * 200, (self.remoteWidgetLayout.count() // 2) * 40)
                 if sliderlabel:
                     sliderlabel.move((self.remoteWidgetLayout.count() % 2) * 200 + 80,
-                                 (self.remoteWidgetLayout.count() // 2) * 40 + 30)
+                                     (self.remoteWidgetLayout.count() // 2) * 40 + 30)
             self.remoteWidgetLayout.addWidget(widget)
 
     def remoteWidgetSendParameter(self, widget):
@@ -1441,9 +1441,10 @@ class remoteWidgetEdit(QDialog):
 
         self.nametext = QLineEdit(name)
         self.formlayout.addRow(QLabel("Name"), self.nametext)
+        self.nametext.mousePressEvent = lambda event: self.nametext.selectAll()
 
         self.typelist = QComboBox()
-        self.typelist.addItems(["Button", "on/off Button", "Slider"])
+        self.typelist.addItems(["Pushbutton", "Switch", "Slider"])
         self.typelist.setCurrentIndex(widgettype)
         self.typelist.currentIndexChanged.connect(self.typelistchanged)
         self.typelist.setEnabled(not edit)
@@ -1489,23 +1490,29 @@ class remoteWidgetEdit(QDialog):
             self.valuetext = QLineEdit(self.valueon)
             self.settingsWidgetLayout.addRow(QLabel("Value"), self.valuetext)
             self.valuetext.setValidator(QDoubleValidator())
+            self.valuetext.mousePressEvent = lambda event: self.valuetext.selectAll()
         elif self.typelist.currentIndex() == 1:
             self.valueontext = QLineEdit(self.valueon)
             self.settingsWidgetLayout.addRow(QLabel("Value for On"), self.valueontext)
             self.valueontext.setValidator(QDoubleValidator())
+            self.valueontext.mousePressEvent = lambda event: self.valueontext.selectAll()
             self.valueofftext = QLineEdit(self.valueoff)
             self.settingsWidgetLayout.addRow(QLabel("Value for Off"), self.valueofftext)
+            self.valueofftext.mousePressEvent = lambda event: self.valueofftext.selectAll()
             self.valueofftext.setValidator(QDoubleValidator())
         elif self.typelist.currentIndex() == 2:
             self.maxslidertext = QLineEdit(str(self.maxslider))
             self.settingsWidgetLayout.addRow(QLabel("Max"), self.maxslidertext)
             self.maxslidertext.setValidator(QDoubleValidator())
+            self.maxslidertext.mousePressEvent = lambda event: self.maxslidertext.selectAll()
             self.minslidertext = QLineEdit(str(self.minslider))
             self.settingsWidgetLayout.addRow(QLabel("Min"), self.minslidertext)
             self.minslidertext.setValidator(QDoubleValidator())
+            self.minslidertext.mousePressEvent = lambda event: self.minslidertext.selectAll()
             self.stepslidertext = QLineEdit(str(self.stepslider))
             self.settingsWidgetLayout.addRow(QLabel("Stepsize"), self.stepslidertext)
             self.stepslidertext.setValidator(QDoubleValidator())
+            self.stepslidertext.mousePressEvent = lambda event: self.stepslidertext.selectAll()
 
     def button_press(self):
         if self.sender() == self.btn_ok:
