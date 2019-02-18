@@ -6,18 +6,8 @@
 
 #include "Transport.h"
 
-void Transport::init() {
-    Serial.begin(115200);
-    min_init_context(&this->ctx, 0);
-}
-//----------------------------------------------------------------------
-
 void Transport::run() {
-    int avl = 0, len = 0;
-    if ((avl = Serial.available())) {
-        len = Serial.readBytes(this->serialBuf, avl);
-    }
-    min_poll(&this->ctx, this->serialBuf, len);
+    cMin.poll();
 }
 //----------------------------------------------------------------------
 
@@ -76,37 +66,6 @@ void Transport::unpackTrajRampData(uint8_t *payload) {
     unPack(this->_trajData.lStartTime);
     unPack(this->_trajData.dEndValue);
     unPack(this->_trajData.lEndTime);
-}
-//----------------------------------------------------------------------
-
-/*** MIN Callbacks ***/
-uint16_t min_tx_space(uint8_t port) {
-    return Serial.availableForWrite();
-}
-//----------------------------------------------------------------------
-
-void min_tx_byte(uint8_t port, uint8_t byte) {
-    Serial.write(&byte, 1);
-}
-//----------------------------------------------------------------------
-
-void min_tx_start(uint8_t port) {}
-//----------------------------------------------------------------------
-
-void min_tx_finished(uint8_t port) {}
-//----------------------------------------------------------------------
-
-#ifdef TRANSPORT_PROTOCOL
-
-uint32_t min_time_ms(void) {
-    return millis();
-}
-//----------------------------------------------------------------------
-
-#endif
-
-void min_application_handler(uint8_t min_id, uint8_t *min_payload, uint8_t len_payload, uint8_t port) {
-    transport.handleFrame(min_id, min_payload, len_payload);
 }
 //----------------------------------------------------------------------
 
@@ -224,9 +183,9 @@ void Transport::startFrame(uint8_t *payload) {
 //----------------------------------------------------------------------
 
 void Transport::sendFrame(unsigned char id) {
-    min_queue_frame(&this->ctx, id, payload, payloadSize);
+    cMin.queue_frame(id, payload, payloadSize);
     delete[] payload;
 }
-
+//----------------------------------------------------------------------
 
 #endif // TRANSPORT_CPP

@@ -12,17 +12,34 @@
 
 #endif
 
-extern "C" {
+#define MAX_PAYLOAD                   (20)
+#define TRANSPORT_MAX_WINDOW_SIZE     (40U)
+#define MIN_MAX_FRAMES                (16)
+#define MIN_MAX_FRAME_DATA            (1<<8)
+#define BUFLEN                        (64)
+
 #include "Min.h"
-}
-#define BUFLEN (64)     ///< length of serial buffer
 
 /**
  * @brief Layer class for the min protocol communication between the host the micro controller
  */
 class Transport {
 public:
-    void init();        ///< initialize Transport class
+    Transport() : cMin(MIN_MAX_FRAMES, MIN_MAX_FRAME_DATA, MAX_PAYLOAD, BUFLEN) {
+
+        static Transport *transportObj = this;
+
+        cMin.add_application_function(
+                [](uint8_t id, uint8_t *payload, uint8_t len) {
+                    transportObj->handleFrame(id, payload, len);
+                }
+        );
+    }
+
+    void init() {
+        cMin.initSerial(Serial);
+    }
+
     void run();         ///< must be called periodically, to ensure correct
     ///< functionality of the class
     /**
@@ -67,9 +84,7 @@ public:
     } _trajData;
 
 private:
-    uint8_t serialBuf[BUFLEN];
     bool bActivateExperiment = false;
-    struct min_context ctx;
     unsigned char cCursor = 0;
     uint8_t *payload;
     uint8_t payloadSize;
@@ -86,10 +101,12 @@ private:
 
     void unpackTrajRampData(uint8_t *payload);
 
+    Min cMin;
+
     /**
- * Adds a double value to payload
- * @param dValue value that is packed in payload
- */
+     * Adds a double value to payload
+    * @param dValue value that is packed in payload
+    */
     void pack(double dValue);
 
     /**
