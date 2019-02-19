@@ -16,6 +16,13 @@
 #include <stdint.h>
 #include <Arduino.h>
 
+#define DEBUG_PRINT 1
+#if DEBUG_PRINT
+void debug_print(const char *msg, ...);
+#else
+#define debug_print(...)
+#endif
+
 struct TransportFrame {
     uint32_t last_sent_time_ms;            // When frame was last sent (used for re-send timeouts)
     uint16_t payload_offset;            // Where in the ring buffer the payload is
@@ -28,6 +35,7 @@ class TransportFIFO {
 public:
     TransportFIFO(uint8_t size) {
         frames = new struct TransportFrame[size];
+	now = 0;
     }
 
     void reset();
@@ -62,8 +70,7 @@ public:
         // Counters for diagnosis purposes
         transport_fifo.reset();
 
-        transport_fifo_max_frame_data = frame_data;
-        max_payload = max_payload;
+        this->max_payload = max_payload;
         payloads_ring_buffer = new uint8_t[frame_data];
         rx_frame_payload_buf = new uint8_t[max_payload];      // Payload received so far
         transport_fifo_max_frames = frames;
@@ -72,6 +79,7 @@ public:
         transport_fifo_max_frame_data_mask = frame_data - 1;
 
         serialBuf = new uint8_t[serialBufLen];
+	max_window_size = 16;
     }
 
     void initSerial(HardwareSerial &serial) {

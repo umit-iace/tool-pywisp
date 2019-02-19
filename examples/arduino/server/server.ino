@@ -48,8 +48,6 @@ void fContLoop() {
 
         transport.sendData();
     }
-    // Test sende daten
-    transport.sendData();
 }
 //----------------------------------------------------------------------
 
