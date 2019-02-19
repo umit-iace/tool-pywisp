@@ -3,17 +3,17 @@
 
 #if DEBUG_PRINT
 void debug_print(const char *msg, ...) {
-	static uint8_t init = 1;
-	if (init) {
-		Serial2.begin(115200);
-		init = 0;
-	}
-	char s[256];
-	va_list args;
-	va_start(args, msg);
-	vsprintf(s, msg, args);
-	va_end(args);
-	Serial2.print(s);
+    static uint8_t init = 1;
+    if (init) {
+        Serial2.begin(115200);
+        init = 0;
+    }
+    char s[256];
+    va_list args;
+    va_start(args, msg);
+    vsprintf(s, msg, args);
+    va_end(args);
+    Serial2.print(s);
 }
 #endif
 
@@ -122,11 +122,11 @@ struct TransportFrame *Min::transport_fifo_push(uint8_t data_size) {
             this->transport_fifo.tail_idx++;
             this->transport_fifo.tail_idx &= transport_fifo_max_frames_mask;
         } else {
-		debug_print("No FIFO payload space: data_size=%d, n_ring_buffer_bytes=%d\n",
-				data_size, this->transport_fifo.n_ring_buffer_bytes);
-	}
+            debug_print("No FIFO payload space: data_size=%d, n_ring_buffer_bytes=%d\n",
+                        data_size, this->transport_fifo.n_ring_buffer_bytes);
+        }
     } else {
-	    debug_print("No FIFO frame slots\n");
+        debug_print("No FIFO frame slots\n");
     }
     return ret;
 }
@@ -139,8 +139,8 @@ struct TransportFrame *Min::transport_fifo_get(uint8_t n) {
 
 // Sends the given frame to the serial line
 void Min::transport_fifo_send(struct TransportFrame *frame) {
-	debug_print("transport_fifo_send: min_id=%d, seq=%d, payload_len=%d\n",
-			frame->min_id, frame->seq, frame->payload_len);
+    debug_print("transport_fifo_send: min_id=%d, seq=%d, payload_len=%d\n",
+                frame->min_id, frame->seq, frame->payload_len);
     on_wire_bytes(frame->min_id | (uint8_t) TRANSPORT_FRAME, frame->seq, payloads_ring_buffer, frame->payload_offset,
                   transport_fifo_max_frame_data_mask, frame->payload_len);
     frame->last_sent_time_ms = transport_fifo.now;
@@ -172,7 +172,7 @@ void Min::send_ack() {
 
 // We don't queue an RESET frame - we send it straight away (if there's space to do so)
 void Min::send_reset() {
-	debug_print("send RESET\n");
+    debug_print("send RESET\n");
     if (on_wire_size(0) <= tx_space()) {
         on_wire_bytes(RESET, 0, 0, 0, 0, 0);
     }
@@ -222,10 +222,10 @@ bool Min::queue_frame(uint8_t min_id, uint8_t *payload, uint8_t payload_len) {
             payload_offset++;
             payload_offset &= transport_fifo_max_frame_data_mask;
         }
-	debug_print("Queued ID=%d, len=%d\n", min_id, payload_len);
+        debug_print("Queued ID=%d, len=%d\n", min_id, payload_len);
         return true;
     } else {
-	debug_print("Dropping frame ID=%d, len=%d\n", min_id, payload_len);
+        debug_print("Dropping frame ID=%d, len=%d\n", min_id, payload_len);
         this->transport_fifo.dropped_frames++;
         return false;
     }
@@ -283,7 +283,7 @@ void Min::valid_frame_received() {
                 this->transport_fifo.sn_min = seq;
                 // Now pop off all the frames up to (but not including) rn
                 // The ACK contains Rn; all frames before Rn are ACKed and can be removed from the window
-		debug_print("Received ACK seq=%d, num_acked=%d, num_nacked=%d\n", seq, num_acked, num_nacked);
+                debug_print("Received ACK seq=%d, num_acked=%d, num_nacked=%d\n", seq, num_acked, num_nacked);
                 for (uint8_t i = 0; i < num_acked; i++) {
                     transport_fifo_pop();
                 }
@@ -298,7 +298,7 @@ void Min::valid_frame_received() {
                     idx &= transport_fifo_max_frames_mask;
                 }
             } else {
-		    debug_print("Received spurious ACK seq=%d\n", seq);
+                debug_print("Received spurious ACK seq=%d\n", seq);
                 this->transport_fifo.spurious_acks++;
             }
             break;
@@ -333,8 +333,8 @@ void Min::valid_frame_received() {
                     // Now ready to pass this up to the application handlers
 
                     // Pass frame up to application handler to deal with
-		    debug_print("Incoming app frame seq=%d, id=%d, payload len=%d\n",
-				    seq, id_control & (uint8_t)0x3fU, payload_len);
+                    debug_print("Incoming app frame seq=%d, id=%d, payload len=%d\n",
+                                seq, id_control & (uint8_t) 0x3fU, payload_len);
                     application_handler(id_control & (uint8_t) 0x3fU, payload, payload_len);
                 } else {
                     // Discard this frame because we aren't looking for it: it's either a dupe because it was
@@ -360,12 +360,12 @@ void Min::rx_byte(uint8_t byte) {
     if (this->rx_header_bytes_seen == 2) {
         this->rx_header_bytes_seen = 0;
         if (byte == HEADER_BYTE) {
-	    debug_print("H");
+            debug_print("H");
             this->rx_frame_state = RECEIVING_ID_CONTROL;
             return;
         }
         if (byte == STUFF_BYTE) {
-		debug_print("S");
+            debug_print("S");
             /* Discard this byte; carry on receiving on the next character */
             return;
         } else {
@@ -376,7 +376,7 @@ void Min::rx_byte(uint8_t byte) {
     }
 
     if (byte == HEADER_BYTE) {
-	    debug_print("H");
+        debug_print("H");
         this->rx_header_bytes_seen++;
     } else {
         this->rx_header_bytes_seen = 0;
@@ -404,7 +404,7 @@ void Min::rx_byte(uint8_t byte) {
             break;
         case RECEIVING_LENGTH:
             this->rx_frame_length = byte;
-	    debug_print("l=%d ",this->rx_frame_length);
+            debug_print("l=%d ", this->rx_frame_length);
             this->rx_control = byte;
             crc32_step(this->rx_checksum, byte);
             if (this->rx_frame_length > 0) {
@@ -427,30 +427,30 @@ void Min::rx_byte(uint8_t byte) {
             }
             break;
         case RECEIVING_CHECKSUM_3:
-	    debug_print("C4C");
+            debug_print("C4C");
             this->rx_frame_checksum = ((uint32_t) byte) << 24;
             this->rx_frame_state = RECEIVING_CHECKSUM_2;
             break;
         case RECEIVING_CHECKSUM_2:
-	    debug_print("C3C");
+            debug_print("C3C");
             this->rx_frame_checksum |= ((uint32_t) byte) << 16;
             this->rx_frame_state = RECEIVING_CHECKSUM_1;
             break;
         case RECEIVING_CHECKSUM_1:
-	    debug_print("C2C");
+            debug_print("C2C");
             this->rx_frame_checksum |= ((uint32_t) byte) << 8;
             this->rx_frame_state = RECEIVING_CHECKSUM_0;
             break;
         case RECEIVING_CHECKSUM_0:
-	    debug_print("C1C");
+            debug_print("C1C");
             this->rx_frame_checksum |= byte;
             crc = crc32_finalize(this->rx_checksum);
             if (this->rx_frame_checksum != crc) {
-		    debug_print("frame fails crc\n");
+                debug_print("frame fails crc\n");
                 // Frame fails the checksum and so is dropped
                 this->rx_frame_state = SEARCHING_FOR_SOF;
             } else {
-		    debug_print("frame passes crc\n");
+                debug_print("frame passes crc\n");
                 // Checksum passes, go on to check for the end-of-frame marker
                 this->rx_frame_state = RECEIVING_EOF;
             }
@@ -458,7 +458,7 @@ void Min::rx_byte(uint8_t byte) {
         case RECEIVING_EOF:
             if (byte == 0x55u) {
                 // Frame received OK, pass up data to handler
-		debug_print("valid frame\n");
+                debug_print("valid frame\n");
                 valid_frame_received();
             }
             // else discard
@@ -478,12 +478,12 @@ void Min::poll() {
     uint32_t len = 0;
     if ((avl = serial->available())) {
         len = serial->readBytes(serialBuf, avl);
-	debug_print("received %d bytes of data: \n", len);
-	    for (uint32_t i = 0; i < len; i++) {
-		debug_print("%x ", serialBuf[i]);
-		rx_byte(serialBuf[i]);
-	    }
-	    debug_print("\n");
+        debug_print("received %d bytes of data: \n", len);
+        for (uint32_t i = 0; i < len; i++) {
+            debug_print("%x ", serialBuf[i]);
+            rx_byte(serialBuf[i]);
+        }
+        debug_print("\n");
 
     }
 

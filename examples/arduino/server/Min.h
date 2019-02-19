@@ -16,26 +16,28 @@
 #include <stdint.h>
 #include <Arduino.h>
 
-#define DEBUG_PRINT 1
+#define DEBUG_PRINT 0
 #if DEBUG_PRINT
+
 void debug_print(const char *msg, ...);
+
 #else
 #define debug_print(...)
 #endif
 
 struct TransportFrame {
-    uint32_t last_sent_time_ms;            // When frame was last sent (used for re-send timeouts)
-    uint16_t payload_offset;            // Where in the ring buffer the payload is
-    uint8_t payload_len;            // How big the payload is
-    uint8_t min_id;                // ID of frame
-    uint8_t seq;                // Sequence number of frame
+    uint32_t last_sent_time_ms;             // When frame was last sent (used for re-send timeouts)
+    uint16_t payload_offset;                // Where in the ring buffer the payload is
+    uint8_t payload_len;                    // How big the payload is
+    uint8_t min_id;                         // ID of frame
+    uint8_t seq;                            // Sequence number of frame
 };
 
 class TransportFIFO {
 public:
     TransportFIFO(uint8_t size) {
         frames = new struct TransportFrame[size];
-	now = 0;
+        now = 0;
     }
 
     void reset();
@@ -45,16 +47,16 @@ public:
     uint32_t last_sent_ack_time_ms;
     uint32_t last_received_anything_ms;
     uint32_t last_received_frame_ms;
-    uint32_t dropped_frames;        // Diagnostic counters
+    uint32_t dropped_frames;                // Diagnostic counters
     uint32_t spurious_acks;
     uint32_t sequence_mismatch_drop;
     uint32_t resets_received;
-    uint16_t n_ring_buffer_bytes;        // Number of bytes used in the payload ring buffer
-    uint16_t ring_buffer_tail_offset;    // Tail of the payload ring buffer
-    uint8_t n_frames;            // Number of frames in the FIFO
-    uint8_t head_idx;            // Where frames are taken from in the FIFO
-    uint8_t tail_idx;            // Where new frames are added
-    uint8_t sn_min;                // Sequence numbers for transport protocol
+    uint16_t n_ring_buffer_bytes;           // Number of bytes used in the payload ring buffer
+    uint16_t ring_buffer_tail_offset;       // Tail of the payload ring buffer
+    uint8_t n_frames;                       // Number of frames in the FIFO
+    uint8_t head_idx;                       // Where frames are taken from in the FIFO
+    uint8_t tail_idx;                       // Where new frames are added
+    uint8_t sn_min;                         // Sequence numbers for transport protocol
     uint8_t sn_max;
     uint8_t rn;
     uint32_t now;
@@ -79,7 +81,6 @@ public:
         transport_fifo_max_frame_data_mask = frame_data - 1;
 
         serialBuf = new uint8_t[serialBufLen];
-	max_window_size = 16;
     }
 
     void initSerial(HardwareSerial &serial) {
@@ -93,13 +94,13 @@ private:
     TransportFIFO transport_fifo;           // T-MIN queue of outgoing frames
     uint32_t ack_retransmit_timeout_ms = 25;
     uint32_t frame_retransmit_timeout_ms = 400;
-    uint32_t max_window_size;
-    uint32_t idle_timeout_ms;
+    uint32_t max_window_size = 16;
+    uint32_t idle_timeout_ms = 3000;
     uint32_t transport_fifo_max_frames_mask;
     uint32_t transport_fifo_max_frame_data_mask;
-    uint32_t transport_fifo_max_frames;
+    uint32_t transport_fifo_max_frames = 16;
     uint32_t transport_fifo_max_frame_data;
-    uint8_t max_payload;
+    uint8_t max_payload = 40;
 
     uint8_t *serialBuf;
     uint8_t *payloads_ring_buffer;

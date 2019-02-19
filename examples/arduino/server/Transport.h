@@ -42,6 +42,7 @@ public:
 
     void run();         ///< must be called periodically, to ensure correct
     ///< functionality of the class
+
     /**
      * @brief Function for reading activity status of the experiment
      * @return Experiment active
