@@ -1148,9 +1148,9 @@ class MainGui(QMainWindow):
         data = self.exp.handleFrame(frame, connection)
         if data is None:
             return
-        time = data['Zeit'] / 1000.0
-        dataPoints = data['Punkte']
-        names = data['Punkte'].keys()
+        time = data['Time'] / 1000.0
+        dataPoints = data['DataPoints']
+        names = data['DataPoints'].keys()
 
         for key, value in self._currentDataPointBuffers.items():
             if key in names:
