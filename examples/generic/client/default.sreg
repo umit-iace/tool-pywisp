@@ -1,0 +1,15 @@
+# default experiment file that is loaded when the gui starts up
+
+- Name: RunSystem
+
+  RampTrajectory:
+   StartTime: 5
+   StartValue: 28.0
+   EndTime: 70
+   EndValue: 5.0
+
+  Test:
+    Value1: 11.2
+    Value2: 22.1
+    Value3: 4
+    Value4: 1
