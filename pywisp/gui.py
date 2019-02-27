@@ -483,7 +483,7 @@ class MainGui(QMainWindow):
         timerTime, ok = DataIntDialog.getData(min=2, max=10000, current=self._settings.value("timer_time"))
 
         if ok:
-            self._settings.setValue("timer_timer", int(timerTime))
+            self._settings.setValue("timer_time", int(timerTime))
             self._logger.info("Set timer time to {}".format(timerTime))
 
         self._settings.endGroup()
