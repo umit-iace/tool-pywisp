@@ -1,5 +1,4 @@
 import sympy as sp
-import numpy as np
 from sympy import cos, sin, Matrix
 
 
@@ -176,3 +175,7 @@ B = Matrix([[ F + (m1+2*m2)*l1*sin(phi1)*dphi1**2 + m2*l2*sin(phi2)*dphi2**2 ],
             [ m2*g*l2*sin(phi2) + 2*m2*l1*l2*sin(phi1-phi2)*dphi1**2 ]])
 
 rhs = solve_motion_equations(M, B, state_vars, input_vars)
+
+
+def ode_rhs(t, y, u):
+    return rhs(y, (u,), 0, 0, 0)

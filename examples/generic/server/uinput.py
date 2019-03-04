@@ -1,11 +1,10 @@
 from threading import Thread
-from inputs import get_gamepad, get_key, UnpluggedError, devices
+from inputs import get_gamepad, get_key, devices
 
 
 class GamePad(Thread):
 
     def __init__(self):
-
         Thread.__init__(self)
         self.Key9 = 0
         self.Key10 = 0
@@ -46,7 +45,6 @@ class GamePad(Thread):
 class Keyboard(Thread):
 
     def __init__(self):
-
         Thread.__init__(self)
         self.Left = 0
         self.Right = 0
@@ -85,14 +83,3 @@ def get_input_device():
     input_.start()
 
     return input_
-
-
-if __name__ == "__main__":
-    # gp = GamePad()
-    input_ = Keyboard()
-    input_.start()
-    import time
-    while 1:
-        print(input_.Left, input_.Right, input_.Enter)
-        # print(input_.LStickX)
-        time.sleep(0.5)

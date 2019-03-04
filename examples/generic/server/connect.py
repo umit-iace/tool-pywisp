@@ -4,21 +4,14 @@ from struct import pack
 from socket import socket, AF_INET, SOCK_STREAM
 
 
-class Sender(Thread):
+class Sender:
 
     def __init__(self, connection, queue_size, msg_length):
-        Thread.__init__(self)
         self.connection = connection
         self.deque = deque(maxlen=queue_size)
         self.msg_length = msg_length
-        self._quit = False
 
-    def run(self):
-        while not self._quit:
-            if len(self.deque) > 0:
-                self.connection.send(self.deque.popleft())
-
-    def send(self, id, data, format):
+    def put(self, id, data, format):
         id = pack('>B', id)
         args = [format] + [date for date in data]
         frame = pack(*args)
@@ -28,8 +21,9 @@ class Sender(Thread):
                 msg += b'\x00'
         self.deque.append(msg)
 
-    def quit(self):
-        self._quit = True
+    def send_all(self):
+        while len(self.deque):
+            self.connection.send(self.deque.popleft())
 
 
 class Receiver(Thread):
@@ -45,12 +39,20 @@ class Receiver(Thread):
         while not self._quit:
             self.deque.append(self.connection.recv(self.msg_length))
 
-    def receive(self):
+    def get_all(self):
+        msgs = list()
+        while self.new_msg():
+            msgs.append(self.get_msg())
+
+        return msgs
+
+    def get_msg(self):
         msg = self.deque.popleft()
 
         try:
             id = msg[0]
             data = msg[1:]
+            print("received (id, data): ({}, {})".format(id, data))
 
         except IndexError as e:
             print("Malformed message: ", msg)
@@ -65,7 +67,7 @@ class Receiver(Thread):
         self._quit = True
 
 
-def get_socket(init_port, np=4):
+def socket_bind_listen(init_port, np=4):
     bound = False
     port = init_port
 
@@ -85,13 +87,16 @@ def get_socket(init_port, np=4):
     return sock
 
 
-def establish_connection(socket, msg_length):
+def socket_accept(socket):
     print('waiting for a connection')
     connection, client_address = socket.accept()
-    sender = Sender(connection, 1, msg_length)
-    sender.start()
-    receiver = Receiver(connection, None, msg_length)
-    receiver.start()
     print('connection from', client_address)
 
-    return connection, sender, receiver
+    return connection
+
+def get_sender_receiver(connection, msg_length):
+    sender = Sender(connection, 1, msg_length)
+    receiver = Receiver(connection, None, msg_length)
+    receiver.start()
+
+    return sender, receiver
