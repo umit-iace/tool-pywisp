@@ -25,6 +25,7 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
     this dict will be passed back to this class and is thenceforward available
     via the :py:attr:`settings` property.
     The :py:attr:`dataPoints` are accessible by the GUI for plotting.
+    The :py:attr:`ids` ois a list of identifiers for frame handling of connection.
     The :py:attr:`connection` determines the connection interface.
     """
     def __init__(self):
@@ -43,12 +44,16 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
 
     @property
     @abstractmethod
+    def ids(self):
+        pass
+
+    @property
+    @abstractmethod
     def connection(self):
         pass
 
-    @staticmethod
     @abstractmethod
-    def handleFrame(frame):
+    def handleFrame(self, frame):
         pass
 
     @abstractmethod

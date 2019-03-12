@@ -14,6 +14,8 @@ class RampTrajectory(ExperimentModule):
                                   ("EndValue", 0.7),
                                   ("EndTime", 15)])
 
+    ids = [11, 13]
+
     connection = ConnTestTCP.__name__
 
     def __init__(self):
@@ -31,16 +33,15 @@ class RampTrajectory(ExperimentModule):
                               int(float(data[1]) * 1000),
                               float(data[2]),
                               int(float(data[3]) * 1000))
-        dataPoint = {'id': 13,
+        dataPoint = {'id': self.ids[1],
                      'msg': payload
                      }
         return dataPoint
 
-    @staticmethod
-    def handleFrame(frame):
+    def handleFrame(self, frame):
         dataPoints = {}
         fid = frame.min_id
-        if fid == 11:
+        if fid == self.ids[0]:
             data = struct.unpack('>Ld', frame.payload[:12])
             dataPoints['Time'] = data[0]
             dataPoints['DataPoints'] = {'TrajOutput': data[1]}
