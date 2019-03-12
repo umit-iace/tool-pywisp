@@ -30,7 +30,7 @@ public:
         if (ec != boost::asio::error::operation_aborted) {
             task();
 
-            timer.expires_at(timer.expires_at() + boost::posix_time::seconds(interval));
+            timer.expires_at(timer.expires_at() + boost::posix_time::milliseconds(interval));
             startWait();
         }
     }
@@ -41,7 +41,7 @@ public:
     void start() {
         task();
 
-        timer.expires_from_now(boost::posix_time::seconds(interval));
+        timer.expires_from_now(boost::posix_time::milliseconds(interval));
         startWait();
     }
 
@@ -71,7 +71,7 @@ public:
      * @brief Adds a periodic task. The task is started if the io_context object runs.
      * @param name name of the task.
      * @param task task function, that is processed in task.
-     * @param interval time intervall of the periddic task.
+     * @param interval time intervall of the periodic task in ms.
      */
     void addTask(std::string const &name, PeriodicTask::handlerFunction const &task, int interval) {
         tasks.push_back(std::make_unique<PeriodicTask>(std::ref(ioService), name, interval, task));
