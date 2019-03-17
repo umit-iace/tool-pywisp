@@ -1046,12 +1046,9 @@ class MainGui(QMainWindow):
                         msg.valueon = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueon'])
                         msg.valueoff = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueoff'])
                     elif msg.widgettype == 2:
-                        msg.minslider = str(self._experiments[self._currentExperimentIndex]
-                                            ['Remote'][name]['minslider'])
-                        msg.maxslider = str(self._experiments[self._currentExperimentIndex]
-                                            ['Remote'][name]['maxslider'])
-                        msg.stepslider = str(self._experiments[self._currentExperimentIndex]
-                                             ['Remote'][name]['stepslider'])
+                        msg.minslider = self._experiments[self._currentExperimentIndex]['Remote'][name]['minslider']
+                        msg.maxslider = self._experiments[self._currentExperimentIndex]['Remote'][name]['maxslider']
+                        msg.stepslider = self._experiments[self._currentExperimentIndex]['Remote'][name]['stepslider']
                     else:
                         continue
                     self.remoteAddWidget(msg)
@@ -1094,12 +1091,9 @@ class MainGui(QMainWindow):
                         msg.valueon = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueon'])
                         msg.valueoff = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueoff'])
                     elif msg.widgettype == 2:
-                        msg.minslider = str(self._experiments[self._currentExperimentIndex]
-                                            ['Remote'][name]['minslider'])
-                        msg.maxslider = str(self._experiments[self._currentExperimentIndex]
-                                            ['Remote'][name]['maxslider'])
-                        msg.stepslider = str(self._experiments[self._currentExperimentIndex]
-                                             ['Remote'][name]['stepslider'])
+                        msg.minslider = self._experiments[self._currentExperimentIndex]['Remote'][name]['minslider']
+                        msg.maxslider = self._experiments[self._currentExperimentIndex]['Remote'][name]['maxslider']
+                        msg.stepslider = self._experiments[self._currentExperimentIndex]['Remote'][name]['stepslider']
                     else:
                         continue
                     self.remoteAddWidget(msg)
@@ -1607,7 +1601,7 @@ class remoteWidgetEdit(QDialog):
                 if self.maxslider == "" or self.minslider == "" or self.stepslider == "":
                     return
             self.widgettype = self.typelist.currentIndex()
-            self.ok=True
+            self.ok = True
         self.close()
 
 
@@ -1634,13 +1628,11 @@ class freeLayout(QLayout):
         super(freeLayout, self).addWidget(widget)
 
     def clearAll(self):
-        for widget in self.list:
-            widget.deleteLater()
-        self.list = []
+        while self.count() > 0:
+            self.removeWidget(self.list[0])
 
     def removeWidget(self, widget):
-        for widgets in self.list:
-            if widgets == widget:
-                self.list.remove(widget)
-                widget.deleteLater()
-                break
+        self.list.remove(widget)
+        if widget.widgettype == 2:
+            widget.label.deleteLater()
+        widget.deleteLater()

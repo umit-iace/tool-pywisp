@@ -11,7 +11,9 @@ to design a control flow for the test bench.
 
 .. include:: AUTHORS.rst
 
-- Name: Digital_Testsprung
+- Example for Remote
+
+Name: Digital_Testsprung
 
   ConstTrajectory:
    StartValue: 255
