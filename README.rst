@@ -11,3 +11,22 @@ to design a control flow for the test bench.
 
 .. include:: AUTHORS.rst
 
+- Name: Digital_Testsprung
+
+  ConstTrajectory:
+   StartValue: 255
+   StartTime: 1
+   EndValue: 60
+   PWM: True
+  
+  Remote:
+   test:
+    widgettype: 0
+    valueon: 22
+    parameter: EndValue
+   test2:
+    widgettype: 0
+    valueon: 0
+    parameter: EndValue
+
+  BallInTube:

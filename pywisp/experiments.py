@@ -138,15 +138,14 @@ class ExperimentInteractor(QObject):
         self.targetModel = ExperimentModel(self)
         self.targetModel.itemChanged.connect(self.itemChanged)
 
-    def _addSettings(self, index):
+    def _addSettings(self, moduleName, parent):
         """
         Sets the settings from an experiment module.
-        :param index: the given experiment module index
+        :param moduleName: the given experiment module name
+        :param parent: the given experiment module parent
         """
-        parent = index.model().itemFromIndex(index)
-        moduleName = parent.data(role=PropertyItem.RawDataRole)
-
         settings = self._readSettings(moduleName)
+
         for key, val in settings.items():
             setting_name = PropertyItem(key)
             setting_value = PropertyItem(val)
@@ -164,15 +163,12 @@ class ExperimentInteractor(QObject):
 
         raise ExperimentException("_readSettings(): No module called {} found!".format(moduleName))
 
-    def _readDataPoints(self, index):
+    def _readDataPoints(self, moduleName):
         """
         Reads the data points from an experiment module.
-        :param index: the given experiment module index
+        :param moduleName: the given experiment module name
         :return: data points of module or raise an exception if module is unknown
         """
-        parent = index.model().itemFromIndex(index)
-        moduleName = parent.data(role=PropertyItem.RawDataRole)
-
         for module in getRegisteredExperimentModules():
             if module[1] == moduleName:
                 return module[0].dataPoints
@@ -194,7 +190,12 @@ class ExperimentInteractor(QObject):
         moduleItem.removeRows(0, moduleItem.rowCount())
 
         # insert new settings
-        self._addSettings(moduleItem.index())
+        parent = moduleItem.index().model().itemFromIndex(moduleItem.index())
+        moduleName = parent.data(role=PropertyItem.RawDataRole)
+
+        if not moduleName == 'Remote':
+            self._addSettings(moduleName, parent)
+
 
     def getSettings(self, item):
         """
@@ -251,14 +252,21 @@ class ExperimentInteractor(QObject):
         for row in range(self.targetModel.rowCount()):
             index = self.targetModel.index(row, 0)
             try:
-                self._addSettings(index)
-                self.dataPoints += self._readDataPoints(index)
+                parent = index.model().itemFromIndex(index)
+                moduleName = parent.data(role=PropertyItem.RawDataRole)
+
+                if not moduleName == 'Remote':
+                    self._addSettings(moduleName, parent)
+                    self.dataPoints += self._readDataPoints(moduleName)
             except ExperimentException as e:
                 self._logger.error(e)
                 return False
 
         for moduleName, moduleValue in exp.items():
             if moduleName == 'Name':
+                continue
+
+            if moduleName == 'Remote':
                 continue
 
             if not moduleValue:
