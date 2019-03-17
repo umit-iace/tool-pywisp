@@ -1390,12 +1390,23 @@ class MainGui(QMainWindow):
                         return
         self._logger.warning("Parameter '{}' does not exist in actual experiment".format(widget.parameter))
 
+    def copyRemoteSource(self):
+        text = "  Remote:\n"
+        text += yaml.dump(self._experiments[self._currentExperimentIndex]['Remote'], default_flow_style=False)
+        text = text.replace("\n", "\n    ")
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+
+
     def remoteWidgetMenue(self, position):
         menu = QMenu(self)
         addaction = menu.addAction("Add widget")
+        saveaction = menu.addAction("Copy remote source")
         action = menu.exec_(self.remoteWidget.mapToGlobal(position))
         if action == addaction:
             self.remoteAddWidget()
+        elif action == saveaction:
+            self.copyRemoteSource()
 
 #----------------------------------------------------------------------------------------------------------------------
     def createMovableWidget(self, type):
