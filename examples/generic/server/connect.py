@@ -1,23 +1,24 @@
-from threading import Thread
 from collections import deque
-from struct import pack
+
 from socket import socket, AF_INET, SOCK_STREAM
+from struct import pack
+from threading import Thread
 
 
 class Sender:
 
-    def __init__(self, connection, queue_size, msg_length):
+    def __init__(self, connection, queueSize, msgLength):
         self.connection = connection
-        self.deque = deque(maxlen=queue_size)
-        self.msg_length = msg_length
+        self.deque = deque(maxlen=queueSize)
+        self.msgLength = msgLength
 
     def put(self, id, data, format):
         id = pack('>B', id)
         args = [format] + [date for date in data]
         frame = pack(*args)
         msg = id + frame
-        if len(msg) < self.msg_length + 1:
-            for i in range(self.msg_length + 1 - len(msg)):
+        if len(msg) < self.msgLength + 1:
+            for i in range(self.msgLength + 1 - len(msg)):
                 msg += b'\x00'
         self.deque.append(msg)
 
@@ -39,14 +40,14 @@ class Receiver(Thread):
         while not self._quit:
             self.deque.append(self.connection.recv(self.msg_length))
 
-    def get_all(self):
+    def getAll(self):
         msgs = list()
-        while self.new_msg():
-            msgs.append(self.get_msg())
+        while self.newMsg():
+            msgs.append(self.getMsg())
 
         return msgs
 
-    def get_msg(self):
+    def getMsg(self):
         msg = self.deque.popleft()
 
         try:
@@ -60,7 +61,7 @@ class Receiver(Thread):
 
         return id, data
 
-    def new_msg(self):
+    def newMsg(self):
         return bool(len(self.deque))
 
     def quit(self):
@@ -93,6 +94,7 @@ def socket_accept(socket):
     print('connection from', client_address)
 
     return connection
+
 
 def get_sender_receiver(connection, msg_length):
     sender = Sender(connection, 1, msg_length)

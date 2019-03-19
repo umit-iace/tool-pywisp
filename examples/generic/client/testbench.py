@@ -39,10 +39,6 @@ class Test(ExperimentModule):
         dataPoints = {}
         fid = frame.min_id
         if fid == 10:
-            # import pdb
-            # from PyQt5.QtCore import pyqtRemoveInputHook
-            # pyqtRemoveInputHook()
-            # pdb.set_trace()
             data = struct.unpack('>Ldddd', frame.payload[:36])
             dataPoints['Time'] = data[0]
             dataPoints['DataPoints'] = {'Value1': data[1],
