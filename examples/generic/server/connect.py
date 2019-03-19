@@ -6,13 +6,21 @@ from threading import Thread
 
 
 class Sender:
-
+    """
+    Realizes a Tcp/IP transmitter.
+    """
     def __init__(self, connection, queueSize, msgLength):
         self.connection = connection
         self.deque = deque(maxlen=queueSize)
         self.msgLength = msgLength
 
     def put(self, id, data, format):
+        """
+        Sends message with given id and payload to queue.
+        :param id: id of frame
+        :param data: payload of frame
+        :param format: byte format of payload
+        """
         id = pack('>B', id)
         args = [format] + [date for date in data]
         frame = pack(*args)
@@ -22,13 +30,18 @@ class Sender:
                 msg += b'\x00'
         self.deque.append(msg)
 
-    def send_all(self):
+    def sendAll(self):
+        """
+        Sends all messages from queue to connected client
+        """
         while len(self.deque):
             self.connection.send(self.deque.popleft())
 
 
 class Receiver(Thread):
-
+    """
+    Realizes a Tcp/IP receiver as thread.
+    """
     def __init__(self, connection, queue_size, msg_length):
         Thread.__init__(self)
         self.connection = connection
@@ -41,6 +54,10 @@ class Receiver(Thread):
             self.deque.append(self.connection.recv(self.msg_length))
 
     def getAll(self):
+        """
+        Returns all received messages as list .
+        :return: list of messages
+        """
         msgs = list()
         while self.newMsg():
             msgs.append(self.getMsg())
@@ -48,6 +65,10 @@ class Receiver(Thread):
         return msgs
 
     def getMsg(self):
+        """
+        Splits received message in id and payload part.
+        :return: id and payload
+        """
         msg = self.deque.popleft()
 
         try:
@@ -62,17 +83,27 @@ class Receiver(Thread):
         return id, data
 
     def newMsg(self):
+        """
+        Checks if messages in queue.
+        :return: True if a message is available otherwise False
+        """
         return bool(len(self.deque))
 
     def quit(self):
         self._quit = True
 
 
-def socket_bind_listen(init_port, np=4):
+def socketBindListen(initPort, np=4):
+    """
+    Initialize a socket with given port.
+    :param initPort: first port address
+    :param np: port changes
+    :return: socket instance
+    """
     bound = False
-    port = init_port
+    port = initPort
 
-    while not bound and port - init_port < np:
+    while not bound and port - initPort < np:
         try:
             sock = socket(AF_INET, SOCK_STREAM)
             server_address = ('localhost', port)
@@ -88,7 +119,12 @@ def socket_bind_listen(init_port, np=4):
     return sock
 
 
-def socket_accept(socket):
+def socketAccept(socket):
+    """
+    Waiting for a client accept at socket
+    :param socket: listening socket
+    :return: connection instance for connected client
+    """
     print('waiting for a connection')
     connection, client_address = socket.accept()
     print('connection from', client_address)
@@ -96,9 +132,15 @@ def socket_accept(socket):
     return connection
 
 
-def get_sender_receiver(connection, msg_length):
-    sender = Sender(connection, 1, msg_length)
-    receiver = Receiver(connection, None, msg_length)
+def getSenderReceiver(connection, msgLength):
+    """
+    Initializes the transmitter and receiver for a given connection.
+    :param connection: Tcp/IP connection instance
+    :param msgLength: length of message
+    :return: transmitter and receiver instance
+    """
+    sender = Sender(connection, 1, msgLength)
+    receiver = Receiver(connection, None, msgLength)
     receiver.start()
 
     return sender, receiver

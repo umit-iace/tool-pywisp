@@ -1,6 +1,6 @@
 import numpy as np
 import time
-from connect import socket_bind_listen, socket_accept, get_sender_receiver
+from connect import socketBindListen, socketAccept, getSenderReceiver
 from scipy.integrate import ode
 from system import System
 from threading import ThreadError, active_count
@@ -55,9 +55,9 @@ if __name__ == '__main__':
 
     # communication setup
     msgLength = 80
-    socket = socket_bind_listen(50007)
-    connection = socket_accept(socket)
-    sender, receiver = get_sender_receiver(connection, msgLength)
+    socket = socketBindListen(50007)
+    connection = socketAccept(socket)
+    sender, receiver = getSenderReceiver(connection, msgLength)
 
     # init main loop
     start_time = time.time()
@@ -85,7 +85,7 @@ if __name__ == '__main__':
 
         # send data if available
         sendStart = time.time()
-        sender.send_all()
+        sender.sendAll()
         threadDebug(debug)
 
         # lock loop to cycle time

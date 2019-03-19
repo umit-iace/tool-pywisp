@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import sympy as sp
 from sympy import cos, sin, Matrix, lambdify
 import numpy as np
@@ -5,6 +6,9 @@ import settings as st
 
 
 class System:
+    """
+    Implementation of the nonlinear equation System of the double pendulum.
+    """
     def __init__(self):
         x, dx, phi1, dphi1, phi2, dphi2 = sp.symbols('x, dx, phi1, dphi1, phi2, dphi2')
         F, = sp.symbols('F,')
@@ -38,4 +42,11 @@ class System:
         self.f = lambdify((stateVars, inputVars), solution, modules='numpy')
 
     def rhs(self, t, x, u):
+        """
+        Returns the right hand side of the ODE system.
+        :param t: time
+        :param x: states (x, dx, phi1, dphi1, phi2, dphi2)
+        :param u: input (force)
+        :return:
+        """
         return self.f(x, u)

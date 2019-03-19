@@ -1,9 +1,12 @@
+# -*- coding: utf-8 -*-
 from threading import Thread
 from inputs import get_gamepad, get_key, devices
 
 
 class GamePad(Thread):
-
+    """
+    Implementation of a gamepad control as a separate thread
+    """
     def __init__(self):
         Thread.__init__(self)
         self.Key9 = 0
@@ -43,7 +46,9 @@ class GamePad(Thread):
 
 
 class Keyboard(Thread):
-
+    """
+    Implementation of a keyboard control as a separate thread
+    """
     def __init__(self):
         Thread.__init__(self)
         self.Left = 0
@@ -71,6 +76,11 @@ class Keyboard(Thread):
 
 
 def get_input_device():
+    """
+    Detects if an gamepad is connected. Sets the input to gamepad if detected or otherwise to keboard
+
+    :return: gamepad or keyboard thread
+    """
     msg = "{} as input device connected"
     if any(["GamePad" in des for des in [it[0] for it in [dir(dev) for dev in devices]]]):
         input_ = GamePad()
