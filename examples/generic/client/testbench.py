@@ -6,33 +6,19 @@ from connection import ConnTestTCP
 from pywisp.experimentModules import ExperimentModule
 
 
-class Test(ExperimentModule):
-    dataPoints = ['Value1',
-                  'Value2',
-                  'Value3',
-                  'Value4',
+class TwoPendulum(ExperimentModule):
+    dataPoints = ['x',
+                  'phi1',
+                  'phi2',
+                  'u',
                   ]
 
-    publicSettings = OrderedDict([("Value1", 0.0),
-                                  ("Value2", 10.0),
-                                  ("Value3", 320),
-                                  ("Value4", 10)])
+    publicSettings = OrderedDict()
 
     connection = ConnTestTCP.__name__
 
     def __init__(self):
         ExperimentModule.__init__(self)
-
-    def getParams(self, data):
-        payload = struct.pack('>dfhh',
-                              float(data[0]),
-                              float(data[1]),
-                              int(data[2]),
-                              int(data[3]) % 256)
-        dataPoint = {'id': 12,
-                     'msg': payload
-                     }
-        return dataPoint
 
     @staticmethod
     def handleFrame(frame):
@@ -41,10 +27,10 @@ class Test(ExperimentModule):
         if fid == 10:
             data = struct.unpack('>Ldddd', frame.payload[:36])
             dataPoints['Time'] = data[0]
-            dataPoints['DataPoints'] = {'Value1': data[1],
-                                        'Value2': data[2],
-                                        'Value3': data[3],
-                                        'Value4': data[4],
+            dataPoints['DataPoints'] = {'x': data[1],
+                                        'phi1': data[2],
+                                        'phi2': data[3],
+                                        'u': data[4],
                                         }
         else:
             dataPoints = None

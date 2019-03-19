@@ -4,21 +4,21 @@
 # ---------------------------------------------------------------------
 
 # beam parameter
-beamLength = 1.575                      # m
-beamHeight = 0.010                      # m
+beamLength = 1.575                                              # m
+beamHeight = 0.010                                              # m
 
 # cart parameter
-cartLength = 0.145                      # m
-cartHeight = 0.060                      # m
+cartLength = 0.145                                              # m
+cartHeight = 0.060                                              # m
 
 # pendulum parameter
-pendulumShaftRadius = 0.040 / 2         # m
+pendulumShaftRadius = 0.040 / 2                                 # m
 
 pendulum1Height = 0.250 + pendulumShaftRadius                   # m
-pendulum1Radius = 0.010 / 2         # m
+pendulum1Radius = 0.010 / 2                                     # m
 
-pendulum2Height = 0.250 + pendulumShaftRadius                    # m
-pendulum2Radius = 0.010 / 2          # m
+pendulum2Height = 0.250 + pendulumShaftRadius                   # m
+pendulum2Radius = 0.010 / 2                                     # m
 
 # xlim for mpl plot
 xMinPlot = -0.850

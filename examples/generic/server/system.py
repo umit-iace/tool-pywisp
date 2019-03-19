@@ -39,7 +39,3 @@ class System:
 
     def rhs(self, t, x, u):
         return self.f(x, u)
-
-
-if __name__ == "__main__":
-    system = System()

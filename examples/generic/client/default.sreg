@@ -2,8 +2,4 @@
 
 - Name: RunSystem
 
-  Test:
-    Value1: 11.2
-    Value2: 22.1
-    Value3: 4
-    Value4: 1
+  TwoPendulum:

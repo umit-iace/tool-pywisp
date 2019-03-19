@@ -17,3 +17,9 @@ B&R
 
 .. include:: ../../examples/tcp/br-server/README.rst
    :start-after: sphinx-marker
+
+Generic
+-------
+
+.. include:: ../../examples/tcp/pc-server/README.rst
+   :start-after: sphinx-marker

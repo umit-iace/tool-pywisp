@@ -8,7 +8,7 @@ from visualization import MplTwoPendulumVisualizer
 
 if __name__ == '__main__':
     pw.registerConnection(ConnTestTCP)
-    pw.registerExperimentModule(testbench.Test)
+    pw.registerExperimentModule(testbench.TwoPendulum)
     pw.registerVisualizer(MplTwoPendulumVisualizer)
     app = QApplication(sys.argv)
     form = pw.MainGui()
