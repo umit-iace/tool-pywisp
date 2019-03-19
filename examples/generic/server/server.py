@@ -60,6 +60,11 @@ if __name__ == '__main__':
     sender, receiver = get_sender_receiver(connection, msgLength)
 
     # init main loop
+    status_string = ("loop: {:10.6f} <{:10.6f} /{:10.6f}\t | \t"
+                     "cycle: {:10.6f} /{:10.6f}\t | \t"
+                     "receive: {:10.6f}\t | \t"
+                     "send: {:10.6f}\t | \t"
+                     "timeouts in total {}")
     start_time = time.time()
     lastReset = start_time
     loopStart = start_time
@@ -101,13 +106,9 @@ if __name__ == '__main__':
         # print status info
         if loopTime > loopTimeMax:
             loopTimeMax = loopTime
-        print("loop: {:10.6f} <{:10.6f} /{:10.6f}\t | \t"
-              "cycle: {:10.6f} /{:10.6f}\t | \t"
-              "receive: {:10.6f}\t | \t"
-              "send: {:10.6f}\t | \t"
-              "timeouts in total {}".format(loopTime, loopTimeMax, loopEnd - loopStart,
-                                            sendStart - cycleStart, cycleTime,
-                                            cycleStart - loopStart,
-                                            loopFinished - sendStart,
-                                            rtErrors))
+        print(status_string.format(loopTime, loopTimeMax, loopEnd - loopStart,
+                                   sendStart - cycleStart, cycleTime,
+                                   cycleStart - loopStart,
+                                   loopFinished - sendStart,
+                                   rtErrors))
         loopStart = loopEnd
