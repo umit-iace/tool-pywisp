@@ -29,14 +29,17 @@ class System:
                     [m2 * g * l2 * sin(phi2) + 2 * m2 * l1 * l2 * sin(phi1 - phi2) * dphi1 ** 2]])
 
         solution = M.solve(B)
-        solution = solution.row_insert(1, Matrix([dx]))
-        solution = solution.row_insert(3, Matrix([dphi1]))
-        solution = solution.row_insert(5, Matrix([dphi2]))
-        
+        solution = solution.row_insert(0, Matrix([dx]))
+        solution = solution.row_insert(2, Matrix([dphi1]))
+        solution = solution.row_insert(4, Matrix([dphi2]))
+
         stateVars = np.array([x, dx, phi1, dphi1, phi2, dphi2])
         inputVars = F
         self.f = lambdify((stateVars, inputVars), solution, modules='numpy')
 
     def rhs(self, t, x, u):
-        print(u)
         return self.f(x, u)
+
+
+if __name__ == "__main__":
+    system = System()
