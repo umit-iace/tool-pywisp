@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging.config
-import os
-
 import matplotlib as mpl
+import os
 
 # make everybody use qt5
 mpl.use('Qt5Agg')
@@ -25,6 +24,6 @@ __version__ = '1.0'
 
 # configure logging
 with open(get_resource("logging.yaml", ""), "r") as f:
-    log_conf = yaml.load(f)
+    log_conf = yaml.load(f, Loader=Loader)
 
 logging.config.dictConfig(log_conf)

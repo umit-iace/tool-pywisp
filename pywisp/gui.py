@@ -7,6 +7,10 @@ import pkg_resources
 import serial.tools.list_ports
 import time
 import yaml
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
 from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QSettings, QCoreApplication
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
@@ -999,7 +1003,7 @@ class MainGui(QMainWindow):
 
         self._logger.info("Load config file: {0}".format(fileName))
         with open(fileName.encode(), "r") as f:
-            self._experiments = yaml.load(f)
+            self._experiments = yaml.load(f, Loader=Loader)
 
         self._logger.info("Lade {} Experimente".format(len(self._experiments)))
 
