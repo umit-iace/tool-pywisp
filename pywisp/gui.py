@@ -400,7 +400,8 @@ class MainGui(QMainWindow):
             return fn
 
         baud = settings['baud']
-        bauds = ['1200', '2400', '4800', '9600', '14400', '19200', '28800', '38400', '57600', '115200']
+        bauds = ['1200', '2400', '4800', '9600', '14400', '19200', '28800',
+                 '38400', '57600', '115200', '125000', '250000', '500000']
         connMenu.clear()
         for _baud in bauds:
             baudAction = QAction(_baud, self)
