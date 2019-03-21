@@ -7,6 +7,7 @@ import pkg_resources
 import serial.tools.list_ports
 import time
 import yaml
+
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
 except ImportError:
@@ -21,7 +22,7 @@ from .connection import SerialConnection, TcpConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
-    DataTcpIpDialog
+    DataTcpIpDialog, RemoteWidgetEdit, FreeLayout
 
 
 class MainGui(QMainWindow):
@@ -256,7 +257,7 @@ class MainGui(QMainWindow):
         self.remoteWidget = QWidget()
         self.remoteWidget.setContextMenuPolicy(Qt.CustomContextMenu)
         self.remoteWidget.customContextMenuRequested.connect(self.remoteWidgetMenue)
-        self.remoteWidgetLayout = freeLayout()
+        self.remoteWidgetLayout = FreeLayout()
         self.remoteWidget.setLayout(self.remoteWidgetLayout)
         self.remoteDock.addWidget(self.remoteWidget)
 
@@ -297,7 +298,7 @@ class MainGui(QMainWindow):
                 self.connections[cls] = {}
         else:
             self._logger.error("No Connections found, return!")
-            #return
+            # return
 
         serialCnt = 0
         for conn, connInstance in self.connections.items():
@@ -581,10 +582,10 @@ class MainGui(QMainWindow):
             self._logger.error("Name '{}' exists.".format(name))
             return
 
-        toplevelitem = QTreeWidgetItem()
-        toplevelitem.setText(0, name)
-        self.dataPointTreeWidget.addTopLevelItem(toplevelitem)
-        toplevelitem.setExpanded(1)
+        topLevelItem = QTreeWidgetItem()
+        topLevelItem.setText(0, name)
+        self.dataPointTreeWidget.addTopLevelItem(topLevelItem)
+        topLevelItem.setExpanded(1)
 
     def removeSelectedPlotTreeItems(self):
         items = self.dataPointTreeWidget.selectedItems()
@@ -1045,20 +1046,20 @@ class MainGui(QMainWindow):
 
             if 'Remote' in self._experiments[self._currentExperimentIndex]:
                 for name in self._experiments[self._currentExperimentIndex]['Remote']:
-                    msg = remoteWidgetEdit(self, visible=False)
+                    msg = RemoteWidgetEdit(self, visible=False)
                     msg.name = name
                     msg.parameter = self._experiments[self._currentExperimentIndex]['Remote'][name]['parameter']
                     msg.ok = True
-                    msg.widgettype = self._experiments[self._currentExperimentIndex]['Remote'][name]['widgettype']
-                    if msg.widgettype == 0:
-                        msg.valueon= str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueon'])
-                    elif msg.widgettype == 1:
-                        msg.valueon = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueon'])
-                        msg.valueoff = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueoff'])
-                    elif msg.widgettype == 2:
-                        msg.minslider = self._experiments[self._currentExperimentIndex]['Remote'][name]['minslider']
-                        msg.maxslider = self._experiments[self._currentExperimentIndex]['Remote'][name]['maxslider']
-                        msg.stepslider = self._experiments[self._currentExperimentIndex]['Remote'][name]['stepslider']
+                    msg.widgetType = self._experiments[self._currentExperimentIndex]['Remote'][name]['widgetType']
+                    if msg.widgetType == 0:
+                        msg.valueOn = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOn'])
+                    elif msg.widgetType == 1:
+                        msg.valueOn = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOn'])
+                        msg.valueOff = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOff'])
+                    elif msg.widgetType == 2:
+                        msg.minSlider = self._experiments[self._currentExperimentIndex]['Remote'][name]['minSlider']
+                        msg.maxSlider = self._experiments[self._currentExperimentIndex]['Remote'][name]['maxSlider']
+                        msg.stepSlider = self._experiments[self._currentExperimentIndex]['Remote'][name]['stepSlider']
                     else:
                         continue
                     self.remoteAddWidget(msg)
@@ -1090,20 +1091,20 @@ class MainGui(QMainWindow):
 
             if 'Remote' in self._experiments[self._currentExperimentIndex]:
                 for name in self._experiments[self._currentExperimentIndex]['Remote']:
-                    msg = remoteWidgetEdit(self, visible=False)
+                    msg = RemoteWidgetEdit(self, visible=False)
                     msg.name = name
                     msg.parameter = self._experiments[self._currentExperimentIndex]['Remote'][name]['parameter']
                     msg.ok = True
-                    msg.widgettype = self._experiments[self._currentExperimentIndex]['Remote'][name]['widgettype']
-                    if msg.widgettype == 0:
-                        msg.valueon= str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueon'])
-                    elif msg.widgettype == 1:
-                        msg.valueon = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueon'])
-                        msg.valueoff = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueoff'])
-                    elif msg.widgettype == 2:
-                        msg.minslider = self._experiments[self._currentExperimentIndex]['Remote'][name]['minslider']
-                        msg.maxslider = self._experiments[self._currentExperimentIndex]['Remote'][name]['maxslider']
-                        msg.stepslider = self._experiments[self._currentExperimentIndex]['Remote'][name]['stepslider']
+                    msg.widgetType = self._experiments[self._currentExperimentIndex]['Remote'][name]['widgetType']
+                    if msg.widgetType == 0:
+                        msg.valueOn = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOn'])
+                    elif msg.widgetType == 1:
+                        msg.valueOn = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOn'])
+                        msg.valueOff = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOff'])
+                    elif msg.widgetType == 2:
+                        msg.minSlider = self._experiments[self._currentExperimentIndex]['Remote'][name]['minSlider']
+                        msg.maxSlider = self._experiments[self._currentExperimentIndex]['Remote'][name]['maxSlider']
+                        msg.stepSlider = self._experiments[self._currentExperimentIndex]['Remote'][name]['stepSlider']
                     else:
                         continue
                     self.remoteAddWidget(msg)
@@ -1318,73 +1319,73 @@ class MainGui(QMainWindow):
 
     def remoteAddWidget(self, msg=None):
         if not msg:
-            msg = remoteWidgetEdit(self)
+            msg = RemoteWidgetEdit(self)
         if msg.ok:
             if not 'Remote' in self._experiments[self._currentExperimentIndex]:
                 self._experiments[self._currentExperimentIndex]['Remote'] = {}
             self._experiments[self._currentExperimentIndex]['Remote'][msg.name] = {}
-            self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['widgettype'] = msg.widgettype
+            self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['widgetType'] = msg.widgetType
             self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['parameter'] = msg.parameter
-            sliderlabel=None
-            if msg.widgettype == 0:
-                movablewidget = self.createMovableWidget(QPushButton)
-                widget = movablewidget(self, msg.name, msg.widgettype, msg.parameter, msg.valueon)
+            sliderLabel = None
+            if msg.widgetType == 0:
+                movableWidget = self.createMovableWidget(QPushButton)
+                widget = movableWidget(self, msg.name, msg.widgetType, msg.parameter, msg.valueOn)
                 widget.setFixedHeight(40)
                 widget.setFixedWidth(100)
-                widget.setText(msg.name +'\n' + msg.valueon)
+                widget.setText(msg.name + '\n' + msg.valueOn)
                 widget.clicked.connect(lambda: self.remoteWidgetSendParameter(widget))
-                self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['valueon'] = msg.valueon
-            elif msg.widgettype == 1:
-                movablewidget = self.createMovableWidget(QPushButton)
-                widget = movablewidget(self, msg.name, msg.widgettype, msg.parameter, msg.valueon, msg.valueoff)
+                self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['valueOn'] = msg.valueOn
+            elif msg.widgetType == 1:
+                movableWidget = self.createMovableWidget(QPushButton)
+                widget = movableWidget(self, msg.name, msg.widgetType, msg.parameter, msg.valueOn, msg.valueOff)
                 widget.setCheckable(True)
                 widget.setFixedHeight(40)
                 widget.setFixedWidth(100)
-                widget.setText(msg.name +'\n' + msg.valueon + '/' + msg.valueoff)
+                widget.setText(msg.name + '\n' + msg.valueOn + '/' + msg.valueOff)
                 widget.clicked.connect(lambda: self.remoteWidgetSendParameter(widget))
-                self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['valueon'] = msg.valueon
-                self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['valueoff'] = msg.valueoff
-            elif msg.widgettype == 2:
-                movablewidget = self.createMovableWidget(QSlider)
+                self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['valueOn'] = msg.valueOn
+                self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['valueOff'] = msg.valueOff
+            elif msg.widgetType == 2:
+                movableWidget = self.createMovableWidget(QSlider)
 
-                sliderlabel = QLabel(msg.name + ': ' + str(msg.minslider) + '-' + str(msg.maxslider))
-                sliderlabel.setFixedHeight(10)
-                self.remoteWidgetLayout.addWidget(sliderlabel)
+                sliderLabel = QLabel(msg.name + ': ' + str(msg.minSlider) + '-' + str(msg.maxSlider))
+                sliderLabel.setFixedHeight(10)
+                self.remoteWidgetLayout.addWidget(sliderLabel)
 
-                widget = movablewidget(self, msg.name, msg.widgettype, msg.parameter, msg.valueon, msg.valueoff,
-                                       msg.minslider, msg.maxslider, msg.stepslider, sliderlabel, Qt.Horizontal)
-                widget.setMinimum(msg.minslider)
-                widget.setMaximum(msg.maxslider)
-                widget.setTickInterval(msg.stepslider)
+                widget = movableWidget(self, msg.name, msg.widgetType, msg.parameter, msg.valueOn, msg.valueOff,
+                                       msg.minSlider, msg.maxSlider, msg.stepSlider, sliderLabel, Qt.Horizontal)
+                widget.setMinimum(msg.minSlider)
+                widget.setMaximum(msg.maxSlider)
+                widget.setTickInterval(msg.stepSlider)
                 widget.setFixedHeight(30)
                 widget.setFixedWidth(200)
                 widget.valueChanged.connect(lambda: self.remoteWidgetSendParameter(widget))
 
-                self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['minslider'] = msg.minslider
-                self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['maxslider'] = msg.maxslider
-                self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['stepslider'] = msg.stepslider
+                self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['minSlider'] = msg.minSlider
+                self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['maxSlider'] = msg.maxSlider
+                self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['stepSlider'] = msg.stepSlider
 
             else:
                 return
             if self.remoteWidget.rect().contains((self.remoteWidgetLayout.count() % 2) * 200,
                                                  (self.remoteWidgetLayout.count() // 2) * 40):
                 widget.move((self.remoteWidgetLayout.count() % 2) * 200, (self.remoteWidgetLayout.count() // 2) * 40)
-                if sliderlabel:
-                    sliderlabel.move((self.remoteWidgetLayout.count() % 2) * 200 + 80,
+                if sliderLabel:
+                    sliderLabel.move((self.remoteWidgetLayout.count() % 2) * 200 + 80,
                                      (self.remoteWidgetLayout.count() // 2) * 40 + 30)
             self.remoteWidgetLayout.addWidget(widget)
 
     def remoteWidgetSendParameter(self, widget):
-        if widget.widgettype == 0:
-            value = widget.valueon
-        elif widget.widgettype == 1:
+        if widget.widgetType == 0:
+            value = widget.valueOn
+        elif widget.widgetType == 1:
             if widget.isChecked():
-                value = widget.valueon
+                value = widget.valueOn
             else:
-                value = widget.valueoff
-        elif widget.widgettype == 2:
-            widget.valueon = widget.value()
-            value = widget.valueon
+                value = widget.valueOff
+        elif widget.widgetType == 2:
+            widget.valueOn = widget.value()
+            value = widget.valueOn
         else:
             return
         settings = deepcopy(self.exp.getExperiment())
@@ -1407,32 +1408,29 @@ class MainGui(QMainWindow):
         clipboard = QApplication.clipboard()
         clipboard.setText(text)
 
-
     def remoteWidgetMenue(self, position):
         menu = QMenu(self)
-        addaction = menu.addAction("Add widget")
-        saveaction = menu.addAction("Copy remote source")
+        addAction = menu.addAction("Add widget")
+        saveAction = menu.addAction("Copy remote source")
         action = menu.exec_(self.remoteWidget.mapToGlobal(position))
-        if action == addaction:
+        if action == addAction:
             self.remoteAddWidget()
-        elif action == saveaction:
+        elif action == saveAction:
             self.copyRemoteSource()
 
-#----------------------------------------------------------------------------------------------------------------------
     def createMovableWidget(self, type):
         class MovableWidget(type):
-
-            def __init__(self, gui, name, widgettype, parameter, valueon, valueoff=None, minslider=0, maxslider=1,
-                         stepslider=1, label=None, *args, **kwargs):
+            def __init__(self, gui, name, widgetType, parameter, valueOn, valueOff=None, minSlider=0, maxSlider=1,
+                         stepSlider=1, label=None, *args, **kwargs):
                 super(MovableWidget, self).__init__(*args, **kwargs)
-                self.widgettype = widgettype
-                self.valueon = valueon
-                self.valueoff = valueoff
+                self.widgetType = widgetType
+                self.valueOn = valueOn
+                self.valueOff = valueOff
                 self.parameter = parameter
                 self.name = name
-                self.minslider = minslider
-                self.maxslider = maxslider
-                self.stepslider = stepslider
+                self.minSlider = minSlider
+                self.maxSlider = maxSlider
+                self.stepSlider = stepSlider
                 self.gui = gui
                 self.label = label
 
@@ -1473,187 +1471,32 @@ class MainGui(QMainWindow):
                         return
 
                 menu = QMenu(self)
-                removeaction = menu.addAction("Remove")
-                editaction = menu.addAction("Edit")
+                removeAction = menu.addAction("Remove")
+                editAction = menu.addAction("Edit")
                 action = menu.exec_(self.mapToGlobal(event.pos()))
-                if action == removeaction:
+                if action == removeAction:
                     del self.gui._experiments[self.gui._currentExperimentIndex]['Remote'][self.name]
                     self.gui.remoteWidgetLayout.removeWidget(self)
-                elif action == editaction:
-                    msg = remoteWidgetEdit(self.gui, True, self.name, self.widgettype, self.parameter, self.valueon,
-                                           self.valueoff, self.minslider, self.maxslider, self.stepslider)
+                elif action == editAction:
+                    msg = RemoteWidgetEdit(self.gui, True, self.name, self.widgetType, self.parameter, self.valueOn,
+                                           self.valueOff, self.minSlider, self.maxSlider, self.stepSlider)
                     if msg.ok:
-                        self.valueon = msg.valueon
+                        self.valueOn = msg.valueOn
                         self.parameter = msg.parameter
-                        self.valueoff = msg.valueoff
-                        self.minslider = msg.minslider
-                        self.maxslider = msg.maxslider
-                        self.stepslider = msg.stepslider
-                        self.widgettype = msg.widgettype
+                        self.valueOff = msg.valueOff
+                        self.minSlider = msg.minSlider
+                        self.maxSlider = msg.maxSlider
+                        self.stepSlider = msg.stepSlider
+                        self.widgetType = msg.widgetType
                         self.name = msg.name
-                        if self.widgettype == 0:
-                            self.setText(self.name +'\n' + self.valueon)
-                        elif self.widgettype == 1:
-                            self.setText(self.name +'\n' + self.valueon + '/' + self.valueoff)
-                        elif self.widgettype == 2:
-                            self.setMinimum(self.minslider)
-                            self.setMaximum(self.maxslider)
-                            self.setTickInterval(self.stepslider)
-                            self.label.setText(self.name + ': ' + str(self.minslider)+ '-' + str(self.maxslider))
+                        if self.widgetType == 0:
+                            self.setText(self.name + '\n' + self.valueOn)
+                        elif self.widgetType == 1:
+                            self.setText(self.name + '\n' + self.valueOn + '/' + self.valueOff)
+                        elif self.widgetType == 2:
+                            self.setMinimum(self.minSlider)
+                            self.setMaximum(self.maxSlider)
+                            self.setTickInterval(self.stepSlider)
+                            self.label.setText(self.name + ': ' + str(self.minSlider) + '-' + str(self.maxSlider))
 
         return MovableWidget
-
-
-class remoteWidgetEdit(QDialog):
-    def __init__(self, gui, edit=False, name='New', widgettype=0, param=None, valueon=None, valueoff=None, minslider=0,
-                 maxslider=255, stepslider=1, visible=True):
-        super(QDialog, self).__init__(None, Qt.WindowSystemMenuHint | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
-        self.widgettype = widgettype
-        self.valueon = valueon
-        self.valueoff = valueoff
-        self.parameter = param
-        self.name = name
-        self.minslider = minslider
-        self.maxslider = maxslider
-        self.stepslider = stepslider
-        self.gui = gui
-        self.ok = False
-
-        self.formlayout = QFormLayout()
-
-        self.nametext = QLineEdit(name)
-        self.formlayout.addRow(QLabel("Name"), self.nametext)
-        self.nametext.mousePressEvent = lambda event: self.nametext.selectAll()
-
-        self.typelist = QComboBox()
-        self.typelist.addItems(["Pushbutton", "Switch", "Slider"])
-        self.typelist.setCurrentIndex(widgettype)
-        self.typelist.currentIndexChanged.connect(self.typelistchanged)
-        self.typelist.setEnabled(not edit)
-        self.formlayout.addRow(QLabel("Widget type"), self.typelist)
-
-        self.paramlist = QComboBox()
-        for top in self.gui.exp.getExperiment():
-            if not top == 'Name':
-                for key in self.gui.exp.getExperiment()[top]:
-                    self.paramlist.addItem(key)
-        if self.paramlist.findText(self.parameter):
-            self.paramlist.setCurrentIndex(self.paramlist.findText(self.parameter))
-        self.formlayout.addRow(QLabel("Parameter of '{}'".format(self.gui.exp.getExperiment()['Name'])), self.paramlist)
-
-        self.settingsWidget = QWidget()
-        self.settingsWidgetLayout = QFormLayout()
-        self.settingsWidget.setLayout(self.settingsWidgetLayout)
-        self.formlayout.addRow(self.settingsWidget)
-
-        self.typelistchanged()
-
-        self.formlayout.addRow(QLabel(' '))
-        self.formlayout.addRow(QLabel(' '))
-
-        self.btn_ok = QPushButton("Ok", self)
-        self.btn_ok.clicked.connect(self.button_press)
-        self.btn_cancel = QPushButton("Cancel", self)
-        self.btn_cancel.clicked.connect(self.button_press)
-
-        self.formlayout.addRow(self.btn_ok, self.btn_cancel)
-
-        self.setLayout(self.formlayout)
-        self.setWindowModality(Qt.ApplicationModal)
-        self.setWindowTitle("Add remote widget dialog")
-        self.setWindowIcon(self.gui.icon)
-        if visible:
-            self.exec()
-
-    def typelistchanged(self):
-        for i in reversed(range(self.settingsWidgetLayout.count())):
-            self.settingsWidgetLayout.itemAt(i).widget().deleteLater()
-
-        if self.typelist.currentIndex() == 0:
-            self.valuetext = QLineEdit(self.valueon)
-            self.settingsWidgetLayout.addRow(QLabel("Value"), self.valuetext)
-            self.valuetext.setValidator(QDoubleValidator())
-            self.valuetext.mousePressEvent = lambda event: self.valuetext.selectAll()
-        elif self.typelist.currentIndex() == 1:
-            self.valueontext = QLineEdit(self.valueon)
-            self.settingsWidgetLayout.addRow(QLabel("Value for On"), self.valueontext)
-            self.valueontext.setValidator(QDoubleValidator())
-            self.valueontext.mousePressEvent = lambda event: self.valueontext.selectAll()
-            self.valueofftext = QLineEdit(self.valueoff)
-            self.settingsWidgetLayout.addRow(QLabel("Value for Off"), self.valueofftext)
-            self.valueofftext.mousePressEvent = lambda event: self.valueofftext.selectAll()
-            self.valueofftext.setValidator(QDoubleValidator())
-        elif self.typelist.currentIndex() == 2:
-            self.maxslidertext = QLineEdit(str(self.maxslider))
-            self.settingsWidgetLayout.addRow(QLabel("Max"), self.maxslidertext)
-            self.maxslidertext.setValidator(QDoubleValidator())
-            self.maxslidertext.mousePressEvent = lambda event: self.maxslidertext.selectAll()
-            self.minslidertext = QLineEdit(str(self.minslider))
-            self.settingsWidgetLayout.addRow(QLabel("Min"), self.minslidertext)
-            self.minslidertext.setValidator(QDoubleValidator())
-            self.minslidertext.mousePressEvent = lambda event: self.minslidertext.selectAll()
-            self.stepslidertext = QLineEdit(str(self.stepslider))
-            self.settingsWidgetLayout.addRow(QLabel("Stepsize"), self.stepslidertext)
-            self.stepslidertext.setValidator(QDoubleValidator())
-            self.stepslidertext.mousePressEvent = lambda event: self.stepslidertext.selectAll()
-
-    def button_press(self):
-        if self.sender() == self.btn_ok:
-            self.parameter = self.paramlist.currentText()
-            if not self.parameter:
-                return
-            self.name = self.nametext.text()
-            if self.name == '':
-                return
-
-            if self.typelist.currentIndex() == 0:
-                self.valueon = self.valuetext.text()
-                if self.valueon == "":
-                    return
-            elif self.typelist.currentIndex() == 1:
-                self.valueon = self.valueontext.text()
-                self.valueoff = self.valueofftext.text()
-                if self.valueon == "" or self.valueoff == "":
-                    return
-            elif self.typelist.currentIndex() == 2:
-                self.maxslider = int(float(self.maxslidertext.text()))
-                self.minslider = int(float(self.minslidertext.text()))
-                self.stepslider = int(float(self.stepslidertext.text()))
-                if self.maxslider == "" or self.minslider == "" or self.stepslider == "":
-                    return
-            self.widgettype = self.typelist.currentIndex()
-            self.ok = True
-        self.close()
-
-
-class freeLayout(QLayout):
-    def __init__(self):
-        super(freeLayout, self).__init__()
-        self.list = []
-
-    def count(self):
-        return len(self.list)
-
-    def sizeHint(self):
-        return QSize()
-
-    def itemAt(self, p_int):
-        return
-
-    def addItem(self, QLayoutItem):
-        return
-
-    def addWidget(self, widget):
-        if not isinstance(widget, QLabel):
-            self.list.append(widget)
-        super(freeLayout, self).addWidget(widget)
-
-    def clearAll(self):
-        while self.count() > 0:
-            self.removeWidget(self.list[0])
-
-    def removeWidget(self, widget):
-        self.list.remove(widget)
-        if widget.widgettype == 2:
-            widget.label.deleteLater()
-        widget.deleteLater()

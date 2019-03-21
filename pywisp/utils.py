@@ -6,9 +6,10 @@ import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from PyQt5.QtCore import Qt, QRegExp
-from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator
-from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout
+from PyQt5.QtCore import Qt, QRegExp, QSize
+from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QDoubleValidator
+from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
+    QLayout, QComboBox, QPushButton, QWidget
 from pyqtgraph import mkPen
 
 __all__ = ["get_resource"]
@@ -307,3 +308,168 @@ class DataTcpIpDialog(QDialog):
         ipData, portData = dialog._getData()
 
         return ipData, portData, result == QDialog.Accepted
+
+
+class RemoteWidgetEdit(QDialog):
+    def __init__(self, gui, edit=False, name='New', widgetType=0, param=None, valueOn=None, valueOff=None, minSlider=0,
+                 maxSlider=255, stepSlider=1, visible=True):
+        super(QDialog, self).__init__(None, Qt.WindowSystemMenuHint | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
+        self.widgetType = widgetType
+        self.valueOn = valueOn
+        self.valueOff = valueOff
+        self.parameter = param
+        self.name = name
+        self.minSlider = minSlider
+        self.maxSlider = maxSlider
+        self.stepSlider = stepSlider
+        self.gui = gui
+        self.ok = False
+
+        self.stepSliderText = None
+        self.minSliderText = None
+        self.maxSliderText = None
+        self.valueOffText = None
+        self.valueOnText = None
+        self.valueText = None
+
+        self.formLayout = QFormLayout()
+
+        self.nameText = QLineEdit(name)
+        self.formLayout.addRow(QLabel("Name"), self.nameText)
+        self.nameText.mousePressEvent = lambda event: self.nameText.selectAll()
+
+        self.typeList = QComboBox()
+        self.typeList.addItems(["Pushbutton", "Switch", "Slider"])
+        self.typeList.setCurrentIndex(widgetType)
+        self.typeList.currentIndexChanged.connect(self.typeListchanged)
+        self.typeList.setEnabled(not edit)
+        self.formLayout.addRow(QLabel("Widget type"), self.typeList)
+
+        self.paramList = QComboBox()
+        for top in self.gui.exp.getExperiment():
+            if not top == 'Name':
+                for key in self.gui.exp.getExperiment()[top]:
+                    self.paramList.addItem(key)
+        if self.paramList.findText(self.parameter):
+            self.paramList.setCurrentIndex(self.paramList.findText(self.parameter))
+        self.formLayout.addRow(QLabel("Parameter of '{}'".format(self.gui.exp.getExperiment()['Name'])), self.paramList)
+
+        self.settingsWidget = QWidget()
+        self.settingsWidgetLayout = QFormLayout()
+        self.settingsWidget.setLayout(self.settingsWidgetLayout)
+        self.formLayout.addRow(self.settingsWidget)
+
+        self.typeListchanged()
+
+        self.formLayout.addRow(QLabel(' '))
+        self.formLayout.addRow(QLabel(' '))
+
+        self.btnOk = QPushButton("Ok", self)
+        self.btnOk.clicked.connect(self.button_press)
+        self.btnCancel = QPushButton("Cancel", self)
+        self.btnCancel.clicked.connect(self.button_press)
+
+        self.formLayout.addRow(self.btnOk, self.btnCancel)
+
+        self.setLayout(self.formLayout)
+        self.setWindowModality(Qt.ApplicationModal)
+        self.setWindowTitle("Add Remote Widget ...")
+        self.setWindowIcon(self.gui.icon)
+        if visible:
+            self.exec()
+
+    def typeListchanged(self):
+        for i in reversed(range(self.settingsWidgetLayout.count())):
+            self.settingsWidgetLayout.itemAt(i).widget().deleteLater()
+
+        if self.typeList.currentIndex() == 0:
+            self.valueText = QLineEdit(self.valueOn)
+            self.settingsWidgetLayout.addRow(QLabel("Value"), self.valueText)
+            self.valueText.setValidator(QDoubleValidator())
+            self.valueText.mousePressEvent = lambda event: self.valueText.selectAll()
+        elif self.typeList.currentIndex() == 1:
+            self.valueOnText = QLineEdit(self.valueOn)
+            self.settingsWidgetLayout.addRow(QLabel("Value for On"), self.valueOnText)
+            self.valueOnText.setValidator(QDoubleValidator())
+            self.valueOnText.mousePressEvent = lambda event: self.valueOnText.selectAll()
+            self.valueOffText = QLineEdit(self.valueOff)
+            self.settingsWidgetLayout.addRow(QLabel("Value for Off"), self.valueOffText)
+            self.valueOffText.mousePressEvent = lambda event: self.valueOffText.selectAll()
+            self.valueOffText.setValidator(QDoubleValidator())
+        elif self.typeList.currentIndex() == 2:
+            self.maxSliderText = QLineEdit(str(self.maxSlider))
+            self.settingsWidgetLayout.addRow(QLabel("Max"), self.maxSliderText)
+            self.maxSliderText.setValidator(QDoubleValidator())
+            self.maxSliderText.mousePressEvent = lambda event: self.maxSliderText.selectAll()
+            self.minSliderText = QLineEdit(str(self.minSlider))
+            self.settingsWidgetLayout.addRow(QLabel("Min"), self.minSliderText)
+            self.minSliderText.setValidator(QDoubleValidator())
+            self.minSliderText.mousePressEvent = lambda event: self.minSliderText.selectAll()
+            self.stepSliderText = QLineEdit(str(self.stepSlider))
+            self.settingsWidgetLayout.addRow(QLabel("Stepsize"), self.stepSliderText)
+            self.stepSliderText.setValidator(QDoubleValidator())
+            self.stepSliderText.mousePressEvent = lambda event: self.stepSliderText.selectAll()
+
+    def button_press(self):
+        if self.sender() == self.btnOk:
+            self.parameter = self.paramList.currentText()
+            if not self.parameter:
+                return
+            self.name = self.nameText.text()
+            if self.name == '':
+                return
+
+            if self.typeList.currentIndex() == 0:
+                self.valueOn = self.valueText.text()
+                if self.valueOn == "":
+                    return
+            elif self.typeList.currentIndex() == 1:
+                self.valueOn = self.valueOnText.text()
+                self.valueOff = self.valueOffText.text()
+                if self.valueOn == "" or self.valueOff == "":
+                    return
+            elif self.typeList.currentIndex() == 2:
+                self.maxSlider = int(float(self.maxSliderText.text()))
+                self.minSlider = int(float(self.minSliderText.text()))
+                self.stepSlider = int(float(self.stepSliderText.text()))
+                if self.maxSlider == "" or self.minSlider == "" or self.stepSlider == "":
+                    return
+            self.widgetType = self.typeList.currentIndex()
+            self.ok = True
+        self.close()
+
+
+class FreeLayout(QLayout):
+    """
+    An empty layout for widgets
+    """
+    def __init__(self):
+        super(FreeLayout, self).__init__()
+        self.list = []
+
+    def count(self):
+        return len(self.list)
+
+    def sizeHint(self):
+        return QSize()
+
+    def itemAt(self, p_int):
+        return
+
+    def addItem(self, QLayoutItem):
+        return
+
+    def addWidget(self, widget):
+        if not isinstance(widget, QLabel):
+            self.list.append(widget)
+        super(FreeLayout, self).addWidget(widget)
+
+    def clearAll(self):
+        while self.count() > 0:
+            self.removeWidget(self.list[0])
+
+    def removeWidget(self, widget):
+        self.list.remove(widget)
+        if widget.widgetType == 2:
+            widget.label.deleteLater()
+        widget.deleteLater()
