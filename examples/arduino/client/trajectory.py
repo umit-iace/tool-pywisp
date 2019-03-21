@@ -9,10 +9,10 @@ from pywisp.experimentModules import ExperimentModule
 class RampTrajectory(ExperimentModule):
     dataPoints = ['TrajOutput']
 
-    publicSettings = OrderedDict([("Startwert", 0.0),
-                                  ("Startzeit", 10),
-                                  ("Endwert", 0.7),
-                                  ("Endzeit", 15)])
+    publicSettings = OrderedDict([("StartValue", 0.0),
+                                  ("StartTime", 10),
+                                  ("EndValue", 0.7),
+                                  ("EndTime", 15)])
 
     connection = ConnTestSerial.__name__
 
@@ -42,8 +42,8 @@ class RampTrajectory(ExperimentModule):
         fid = frame.min_id
         if fid == 11:
             data = struct.unpack('>Lf', frame.payload)
-            dataPoints['Zeit'] = data[0]
-            dataPoints['Punkte'] = {'TrajOutput': data[1]}
+            dataPoints['Time'] = data[0]
+            dataPoints['DataPoints'] = {'TrajOutput': data[1]}
         else:
             dataPoints = None
 

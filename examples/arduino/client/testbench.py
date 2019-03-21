@@ -40,8 +40,8 @@ class Test(ExperimentModule):
         fid = frame.min_id
         if fid == 10:
             data = struct.unpack('>LffhB', frame.payload)
-            dataPoints['Zeit'] = data[0]
-            dataPoints['Punkte'] = {'Value1': data[1],
+            dataPoints['Time'] = data[0]
+            dataPoints['DataPoints'] = {'Value1': data[1],
                                     'Value2': data[2],
                                     'Value3': data[3],
                                     'Value4': data[4],

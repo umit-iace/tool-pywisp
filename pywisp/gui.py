@@ -7,6 +7,10 @@ import pkg_resources
 import serial.tools.list_ports
 import time
 import yaml
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
 from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QSettings, QCoreApplication
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
@@ -406,7 +410,8 @@ class MainGui(QMainWindow):
             return fn
 
         baud = settings['baud']
-        bauds = ['1200', '2400', '4800', '9600', '14400', '19200', '28800', '38400', '57600', '115200']
+        bauds = ['1200', '2400', '4800', '9600', '14400', '19200', '28800',
+                 '38400', '57600', '115200', '125000', '250000', '500000']
         connMenu.clear()
         for _baud in bauds:
             baudAction = QAction(_baud, self)
@@ -474,7 +479,7 @@ class MainGui(QMainWindow):
 
     def setIntPoints(self):
         """
-        Sets the among of interpolation points in settings with a dialog.
+        Sets the amount of interpolation points in settings with a dialog.
         """
         self._settings.beginGroup('plot')
         intPoints, ok = DataIntDialog.getData(min=2, max=1000000, current=self._settings.value("interpolation_points"))
@@ -493,7 +498,7 @@ class MainGui(QMainWindow):
         timerTime, ok = DataIntDialog.getData(min=2, max=10000, current=self._settings.value("timer_time"))
 
         if ok:
-            self._settings.setValue("timer_timer", int(timerTime))
+            self._settings.setValue("timer_time", int(timerTime))
             self._logger.info("Set timer time to {}".format(timerTime))
 
         self._settings.endGroup()
@@ -657,11 +662,11 @@ class MainGui(QMainWindow):
         idx = self.lastMeasList.row(self._currentLastMeasItem)
         dataPointBuffers = self.measurements[idx]['dataPointBuffers']
 
-        dataPoints = []
+        dataPoints = dict()
         for item in self.dataPointListWidget.selectedItems():
-            for data in dataPointBuffers:
-                if data.name == item.text():
-                    dataPoints.append(data)
+            for key, value in dataPointBuffers.items():
+                if key == item.text():
+                    dataPoints[key] = value
                     break
 
         self.export(dataPoints)
@@ -729,7 +734,9 @@ class MainGui(QMainWindow):
         if title in openDocks:
             if self._currentLastMeasItem is None:
                 dataPointNames = self.exp.getDataPoints()
-                dataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
+                dataPointBuffers = dict()
+                for data in dataPointNames:
+                    dataPointBuffers[data] = DataPointBuffer()
             else:
                 idx = self.lastMeasList.row(self._currentLastMeasItem)
                 dataPointBuffers = self.measurements[idx]['dataPointBuffers']
@@ -746,18 +753,18 @@ class MainGui(QMainWindow):
         title = item.text(0)
 
         # get the new datapoints
-        newDataPoints = []
+        newDataPoints = dict()
         for indx in range(item.childCount()):
-            for dataPoint in dataPointBuffers:
-                if dataPoint.name == item.child(indx).text(1):
-                    newDataPoints.append(dataPoint)
+            for key, value in dataPointBuffers.items():
+                if key == item.child(indx).text(1):
+                    newDataPoints[key] = value
 
         # set the new datapoints
         for chart in self.plotCharts:
             if chart.title == title:
                 chart.clear()
-                for dataPoint in newDataPoints:
-                    chart.addPlotCurve(dataPoint)
+                for key, value in newDataPoints.items():
+                    chart.addPlotCurve(key, value)
                 chart.updatePlot()
                 break
 
@@ -773,15 +780,17 @@ class MainGui(QMainWindow):
 
         if self._currentLastMeasItem is None:
             dataPointNames = self.exp.getDataPoints()
-            dataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
+            dataPointBuffers = dict()
+            for name in dataPointNames:
+                dataPointBuffers[name] = DataPointBuffer()
         else:
             idx = self.lastMeasList.row(self._currentLastMeasItem)
             dataPointBuffers = self.measurements[idx]['dataPointBuffers']
 
         for idx in range(item.childCount()):
-            for datapoint in dataPointBuffers:
-                if datapoint.name == item.child(idx).text(1):
-                    chart.addPlotCurve(datapoint)
+            for key, value in dataPointBuffers.items():
+                if key == item.child(idx).text(1):
+                    chart.addPlotCurve(key, value)
 
         # before adding the PlotChart object to the list check if the plot contains any data points
         if chart.dataPoints is not None:
@@ -846,15 +855,14 @@ class MainGui(QMainWindow):
         chart.enableAutoRange()
 
     def exportPlotItem(self, plotItem):
-        dataPoints = []
+        dataPoints = dict()
         for i, c in enumerate(plotItem.curves):
             if c.getData() is None:
                 continue
             if len(c.getData()) > 2:
                 self._logger.warning('Can not handle the amount of data!')
                 continue
-            dataPoint = DataPointBuffer(name=c.name(), time=c.getData()[0], values=c.getData()[1])
-            dataPoints.append(dataPoint)
+            dataPoints[c.name()] = DataPointBuffer(time=c.getData()[0], values=c.getData()[1])
 
         self.export(dataPoints)
 
@@ -901,7 +909,7 @@ class MainGui(QMainWindow):
     @pyqtSlot()
     def startExperiment(self):
         """
-        Starts the experiment, the timer and the connections. Disables the start button.
+        Starts the experiment, the timer, and the connections. Disables the start button.
         """
         self._currentExperimentIndex = self.experimentList.row(self._currentExpListItem)
         self._currentExperimentName = self._experiments[self._currentExperimentIndex]["Name"]
@@ -928,7 +936,9 @@ class MainGui(QMainWindow):
         dataPointNames = self.exp.getDataPoints()
 
         if dataPointNames:
-            self._currentDataPointBuffers = [DataPointBuffer(data) for data in dataPointNames]
+            self._currentDataPointBuffers = dict()
+            for data in dataPointNames:
+                self._currentDataPointBuffers[data] = DataPointBuffer()
         else:
             return
 
@@ -955,7 +965,7 @@ class MainGui(QMainWindow):
     @pyqtSlot()
     def stopExperiment(self):
         """
-        Stops the experiment, the timer and clears the connections and enable start button.
+        Stops the experiment, the timer, clears the connections, and enables the start button.
         """
         self.actStartExperiment.setDisabled(False)
         self.actStopExperiment.setDisabled(True)
@@ -1004,7 +1014,7 @@ class MainGui(QMainWindow):
 
         self._logger.info("Load config file: {0}".format(fileName))
         with open(fileName.encode(), "r") as f:
-            self._experiments = yaml.load(f)
+            self._experiments = yaml.load(f, Loader=Loader)
 
         self._logger.info("Loading {} experiments".format(len(self._experiments)))
 
@@ -1145,10 +1155,11 @@ class MainGui(QMainWindow):
                     self.actStartExperiment.setEnabled(True)
                 self.actStopExperiment.setEnabled(False)
                 self.statusbarLabel.setText("Connected!")
-                connInstance.received.connect(lambda frame: self.updateData(frame, conn))
+                connInstance.received.connect(lambda frame, conn=conn: self.updateData(frame, conn))
                 connInstance.start()
                 self.isConnected = True
             else:
+                self.connections[conn] = None
                 self._logger.warning("No connection for {} established! Check your settings!".format(conn.__name__))
                 self.isConnected = False
                 return
@@ -1163,8 +1174,6 @@ class MainGui(QMainWindow):
                 connInstance.writeData(data)
             elif connInstance and data['connection'] == conn.__name__:
                 connInstance.writeData(data)
-            else:
-                self._logger.error('No connection available!')
 
     @pyqtSlot()
     def disconnect(self):
@@ -1175,9 +1184,10 @@ class MainGui(QMainWindow):
             self.stopExperiment()
 
         for conn, connInstance in self.connections.items():
-            connInstance.disconnect()
-            connInstance.received.disconnect()
-            self.connections[conn] = None
+            if connInstance:
+                connInstance.disconnect()
+                connInstance.received.disconnect()
+                self.connections[conn] = None
         self.actConnect.setEnabled(True)
         self.actDisconnect.setEnabled(False)
         self.actStartExperiment.setEnabled(False)
@@ -1187,7 +1197,7 @@ class MainGui(QMainWindow):
 
     def findAllPlotDocks(self):
         """
-        Finds all docks where plots inside
+        Finds all docks with plots inside
         :return: list of docks with plots
         """
         list = []
@@ -1203,13 +1213,13 @@ class MainGui(QMainWindow):
         data = self.exp.handleFrame(frame, connection)
         if data is None:
             return
-        time = data['Zeit'] / 1000.0
-        dataPoints = data['Punkte']
-        names = data['Punkte'].keys()
+        time = data['Time'] / 1000.0
+        dataPoints = data['DataPoints']
+        names = data['DataPoints'].keys()
 
-        for buffer in self._currentDataPointBuffers:
-            if buffer.name in names:
-                buffer.addValue(time, dataPoints[buffer.name])
+        for key, value in self._currentDataPointBuffers.items():
+            if key in names:
+                value.addValue(time, dataPoints[key])
 
     def updateDataPlots(self):
         if self.visualizer:

@@ -56,7 +56,6 @@ void fContLoop() {
  * Initializes Transport protocol, the Timer, and the sensors.
  */
 void setup() {
-    // initialize transport protocol
     transport.init();
 
     // initialize Timer

@@ -74,17 +74,16 @@ class MplExampleVisualizer(MplVisualizer):
         self.canvas.draw()
 
     def update(self, dataPoints):
-        for buffer in dataPoints:
-            if buffer.values:
-                if buffer.name == 'TrajOutput':
-                    self.ValueTraj.set_text('%.1f' % buffer.values[-1])
-                elif buffer.name == 'Value1':
-                    self.Value1.set_text('%.1f' % buffer.values[-1])
-                elif buffer.name == 'Value2':
-                    self.Value2.set_text('%.1f' % buffer.values[-1])
-                elif buffer.name == 'Value3':
-                    self.Value3.set_text('%.1f' % buffer.values[-1])
-                elif buffer.name == 'Value4':
-                    self.Value4.set_text('%.1f' % buffer.values[-1])
+        dps = {'TrajOutput': [self.ValueTraj, '1'],
+               'Value1': [self.Value1, '1'],
+               'Value2': [self.Value2, '1'],
+               'Value3': [self.Value3, '1'],
+               'Value4': [self.Value4, '1'],
+               }
+
+        for key, value in dps.items():
+            if dataPoints[key].values:
+                formatStr = "%." + value[1] + "f"
+                value[0].set_text(formatStr % dataPoints[key].values[-1])
 
         self.canvas.draw()

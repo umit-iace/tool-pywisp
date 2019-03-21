@@ -3,10 +3,10 @@
 - Name: RunSystem
 
   RampTrajectory:
-   Startzeit: 5
-   Startwert: 28.0
-   Endzeit: 70
-   Endwert: 5.0
+   StartTime: 5
+   StartValue: 28.0
+   EndTime: 70
+   EndValue: 5.0
 
   Test:
     Value1: 11.2

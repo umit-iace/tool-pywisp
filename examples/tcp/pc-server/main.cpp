@@ -11,7 +11,7 @@
 
 //----------------------------------------------------------------------
 
-const unsigned long lDt = 1000;          ///< Sampling step [ms]
+const unsigned long lDt = 500;          ///< Sampling step [ms]
 //----------------------------------------------------------------------
 
 /**
@@ -62,7 +62,7 @@ int main(int argc, char const *argv[]) {
         boost::asio::io_service ioService;
 
         PeriodicScheduler scheduler(std::ref(ioService));
-        scheduler.addTask("fContLoop", boost::bind(fContLoop, &transport), 1);
+        scheduler.addTask("fContLoop", boost::bind(fContLoop, &transport), lDt);
 
         TcpServer server(ioService, std::ref(inputQueue), std::ref(outputQueue), PORT);
 

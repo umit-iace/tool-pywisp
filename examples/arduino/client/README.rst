@@ -43,6 +43,6 @@ For the communication the following frames are used:
       - TestTCP (TestBench)
     * - 13
       - 2x long + 2x double
-      - Startwert, Startzeit, Endwert, Endzeit
+      - StartValue, StartTime, EndValue, EndTime
       - zum Server
       - RampTrajectory (Trajectory)

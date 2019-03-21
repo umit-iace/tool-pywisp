@@ -10,25 +10,3 @@ it is easy to use, if you run your simulations in it. It uses the same modular s
 to design a control flow for the test bench.
 
 .. include:: AUTHORS.rst
-
-- Example for Remote
-
-Name: Digital_Testsprung
-
-  ConstTrajectory:
-   StartValue: 255
-   StartTime: 1
-   EndValue: 60
-   PWM: True
-  
-  Remote:
-   test:
-    widgettype: 0
-    valueon: 22
-    parameter: EndValue
-   test2:
-    widgettype: 0
-    valueon: 0
-    parameter: EndValue
-
-  BallInTube:

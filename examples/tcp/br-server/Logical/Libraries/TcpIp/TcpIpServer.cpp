@@ -35,7 +35,7 @@ void TcpIpServer::init()
 	switch(tcp_step) {
 		case 0:
 			deinit();
-			this->cOutBuf = 0;
+			this->currentOutBuf = 0;
 			tcp_step = 1;
 			break;
 		case 1:
@@ -163,28 +163,37 @@ TcpIpServer::Status TcpIpServer::read()
  */
 TcpIpServer::Status TcpIpServer::write()
 {
+	static short leftover = 0;
 	TcpSend_0.ident = this->clientID;
-	TcpSend_0.pData = (unsigned long) this->outBuffer[cOutBuf];
-	TcpSend_0.datalen = this->outBufferLen[cOutBuf];
 	TcpSend_0.flags = 0;
 	TcpSend_0.enable = true;
+	if (!leftover) {
+		TcpSend_0.pData = (unsigned long) this->outBuffer[currentOutBuf];
+		TcpSend_0.datalen = this->outBufferLen[currentOutBuf];
+	}
 	TcpSend(&TcpSend_0);
-	if (TcpSend_0.status == ERR_OK)
-	{
-		this->outBufferLen[cOutBuf] = 0;
-		cOutBuf = !cOutBuf;
-		return READY;
+	switch (TcpSend_0.status) {
+		case tcpERR_NOT_CONNECTED:
+			// connection closed
+			return STOP;
+		case ERR_OK:
+			if (leftover)
+				leftover = 0;
+			this->outBufferLen[currentOutBuf] = 0;
+			currentOutBuf = !currentOutBuf;
+			return READY;
+		case tcpERR_SENTLEN:
+			leftover = 1;
+			TcpSend_0.pData += TcpSend_0.sentlen;
+			TcpSend_0.datalen -= TcpSend_0.sentlen;
+			// fallthrough
+		case ERR_FUB_BUSY:
+			// fallthrough
+		case tcpERR_WOULDBLOCK:
+			return BUSY;
+		default:
+			return ERROR;
 	}
-	else if (TcpSend_0.status == ERR_FUB_BUSY)
-		;
-	else if (TcpSend_0.status == tcpERR_NOT_CONNECTED)
-	{
-		/* connection closed */
-		return STOP;        
-	}
-	else
-		return ERROR;
-	return BUSY;
 }
 
 /**
@@ -192,10 +201,13 @@ TcpIpServer::Status TcpIpServer::write()
  */
 void TcpIpServer::handleFrame(Frame frame)
 {
-	unsigned char w = !this->cOutBuf; 
-	this->outBuffer[w][this->outBufferLen[w]++] = frame.data.id;
+	unsigned char b = !this->currentOutBuf;
+	/* prefer dropping frames to dying due to buffer overflows */
+	if (this->outBufferLen[b] >= 255 * (MAX_PAYLOAD + 1))
+		return;
+	this->outBuffer[b][this->outBufferLen[b]++] = frame.data.id;
 	for (int i = 0; i < MAX_PAYLOAD; ++i) {
-		this->outBuffer[w][this->outBufferLen[w]++] = frame.data.payload[i];
+		this->outBuffer[b][this->outBufferLen[b]++] = frame.data.payload[i];
 	}
 }
 	
@@ -222,7 +234,8 @@ void TcpIpServer::sync()
 						this->inBufferLen = 0;
 					}
 					/* send data if available */
-					if (this->outBufferLen[this->cOutBuf] || this->outBufferLen[!this->cOutBuf]) {
+					if (this->outBufferLen[this->currentOutBuf] ||
+                        this->outBufferLen[!this->currentOutBuf]) {
 						tcp_step = 1;
 					} else {
 						tcp_step = 0;

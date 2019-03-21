@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-This module contains all classes and functions related to establish a connection with a test rig.
+This module contains all classes and functions related to establishing a connection with a test rig.
 """
 
 import logging
@@ -74,11 +74,12 @@ class SerialConnection(Connection, QtCore.QThread):
             frames = self.min.poll()
             if frames and self.doRead:
                 self.readData(frames)
-            time.sleep(0.01)
+            else:
+                time.sleep(0.001)
 
     def connect(self):
         """
-        Checks if the given port is available and instantiate the min protocol
+        Checks if the given port is available and instantiates the min protocol
         :return: True if successful connected, False otherwise.
         """
         ports = [
@@ -99,7 +100,7 @@ class SerialConnection(Connection, QtCore.QThread):
 
     def disconnect(self):
         """
-        Close the min protocol and reset the connection
+        Closes the min protocol and resets the connection
         """
         time.sleep(1)
         self.isConnected = False
@@ -117,7 +118,7 @@ class SerialConnection(Connection, QtCore.QThread):
 
     def readData(self, frames):
         """
-        Reads and emits the data frame, that comes over the serial interface.
+        Reads and emits the data frame that comes over the serial interface.
         :param frames: min frame from the other side
         """
         for frame in frames:
@@ -133,7 +134,7 @@ class SerialConnection(Connection, QtCore.QThread):
 
 class TcpConnection(Connection, QtCore.QThread):
     """
-    A connection derived Class for a tcp client implemented as a QThread, which connects a server
+    A connection derived Class for a tcp client implemented as a QThread, which connects to a server
     """
     payloadLen = 80
 
@@ -163,7 +164,7 @@ class TcpConnection(Connection, QtCore.QThread):
 
     def connect(self):
         """
-        Checks if the given port is available and instantiate the socket connection
+        Checks if the given port is available and instantiates the socket connection
         :return: True if successful connected, False otherwise.
         """
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -180,7 +181,7 @@ class TcpConnection(Connection, QtCore.QThread):
 
     def getIP(self):
         """
-        Gets the IP address of host and return it
+        Gets the IP address of host and returns it
         :return: the IP address
         """
         hostname = socket.gethostname()
@@ -194,7 +195,7 @@ class TcpConnection(Connection, QtCore.QThread):
         while True and self.isConnected:
             if self.doRead:
                 self.readData(None)
-            time.sleep(0.01)
+            time.sleep(0.001)
 
     def readData(self, frames):
         """
@@ -206,8 +207,9 @@ class TcpConnection(Connection, QtCore.QThread):
             if data and data != b'':
                 if len(data) != self.payloadLen + 1:
                     self._logger.error("Length of data {} differs from payload length {}!".format(len(data), self.payloadLen + 1))
-                frame = MINFrame(data[0], data[1:], 0, False)
-                self.received.emit(frame)
+                else:
+                    frame = MINFrame(data[0], data[1:], 0, False)
+                    self.received.emit(frame)
         except socket.timeout:
             # if nothing is to read, get on
             pass
@@ -218,7 +220,7 @@ class TcpConnection(Connection, QtCore.QThread):
     def writeData(self, data):
         """
         Writes a data frame to the socket connection
-        :param data: to send data frame
+        :param data: data frame to be sent
         """
         try:
             outputData = struct.pack('>B', data['id']) + data['msg']
