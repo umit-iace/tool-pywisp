@@ -1481,6 +1481,8 @@ class MainGui(QMainWindow):
                     msg = RemoteWidgetEdit(self.gui, True, self.name, self.widgetType, self.parameter, self.valueOn,
                                            self.valueOff, self.minSlider, self.maxSlider, self.stepSlider)
                     if msg.ok:
+                        del self.gui._experiments[self.gui._currentExperimentIndex]['Remote'][self.name]
+
                         self.valueOn = msg.valueOn
                         self.parameter = msg.parameter
                         self.valueOff = msg.valueOff
@@ -1489,14 +1491,32 @@ class MainGui(QMainWindow):
                         self.stepSlider = msg.stepSlider
                         self.widgetType = msg.widgetType
                         self.name = msg.name
+
+                        self.gui._experiments[self.gui._currentExperimentIndex]['Remote'][self.name] = {}
+                        self.gui._experiments[self.gui._currentExperimentIndex]['Remote'][self.name][
+                            'widgetType'] = self.widgetType
+                        self.gui._experiments[self.gui._currentExperimentIndex]['Remote'][self.name]['parameter'] =\
+                            self.parameter
+
                         if self.widgetType == 0:
                             self.setText(self.name + '\n' + self.valueOn)
+                            self.gui._experiments[self.gui._currentExperimentIndex]['Remote'][self.name]['valueOn'] =\
+                                self.valueOn
                         elif self.widgetType == 1:
                             self.setText(self.name + '\n' + self.valueOn + '/' + self.valueOff)
+                            self.gui._experiments[self.gui._currentExperimentIndex]['Remote'][self.name]['valueOn'] =\
+                                self.valueOn
+                            self.gui._experiments[self.gui._currentExperimentIndex]['Remote'][self.name][
+                                'valueOff'] = self.valueOff
                         elif self.widgetType == 2:
                             self.setMinimum(self.minSlider)
                             self.setMaximum(self.maxSlider)
                             self.setTickInterval(self.stepSlider)
                             self.label.setText(self.name + ': ' + str(self.minSlider) + '-' + str(self.maxSlider))
-
+                            self.gui._experiments[self.gui._currentExperimentIndex]['Remote'][self.name][
+                                'minSlider'] = self.minSlider
+                            self.gui._experiments[self.gui._currentExperimentIndex]['Remote'][self.name][
+                                'maxSlider'] = self.maxSlider
+                            self.gui._experiments[self.gui._currentExperimentIndex]['Remote'][self.name][
+                                'stepSlider'] = self.stepSlider
         return MovableWidget
