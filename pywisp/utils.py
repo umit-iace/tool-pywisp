@@ -311,6 +311,9 @@ class DataTcpIpDialog(QDialog):
 
 
 class RemoteWidgetEdit(QDialog):
+    """
+    Creates a dialog to add and edit remote widgets of different types
+    """
     def __init__(self, gui, edit=False, name='New', widgetType="PushButton", param=None, valueOn=None, valueOff=None, minSlider=0,
                  maxSlider=255, stepSlider=1, visible=True):
         super(QDialog, self).__init__(None, Qt.WindowSystemMenuHint | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
@@ -441,7 +444,7 @@ class RemoteWidgetEdit(QDialog):
 
 class FreeLayout(QLayout):
     """
-    An empty layout for widgets
+    An empty layout for widgets with no position and placement management
     """
     def __init__(self):
         super(FreeLayout, self).__init__()

@@ -1318,6 +1318,10 @@ class MainGui(QMainWindow):
         qList.repaint()
 
     def remoteAddWidget(self, msg=None):
+        """
+        Adds a new widget to the remoteDock
+        :param msg: RemoteWidgetEdit object containing widget parameters and information
+        """
         if not msg:
             msg = RemoteWidgetEdit(self)
         if msg.ok:
@@ -1376,6 +1380,10 @@ class MainGui(QMainWindow):
             self.remoteWidgetLayout.addWidget(widget)
 
     def remoteWidgetSendParameter(self, widget):
+        """
+        Gets called when a user interacts with remote widgets and sends the specified parameter to the bench
+        :param widget: the widget the user interacted with
+        """
         if widget.widgetType == "PushButton":
             value = widget.valueOn
         elif widget.widgetType == "Switch":
@@ -1409,6 +1417,10 @@ class MainGui(QMainWindow):
         clipboard.setText(text)
 
     def remoteWidgetMenue(self, position):
+        """
+        Gets called when a user opens the context menu from the remoteDock
+        :param position: the position where the user opened the context menu
+        """
         menu = QMenu(self)
         addAction = menu.addAction("Add widget")
         saveAction = menu.addAction("Copy remote source")
@@ -1419,6 +1431,11 @@ class MainGui(QMainWindow):
             self.copyRemoteSource()
 
     def createMovableWidget(self, type):
+        """
+        Creates a class to make a movable QtWidget. The class also contains a context menu for the widgets to edit them.
+        :param type: the type of the desired widget
+        :return: the movable widget class
+        """
         class MovableWidget(type):
             def __init__(self, gui, name, widgetType, parameter, valueOn, valueOff=None, minSlider=0, maxSlider=1,
                          stepSlider=1, label=None, *args, **kwargs):
