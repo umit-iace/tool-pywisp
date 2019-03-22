@@ -192,10 +192,7 @@ class ExperimentInteractor(QObject):
         # insert new settings
         parent = moduleItem.index().model().itemFromIndex(moduleItem.index())
         moduleName = parent.data(role=PropertyItem.RawDataRole)
-
-        if not moduleName == 'Remote':
-            self._addSettings(moduleName, parent)
-
+        self._addSettings(moduleName, parent)
 
     def getSettings(self, item):
         """
@@ -243,6 +240,9 @@ class ExperimentInteractor(QObject):
                 self.targetModel.setName(value)
                 continue
 
+            if key == 'Remote':
+                continue
+
             name = PropertyItem(key)
             value = None
             newItems = [name, value]
@@ -254,10 +254,8 @@ class ExperimentInteractor(QObject):
             try:
                 parent = index.model().itemFromIndex(index)
                 moduleName = parent.data(role=PropertyItem.RawDataRole)
-
-                if not moduleName == 'Remote':
-                    self._addSettings(moduleName, parent)
-                    self.dataPoints += self._readDataPoints(moduleName)
+                self._addSettings(moduleName, parent)
+                self.dataPoints += self._readDataPoints(moduleName)
             except ExperimentException as e:
                 self._logger.error(e)
                 return False
