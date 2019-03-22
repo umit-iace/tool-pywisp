@@ -13,3 +13,20 @@
     Value2: 22.1
     Value3: 4
     Value4: 1
+
+  Remote:
+    PushExample:
+      parameter: Value1
+      valueOn: '99.99'
+      widgetType: PushButton
+    SwitchExample:
+      parameter: Value2
+      valueOff: '11.1'
+      valueOn: '22.2'
+      widgetType: Switch
+    SliderExample:
+      maxSlider: 255
+      minSlider: 0
+      parameter: Value3
+      stepSlider: 1
+      widgetType: Slider
