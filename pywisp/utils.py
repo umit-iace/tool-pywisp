@@ -311,7 +311,7 @@ class DataTcpIpDialog(QDialog):
 
 
 class RemoteWidgetEdit(QDialog):
-    def __init__(self, gui, edit=False, name='New', widgetType=0, param=None, valueOn=None, valueOff=None, minSlider=0,
+    def __init__(self, gui, edit=False, name='New', widgetType="PushButton", param=None, valueOn=None, valueOff=None, minSlider=0,
                  maxSlider=255, stepSlider=1, visible=True):
         super(QDialog, self).__init__(None, Qt.WindowSystemMenuHint | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
         self.widgetType = widgetType
@@ -339,8 +339,8 @@ class RemoteWidgetEdit(QDialog):
         self.nameText.mousePressEvent = lambda event: self.nameText.selectAll()
 
         self.typeList = QComboBox()
-        self.typeList.addItems(["Pushbutton", "Switch", "Slider"])
-        self.typeList.setCurrentIndex(widgetType)
+        self.typeList.addItems(["PushButton", "Switch", "Slider"])
+        self.typeList.setCurrentText(widgetType)
         self.typeList.currentIndexChanged.connect(self.typeListchanged)
         self.typeList.setEnabled(not edit)
         self.formLayout.addRow(QLabel("Widget type"), self.typeList)
@@ -382,12 +382,12 @@ class RemoteWidgetEdit(QDialog):
         for i in reversed(range(self.settingsWidgetLayout.count())):
             self.settingsWidgetLayout.itemAt(i).widget().deleteLater()
 
-        if self.typeList.currentIndex() == 0:
+        if self.typeList.currentText() == "PushButton":
             self.valueText = QLineEdit(self.valueOn)
             self.settingsWidgetLayout.addRow(QLabel("Value"), self.valueText)
             self.valueText.setValidator(QDoubleValidator())
             self.valueText.mousePressEvent = lambda event: self.valueText.selectAll()
-        elif self.typeList.currentIndex() == 1:
+        elif self.typeList.currentText() == "Switch":
             self.valueOnText = QLineEdit(self.valueOn)
             self.settingsWidgetLayout.addRow(QLabel("Value for On"), self.valueOnText)
             self.valueOnText.setValidator(QDoubleValidator())
@@ -396,7 +396,7 @@ class RemoteWidgetEdit(QDialog):
             self.settingsWidgetLayout.addRow(QLabel("Value for Off"), self.valueOffText)
             self.valueOffText.mousePressEvent = lambda event: self.valueOffText.selectAll()
             self.valueOffText.setValidator(QDoubleValidator())
-        elif self.typeList.currentIndex() == 2:
+        elif self.typeList.currentText() == "Slider":
             self.maxSliderText = QLineEdit(str(self.maxSlider))
             self.settingsWidgetLayout.addRow(QLabel("Max"), self.maxSliderText)
             self.maxSliderText.setValidator(QDoubleValidator())
@@ -419,22 +419,22 @@ class RemoteWidgetEdit(QDialog):
             if self.name == '':
                 return
 
-            if self.typeList.currentIndex() == 0:
+            if self.typeList.currentText() == "PushButton":
                 self.valueOn = self.valueText.text()
                 if self.valueOn == "":
                     return
-            elif self.typeList.currentIndex() == 1:
+            elif self.typeList.currentText() == "Switch":
                 self.valueOn = self.valueOnText.text()
                 self.valueOff = self.valueOffText.text()
                 if self.valueOn == "" or self.valueOff == "":
                     return
-            elif self.typeList.currentIndex() == 2:
+            elif self.typeList.currentText() == "Slider":
                 self.maxSlider = int(float(self.maxSliderText.text()))
                 self.minSlider = int(float(self.minSliderText.text()))
                 self.stepSlider = int(float(self.stepSliderText.text()))
                 if self.maxSlider == "" or self.minSlider == "" or self.stepSlider == "":
                     return
-            self.widgetType = self.typeList.currentIndex()
+            self.widgetType = self.typeList.currentText()
             self.ok = True
         self.close()
 
@@ -470,6 +470,6 @@ class FreeLayout(QLayout):
 
     def removeWidget(self, widget):
         self.list.remove(widget)
-        if widget.widgetType == 2:
+        if widget.widgetType == "Slider":
             widget.label.deleteLater()
         widget.deleteLater()

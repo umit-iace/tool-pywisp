@@ -1051,12 +1051,12 @@ class MainGui(QMainWindow):
                     msg.parameter = self._experiments[self._currentExperimentIndex]['Remote'][name]['parameter']
                     msg.ok = True
                     msg.widgetType = self._experiments[self._currentExperimentIndex]['Remote'][name]['widgetType']
-                    if msg.widgetType == 0:
+                    if msg.widgetType == "PushButton":
                         msg.valueOn = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOn'])
-                    elif msg.widgetType == 1:
+                    elif msg.widgetType == "Switch":
                         msg.valueOn = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOn'])
                         msg.valueOff = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOff'])
-                    elif msg.widgetType == 2:
+                    elif msg.widgetType == "Slider":
                         msg.minSlider = self._experiments[self._currentExperimentIndex]['Remote'][name]['minSlider']
                         msg.maxSlider = self._experiments[self._currentExperimentIndex]['Remote'][name]['maxSlider']
                         msg.stepSlider = self._experiments[self._currentExperimentIndex]['Remote'][name]['stepSlider']
@@ -1096,12 +1096,12 @@ class MainGui(QMainWindow):
                     msg.parameter = self._experiments[self._currentExperimentIndex]['Remote'][name]['parameter']
                     msg.ok = True
                     msg.widgetType = self._experiments[self._currentExperimentIndex]['Remote'][name]['widgetType']
-                    if msg.widgetType == 0:
+                    if msg.widgetType == "PushButton":
                         msg.valueOn = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOn'])
-                    elif msg.widgetType == 1:
+                    elif msg.widgetType == "Switch":
                         msg.valueOn = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOn'])
                         msg.valueOff = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOff'])
-                    elif msg.widgetType == 2:
+                    elif msg.widgetType == "Slider":
                         msg.minSlider = self._experiments[self._currentExperimentIndex]['Remote'][name]['minSlider']
                         msg.maxSlider = self._experiments[self._currentExperimentIndex]['Remote'][name]['maxSlider']
                         msg.stepSlider = self._experiments[self._currentExperimentIndex]['Remote'][name]['stepSlider']
@@ -1327,7 +1327,7 @@ class MainGui(QMainWindow):
             self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['widgetType'] = msg.widgetType
             self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['parameter'] = msg.parameter
             sliderLabel = None
-            if msg.widgetType == 0:
+            if msg.widgetType == "PushButton":
                 movableWidget = self.createMovableWidget(QPushButton)
                 widget = movableWidget(self, msg.name, msg.widgetType, msg.parameter, msg.valueOn)
                 widget.setFixedHeight(40)
@@ -1335,7 +1335,7 @@ class MainGui(QMainWindow):
                 widget.setText(msg.name + '\n' + msg.valueOn)
                 widget.clicked.connect(lambda: self.remoteWidgetSendParameter(widget))
                 self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['valueOn'] = msg.valueOn
-            elif msg.widgetType == 1:
+            elif msg.widgetType == "Switch":
                 movableWidget = self.createMovableWidget(QPushButton)
                 widget = movableWidget(self, msg.name, msg.widgetType, msg.parameter, msg.valueOn, msg.valueOff)
                 widget.setCheckable(True)
@@ -1345,7 +1345,7 @@ class MainGui(QMainWindow):
                 widget.clicked.connect(lambda: self.remoteWidgetSendParameter(widget))
                 self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['valueOn'] = msg.valueOn
                 self._experiments[self._currentExperimentIndex]['Remote'][msg.name]['valueOff'] = msg.valueOff
-            elif msg.widgetType == 2:
+            elif msg.widgetType == "Slider":
                 movableWidget = self.createMovableWidget(QSlider)
 
                 sliderLabel = QLabel(msg.name + ': ' + str(msg.minSlider) + '-' + str(msg.maxSlider))
@@ -1376,14 +1376,14 @@ class MainGui(QMainWindow):
             self.remoteWidgetLayout.addWidget(widget)
 
     def remoteWidgetSendParameter(self, widget):
-        if widget.widgetType == 0:
+        if widget.widgetType == "PushButton":
             value = widget.valueOn
-        elif widget.widgetType == 1:
+        elif widget.widgetType == "Switch":
             if widget.isChecked():
                 value = widget.valueOn
             else:
                 value = widget.valueOff
-        elif widget.widgetType == 2:
+        elif widget.widgetType == "Slider":
             widget.valueOn = widget.value()
             value = widget.valueOn
         else:
@@ -1498,17 +1498,17 @@ class MainGui(QMainWindow):
                         self.gui._experiments[self.gui._currentExperimentIndex]['Remote'][self.name]['parameter'] =\
                             self.parameter
 
-                        if self.widgetType == 0:
+                        if self.widgetType == "PushButton":
                             self.setText(self.name + '\n' + self.valueOn)
                             self.gui._experiments[self.gui._currentExperimentIndex]['Remote'][self.name]['valueOn'] =\
                                 self.valueOn
-                        elif self.widgetType == 1:
+                        elif self.widgetType == "Switch":
                             self.setText(self.name + '\n' + self.valueOn + '/' + self.valueOff)
                             self.gui._experiments[self.gui._currentExperimentIndex]['Remote'][self.name]['valueOn'] =\
                                 self.valueOn
                             self.gui._experiments[self.gui._currentExperimentIndex]['Remote'][self.name][
                                 'valueOff'] = self.valueOff
-                        elif self.widgetType == 2:
+                        elif self.widgetType == "Slider":
                             self.setMinimum(self.minSlider)
                             self.setMaximum(self.maxSlider)
                             self.setTickInterval(self.stepSlider)
