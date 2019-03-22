@@ -101,33 +101,6 @@ class MainGui(QMainWindow):
         # animation dock
         self.animationWidget = QWidget()
         self.animationLayout = QVBoxLayout()
-        availableVis = getRegisteredVisualizers()
-        self._logger.info("Found Visualization: {}".format([name for cls, name in availableVis]))
-        if availableVis:
-            if len(availableVis) == 1:
-                self._logger.info("loading visualizer '{}'".format(availableVis[0][1]))
-                self.visualizer = availableVis[0][0](self.animationWidget,
-                                                     self.animationLayout)
-                self.animationDock.addWidget(self.animationWidget)
-            else:
-                # TODO
-                # hbox mit combobox zur auswahl
-                # instantiate the first visualizer
-                self.visComboBox = QComboBox()
-                for vis in availableVis:
-                    self.visComboBox.addItem(vis[1])
-                self.visComboBox.currentIndexChanged.connect(self.visualizerChanged)
-
-                self._logger.info("loading visualizer '{}'".format(availableVis[0][1]))
-                self.visualizer = availableVis[0][0](QWidget(),
-                                                     QVBoxLayout())
-
-                self.animationLayout.addWidget(self.visComboBox)
-                self.animationLayout.addWidget(self.visualizer.qWidget)
-                self.animationWidget.setLayout(self.animationLayout)
-                self.animationDock.addWidget(self.animationWidget)
-        else:
-            self.visualizer = None
         self.animationDock.addWidget(self.animationWidget)
 
         # experiment dock
@@ -352,16 +325,23 @@ class MainGui(QMainWindow):
         self.stopExp.connect(self.exp.stopExperiment)
         self.exp.expFinished.connect(self.saveLastMeas)
 
+        self.visualizer = None
+
         self._updateExperimentsList()
 
         self._applyFirstExperiment()
 
     def visualizerChanged(self, idx):
-        availableVis = getRegisteredVisualizers()
         self.animationLayout.removeWidget(self.visualizer.qWidget)
-        self.visualizer = availableVis[idx][0](QWidget(),
-                                               QVBoxLayout())
-        self.animationLayout.addWidget(self.visualizer.qWidget)
+        visName = self.visComboBox.itemText(idx)
+        availableVis = getRegisteredVisualizers()
+
+        for aVis in availableVis:
+            if aVis[1] == visName:
+                self.visualizer = aVis[0](QWidget(),
+                                          QVBoxLayout())
+                self.animationLayout.addWidget(self.visualizer.qWidget)
+                break
 
     def _getTcpMenu(self, settings):
         # ip and port
@@ -1024,6 +1004,41 @@ class MainGui(QMainWindow):
         if dataPointNames:
             self.updateDataPoints(dataPointNames)
 
+        if success:
+            if self.visualizer is not None:
+                for i in reversed(range(self.animationLayout.count())):
+                    self.animationLayout.itemAt(i).widget().setParent(None)
+            availableVis = getRegisteredVisualizers()
+            if availableVis and 'Visu' in self._experiments[idx]:
+                used = []
+                for vis in self._experiments[idx]['Visu']:
+                    for avis in availableVis:
+                        if vis == avis[1]:
+                            used.append(avis)
+                            break
+
+            if len(used) == 1:
+                self._logger.info("loading visualizer '{}'".format(used[0][1]))
+                self.visualizer = used[0][0](self.animationWidget,
+                                             self.animationLayout)
+                self.animationDock.addWidget(self.animationWidget)
+            elif len(used) > 1:
+                self.visComboBox = QComboBox()
+                for vis in used:
+                    self.visComboBox.addItem(vis[1])
+                self.visComboBox.currentIndexChanged.connect(self.visualizerChanged)
+
+                self._logger.info("loading visualizer '{}'".format(used[0][1]))
+                self.visualizer = used[0][0](QWidget(),
+                                             QVBoxLayout())
+
+                self.animationLayout.addWidget(self.visComboBox)
+                self.animationLayout.addWidget(self.visualizer.qWidget)
+                self.animationWidget.setLayout(self.animationLayout)
+                self.animationDock.addWidget(self.animationWidget)
+            else:
+                self.visualizer = None
+
         return success
 
     @pyqtSlot(QListWidgetItem)
@@ -1042,6 +1057,42 @@ class MainGui(QMainWindow):
 
         if dataPointNames:
             self.updateDataPoints(dataPointNames)
+
+        if success:
+            if self.visualizer is not None:
+                for i in reversed(range(self.animationLayout.count())):
+                    self.animationLayout.itemAt(i).widget().setParent(None)
+
+            availableVis = getRegisteredVisualizers()
+            if availableVis and 'Visu' in self._experiments[self.experimentList.row(item)]:
+                used = []
+                for vis in self._experiments[self.experimentList.row(item)]['Visu']:
+                    for avis in availableVis:
+                        if vis == avis[1]:
+                            used.append(avis)
+                            break
+
+            if len(used) == 1:
+                self._logger.info("loading visualizer '{}'".format(used[0][1]))
+                self.visualizer = used[0][0](self.animationWidget,
+                                             self.animationLayout)
+                self.animationDock.addWidget(self.animationWidget)
+            elif len(used) > 1:
+                self.visComboBox = QComboBox()
+                for vis in used:
+                    self.visComboBox.addItem(vis[1])
+                self.visComboBox.currentIndexChanged.connect(self.visualizerChanged)
+
+                self._logger.info("loading visualizer '{}'".format(used[0][1]))
+                self.visualizer = used[0][0](QWidget(),
+                                             QVBoxLayout())
+
+                self.animationLayout.addWidget(self.visComboBox)
+                self.animationLayout.addWidget(self.visualizer.qWidget)
+                self.animationWidget.setLayout(self.animationLayout)
+                self.animationDock.addWidget(self.animationWidget)
+            else:
+                self.visualizer = None
 
     def _applyExperimentByIdx(self, index=0):
         """

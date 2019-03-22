@@ -13,3 +13,6 @@
     Value2: 22.1
     Value3: 4
     Value4: 1
+
+  Visu:
+    MplExampleVisualizer:

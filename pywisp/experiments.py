@@ -242,6 +242,9 @@ class ExperimentInteractor(QObject):
                 self.targetModel.setName(value)
                 continue
 
+            if key == 'Visu':
+                continue
+
             name = PropertyItem(key)
             value = None
             newItems = [name, value]
@@ -259,6 +262,9 @@ class ExperimentInteractor(QObject):
 
         for moduleName, moduleValue in exp.items():
             if moduleName == 'Name':
+                continue
+
+            if moduleName == 'Visu':
                 continue
 
             if not moduleValue:
