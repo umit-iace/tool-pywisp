@@ -476,3 +476,58 @@ class FreeLayout(QLayout):
         if widget.widgetType == "Slider":
             widget.label.deleteLater()
         widget.deleteLater()
+
+
+class MovableWidget:
+    def __init__(self, name, label=None):
+        self.name = name
+        self.label = label
+        self._mousePressPos = None
+        self.__mouseMovePos = None
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.RightButton:
+            self._mousePressPos = event.globalPos()
+            self.__mouseMovePos = event.globalPos()
+        else:
+            self.mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.RightButton:
+            # adjust offset from clicked point to origin of widget
+            currPos = self.mapToGlobal(self.pos())
+            globalPos = event.globalPos()
+            diff = globalPos - self.__mouseMovePos
+            newPos = self.mapFromGlobal(currPos + diff)
+            if self.parent().rect().contains(newPos):
+                self.move(newPos)
+                if self.label:
+                    newPos.setY(newPos.y() + 30)
+                    newPos.setX(newPos.x() + 80)
+                    self.label.move(newPos)
+                self.__mouseMovePos = globalPos
+
+        self.mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self.mouseReleaseEvent(event)
+
+    def contextMenuEvent(self, event):
+        if self._mousePressPos is not None:
+            moved = event.globalPos() - self._mousePressPos
+            if moved.manhattanLength() > 0:
+                event.ignore()
+                return
+
+
+class MovablePushButton(QPushButton, MovableWidget):
+    def __init__(self, name):
+        MovableWidget.__init__(self, name)
+        QPushButton.__init__(self, name=name)
+
+    def contextMenuEvent(self, event):
+        if self._mousePressPos is not None:
+            moved = event.globalPos() - self._mousePressPos
+            if moved.manhattanLength() > 0:
+                event.ignore()
+                return
