@@ -16,17 +16,34 @@
 
   Remote:
     PushExample:
-      parameter: Value1
+      Module: Test
+      Parameter: Value1
       valueOn: '99.99'
       widgetType: PushButton
     SwitchExample:
-      parameter: Value2
+      Module: Test
+      Parameter: Value2
       valueOff: '11.1'
       valueOn: '22.2'
       widgetType: Switch
     SliderExample:
+      Module: Test
+      Parameter: Value3
       maxSlider: 255
       minSlider: 0
-      parameter: Value3
       stepSlider: 1
       widgetType: Slider
+
+- Name: RunSystem
+
+  RampTrajectory:
+   StartTime: 5
+   StartValue: 28.0
+   EndTime: 70
+   EndValue: 5.0
+
+  Test:
+    Value1: 11.2
+    Value2: 22.1
+    Value3: 4
+    Value4: 1

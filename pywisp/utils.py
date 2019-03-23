@@ -9,7 +9,7 @@ import pandas as pd
 from PyQt5.QtCore import Qt, QRegExp, QSize
 from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QDoubleValidator
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
-    QLayout, QComboBox, QPushButton, QWidget
+    QLayout, QComboBox, QPushButton, QWidget, QSlider
 from pyqtgraph import mkPen
 
 __all__ = ["get_resource"]
@@ -449,6 +449,7 @@ class FreeLayout(QLayout):
     def __init__(self):
         super(FreeLayout, self).__init__()
         self.list = []
+        self.labelList = []
 
     def count(self):
         return len(self.list)
@@ -465,23 +466,26 @@ class FreeLayout(QLayout):
     def addWidget(self, widget):
         if not isinstance(widget, QLabel):
             self.list.append(widget)
+        else:
+            self.labelList.append(widget)
         super(FreeLayout, self).addWidget(widget)
 
     def clearAll(self):
-        while self.count() > 0:
-            self.removeWidget(self.list[0])
+        for i in self.list:
+            i.setParent(None)
+        for i in self.labelList:
+            i.setParent(None)
 
-    def removeWidget(self, widget):
-        self.list.remove(widget)
-        if widget.widgetType == "Slider":
-            widget.label.deleteLater()
-        widget.deleteLater()
+        self.list = []
+        self.labelList = []
 
 
 class MovableWidget:
-    def __init__(self, name, label=None):
+    def __init__(self, name, label=None, **kwargs):
         self.name = name
         self.label = label
+        self.module = kwargs.get('module', None)
+        self.parameter = kwargs.get('parameter', None)
         self._mousePressPos = None
         self.__mouseMovePos = None
 
@@ -521,9 +525,45 @@ class MovableWidget:
 
 
 class MovablePushButton(QPushButton, MovableWidget):
-    def __init__(self, name):
-        MovableWidget.__init__(self, name)
+    def __init__(self, name, valueOn, **kwargs):
+        MovableWidget.__init__(self, name, **kwargs)
         QPushButton.__init__(self, name=name)
+        self.valueOn = valueOn
+
+    def contextMenuEvent(self, event):
+        if self._mousePressPos is not None:
+            moved = event.globalPos() - self._mousePressPos
+            if moved.manhattanLength() > 0:
+                event.ignore()
+                return
+
+
+class MovableSlider(QSlider, MovableWidget):
+    def __init__(self, name, minSlider, maxSlider, stepSlider, label, **kwargs):
+        MovableWidget.__init__(self, name, label, **kwargs)
+        QSlider.__init__(self, Qt.Horizontal, name=name)
+        self.minSlider = minSlider
+        self.maxSlider = maxSlider
+        self.stepSlider = stepSlider
+
+        self.setMinimum(self.minSlider)
+        self.setMaximum(self.maxSlider)
+        self.setTickInterval(self.stepSlider)
+
+    def contextMenuEvent(self, event):
+        if self._mousePressPos is not None:
+            moved = event.globalPos() - self._mousePressPos
+            if moved.manhattanLength() > 0:
+                event.ignore()
+                return
+
+
+class MovableSwitch(QPushButton, MovableWidget):
+    def __init__(self, name, valueOn, valueOff, **kwargs):
+        MovableWidget.__init__(self, name, **kwargs)
+        QPushButton.__init__(self, name=name)
+        self.valueOn = valueOn
+        self.valueOff = valueOff
 
     def contextMenuEvent(self, event):
         if self._mousePressPos is not None:
