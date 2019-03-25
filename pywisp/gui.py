@@ -1041,32 +1041,36 @@ class MainGui(QMainWindow):
             self.updateDataPoints(dataPointNames)
 
         if success:
-            self._currentExperimentIndex = idx
-            self._currentExperimentName = self._experiments[idx]["Name"]
+            self.configureRemote(idx)
 
-            if 'Remote' in self._experiments[self._currentExperimentIndex]:
-                for name in self._experiments[self._currentExperimentIndex]['Remote']:
+        return success
+
+    def configureRemote(self, idx):
+        self.remoteWidgetLayout.clearAll()
+
+        if 'Remote' in self._experiments[idx]:
+            if self._experiments[idx] is not None:
+                for name in self._experiments[idx]['Remote']:
                     msg = dict()
                     msg['name'] = name
-                    msg['module'] = self._experiments[self._currentExperimentIndex]['Remote'][name]['Module']
-                    msg['parameter'] = self._experiments[self._currentExperimentIndex]['Remote'][name]['Parameter']
-                    msg['widgetType'] = self._experiments[self._currentExperimentIndex]['Remote'][name]['widgetType']
+                    msg['module'] = self._experiments[idx]['Remote'][name]['Module']
+                    msg['parameter'] = self._experiments[idx]['Remote'][name]['Parameter']
+                    msg['widgetType'] = self._experiments[idx]['Remote'][name]['widgetType']
                     if msg['widgetType'] == "PushButton":
-                        msg['valueOn'] = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOn'])
+                        msg['valueOn'] = str(self._experiments[idx]['Remote'][name]['valueOn'])
                     elif msg['widgetType'] == "Switch":
-                        msg['valueOn'] = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOn'])
+                        msg['valueOn'] = str(self._experiments[idx]['Remote'][name]['valueOn'])
                         msg['valueOff'] = str(
-                            self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOff'])
+                            self._experiments[idx]['Remote'][name]['valueOff'])
                     elif msg['widgetType'] == "Slider":
-                        msg['minSlider'] = self._experiments[self._currentExperimentIndex]['Remote'][name]['minSlider']
-                        msg['maxSlider'] = self._experiments[self._currentExperimentIndex]['Remote'][name]['maxSlider']
-                        msg['stepSlider'] = self._experiments[self._currentExperimentIndex]['Remote'][name][
-                            'stepSlider']
+                        msg['minSlider'] = self._experiments[idx]['Remote'][name]['minSlider']
+                        msg['maxSlider'] = self._experiments[idx]['Remote'][name]['maxSlider']
+                        msg['stepSlider'] = self._experiments[idx]['Remote'][name]['stepSlider']
                     else:
                         continue
                     self.remoteAddWidget(msg)
-
-        return success
+            else:
+                self._logger.warning("Remote not correct configured in file!")
 
     @pyqtSlot(QListWidgetItem)
     def experimentDclicked(self, item):
@@ -1074,7 +1078,8 @@ class MainGui(QMainWindow):
         Apply the selected experiment to the current target and set it bold.
         :param item: item of the experiment in the `ExperimentList`
         """
-        success = self._applyExperimentByIdx(self.experimentList.row(item))
+        idx = self.experimentList.row(item)
+        success = self._applyExperimentByIdx(idx)
         self._currentExpListItem = item
 
         self.setQListItemBold(self.experimentList, item, success)
@@ -1086,32 +1091,7 @@ class MainGui(QMainWindow):
             self.updateDataPoints(dataPointNames)
 
         if success:
-            self._currentExperimentIndex = self.experimentList.row(self._currentExpListItem)
-            self._currentExperimentName = self._experiments[self._currentExperimentIndex]["Name"]
-
-            self.remoteWidgetLayout.clearAll()
-
-            if 'Remote' in self._experiments[self._currentExperimentIndex]:
-                for name in self._experiments[self._currentExperimentIndex]['Remote']:
-                    msg = dict()
-                    msg['name'] = name
-                    msg['module'] = self._experiments[self._currentExperimentIndex]['Remote'][name]['Module']
-                    msg['parameter'] = self._experiments[self._currentExperimentIndex]['Remote'][name]['Parameter']
-                    msg['widgetType'] = self._experiments[self._currentExperimentIndex]['Remote'][name]['widgetType']
-                    if msg['widgetType'] == "PushButton":
-                        msg['valueOn'] = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOn'])
-                    elif msg['widgetType'] == "Switch":
-                        msg['valueOn'] = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOn'])
-                        msg['valueOff'] = str(
-                            self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOff'])
-                    elif msg['widgetType'] == "Slider":
-                        msg['minSlider'] = self._experiments[self._currentExperimentIndex]['Remote'][name]['minSlider']
-                        msg['maxSlider'] = self._experiments[self._currentExperimentIndex]['Remote'][name]['maxSlider']
-                        msg['stepSlider'] = self._experiments[self._currentExperimentIndex]['Remote'][name][
-                            'stepSlider']
-                    else:
-                        continue
-                    self.remoteAddWidget(msg)
+            self.configureRemote(idx)
 
     def _applyExperimentByIdx(self, index=0):
         """
@@ -1332,6 +1312,7 @@ class MainGui(QMainWindow):
         :param msg: RemoteWidgetEdit object containing widget parameters and information
         """
         changed = False
+        idx = self._currentExperimentIndex
         if not msg:
             exp = self.exp.getExperiment()
             del exp['Name']
@@ -1340,11 +1321,11 @@ class MainGui(QMainWindow):
                 return
             else:
                 changed = True
-                if not 'Remote' in self._experiments[self._currentExperimentIndex]:
-                    self._experiments[self._currentExperimentIndex]['Remote'] = {}
-                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']] = {}
-                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['widgetType'] = msg['widgetType']
-                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['parameter'] = msg['parameter']
+                if not 'Remote' in self._experiments[idx]:
+                    self._experiments[idx]['Remote'] = {}
+                self._experiments[idx]['Remote'][msg['name']] = {}
+                self._experiments[idx]['Remote'][msg['name']]['widgetType'] = msg['widgetType']
+                self._experiments[idx]['Remote'][msg['name']]['parameter'] = msg['parameter']
 
         sliderLabel = None
         if msg['widgetType'] == "PushButton":
@@ -1354,7 +1335,7 @@ class MainGui(QMainWindow):
             widget.setText(msg['name'] + '\n' + msg['valueOn'])
             widget.clicked.connect(lambda: self.remotePushButtonSendParameter(widget))
             if changed:
-                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
+                self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
         elif msg['widgetType'] == "Switch":
             widget = MovableSwitch(self, msg['name'], msg['parameter'], module=msg['module'],
                                    parameter=msg['parameter'])
@@ -1364,8 +1345,8 @@ class MainGui(QMainWindow):
             widget.setText(msg['name'] + '\n' + msg['valueOn'] + '/' + msg['valueOff'])
             widget.clicked.connect(lambda: self.remoteSwitchSendParameter(widget))
             if changed:
-                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
-                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['valueOff'] = msg['valueOff']
+                self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
+                self._experiments[idx]['Remote'][msg['name']]['valueOff'] = msg['valueOff']
         elif msg['widgetType'] == "Slider":
             sliderLabel = QLabel(msg['name'] + ': ' + str(msg['minSlider']) + '-' + str(msg['maxSlider']))
             sliderLabel.setFixedHeight(10)
@@ -1380,9 +1361,9 @@ class MainGui(QMainWindow):
             widget.setFixedWidth(200)
             widget.valueChanged.connect(lambda: self.remoteSliderSendParameter(widget))
             if changed:
-                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['minSlider'] = msg['minSlider']
-                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['maxSlider'] = msg['maxSlider']
-                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['stepSlider'] = msg['stepSlider']
+                self._experiments[idx]['Remote'][msg['name']]['minSlider'] = msg['minSlider']
+                self._experiments[idx]['Remote'][msg['name']]['maxSlider'] = msg['maxSlider']
+                self._experiments[idx]['Remote'][msg['name']]['stepSlider'] = msg['stepSlider']
         else:
             return
         if self.remoteWidget.rect().contains((self.remoteWidgetLayout.count() % 2) * 200,
