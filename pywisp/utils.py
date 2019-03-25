@@ -7,9 +7,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from PyQt5.QtCore import Qt, QRegExp, QSize
-from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QDoubleValidator
+from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
-    QLayout, QComboBox, QPushButton, QWidget, QSlider
+    QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu
 from pyqtgraph import mkPen
 
 __all__ = ["get_resource"]
@@ -314,74 +314,74 @@ class RemoteWidgetEdit(QDialog):
     """
     Creates a dialog to add and edit remote widgets of different types
     """
-    def __init__(self, gui, edit=False, name='New', widgetType="PushButton", param=None, valueOn=None, valueOff=None, minSlider=0,
-                 maxSlider=255, stepSlider=1, visible=True):
-        super(QDialog, self).__init__(None, Qt.WindowSystemMenuHint | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
-        self.widgetType = widgetType
-        self.valueOn = valueOn
-        self.valueOff = valueOff
-        self.parameter = param
-        self.name = name
-        self.minSlider = minSlider
-        self.maxSlider = maxSlider
-        self.stepSlider = stepSlider
-        self.gui = gui
-        self.ok = False
+    def __init__(self, **kwargs):
+        parent = kwargs.get('parent', None)
+        super(RemoteWidgetEdit, self).__init__(parent)
+        self.widgetType = kwargs.get('widgetType', 'PushButton')
+        self.name = kwargs.get('name', 'New')
+        self.valueOn = str(kwargs.get('valueOn', 0.0))
+        self.valueOff = str(kwargs.get('valueOff', 0.0))
+        self.minSlider = str(kwargs.get('minSlider', 0.0))
+        self.maxSlider = str(kwargs.get('maxSlider', 0.0))
+        self.stepSlider = str(kwargs.get('stepSlider', 0.0))
 
-        self.stepSliderText = None
         self.minSliderText = None
         self.maxSliderText = None
         self.valueOffText = None
         self.valueOnText = None
         self.valueText = None
 
-        self.formLayout = QFormLayout()
+        mainLayout = QFormLayout()
 
-        self.nameText = QLineEdit(name)
-        self.formLayout.addRow(QLabel("Name"), self.nameText)
+        self.nameText = QLineEdit(self.name)
+        mainLayout.addRow(QLabel("Name"), self.nameText)
         self.nameText.mousePressEvent = lambda event: self.nameText.selectAll()
 
         self.typeList = QComboBox()
         self.typeList.addItems(["PushButton", "Switch", "Slider"])
-        self.typeList.setCurrentText(widgetType)
-        self.typeList.currentIndexChanged.connect(self.typeListchanged)
-        self.typeList.setEnabled(not edit)
-        self.formLayout.addRow(QLabel("Widget type"), self.typeList)
+        self.typeList.setCurrentText(self.widgetType)
+        self.typeList.currentIndexChanged.connect(self.typeListChanged)
+        self.typeList.setEnabled(True)
+        mainLayout.addRow(QLabel("Widget type"), self.typeList)
 
+        self.moduleList = QComboBox()
         self.paramList = QComboBox()
-        for top in self.gui.exp.getExperiment():
-            if not top == 'Name':
-                for key in self.gui.exp.getExperiment()[top]:
-                    self.paramList.addItem(key)
-        if self.paramList.findText(self.parameter):
-            self.paramList.setCurrentIndex(self.paramList.findText(self.parameter))
-        self.formLayout.addRow(QLabel("Parameter of '{}'".format(self.gui.exp.getExperiment()['Name'])), self.paramList)
+        self.modules = dict()
+        exp = kwargs.get('exp', None)
+        for key, value in exp.items():
+            self.modules[key] = [k for k, v in value.items()]
+
+            self.moduleList.addItem(key)
+
+        self.moduleList.currentIndexChanged.connect(self.moduleChanged)
+        self.moduleList.setCurrentIndex(0)
+        self.moduleChanged(0)
+
+        mainLayout.addRow(QLabel("Modules:"), self.moduleList)
+        mainLayout.addRow(QLabel("Parameter:"), self.paramList)
 
         self.settingsWidget = QWidget()
         self.settingsWidgetLayout = QFormLayout()
         self.settingsWidget.setLayout(self.settingsWidgetLayout)
-        self.formLayout.addRow(self.settingsWidget)
+        mainLayout.addRow(self.settingsWidget)
 
-        self.typeListchanged()
+        self.typeListChanged()
 
-        self.formLayout.addRow(QLabel(' '))
-        self.formLayout.addRow(QLabel(' '))
-
-        self.btnOk = QPushButton("Ok", self)
-        self.btnOk.clicked.connect(self.button_press)
-        self.btnCancel = QPushButton("Cancel", self)
-        self.btnCancel.clicked.connect(self.button_press)
-
-        self.formLayout.addRow(self.btnOk, self.btnCancel)
-
-        self.setLayout(self.formLayout)
-        self.setWindowModality(Qt.ApplicationModal)
+        self.setLayout(mainLayout)
         self.setWindowTitle("Add Remote Widget ...")
-        self.setWindowIcon(self.gui.icon)
-        if visible:
-            self.exec()
+        resPath = get_resource("icon.svg")
+        self.icon = QIcon(resPath)
+        self.setWindowIcon(self.icon)
 
-    def typeListchanged(self):
+        # OK and Cancel buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
+            Qt.Horizontal, self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        mainLayout.addWidget(buttons)
+
+    def typeListChanged(self):
         for i in reversed(range(self.settingsWidgetLayout.count())):
             self.settingsWidgetLayout.itemAt(i).widget().deleteLater()
 
@@ -392,11 +392,11 @@ class RemoteWidgetEdit(QDialog):
             self.valueText.mousePressEvent = lambda event: self.valueText.selectAll()
         elif self.typeList.currentText() == "Switch":
             self.valueOnText = QLineEdit(self.valueOn)
-            self.settingsWidgetLayout.addRow(QLabel("Value for On"), self.valueOnText)
+            self.settingsWidgetLayout.addRow(QLabel("Value On"), self.valueOnText)
             self.valueOnText.setValidator(QDoubleValidator())
             self.valueOnText.mousePressEvent = lambda event: self.valueOnText.selectAll()
             self.valueOffText = QLineEdit(self.valueOff)
-            self.settingsWidgetLayout.addRow(QLabel("Value for Off"), self.valueOffText)
+            self.settingsWidgetLayout.addRow(QLabel("Value Off"), self.valueOffText)
             self.valueOffText.mousePressEvent = lambda event: self.valueOffText.selectAll()
             self.valueOffText.setValidator(QDoubleValidator())
         elif self.typeList.currentText() == "Slider":
@@ -408,44 +408,51 @@ class RemoteWidgetEdit(QDialog):
             self.settingsWidgetLayout.addRow(QLabel("Min"), self.minSliderText)
             self.minSliderText.setValidator(QDoubleValidator())
             self.minSliderText.mousePressEvent = lambda event: self.minSliderText.selectAll()
-            self.stepSliderText = QLineEdit(str(self.stepSlider))
-            self.settingsWidgetLayout.addRow(QLabel("Stepsize"), self.stepSliderText)
-            self.stepSliderText.setValidator(QDoubleValidator())
-            self.stepSliderText.mousePressEvent = lambda event: self.stepSliderText.selectAll()
+            stepSliderText = QLineEdit(str(self.stepSlider))
+            self.settingsWidgetLayout.addRow(QLabel("Step Size"), stepSliderText)
+            stepSliderText.setValidator(QDoubleValidator())
+            stepSliderText.mousePressEvent = lambda event: stepSliderText.selectAll()
 
-    def button_press(self):
-        if self.sender() == self.btnOk:
-            self.parameter = self.paramList.currentText()
-            if not self.parameter:
-                return
-            self.name = self.nameText.text()
-            if self.name == '':
-                return
+    def moduleChanged(self, value):
+        self.paramList.clear()
+        module = self.moduleList.currentText()
 
-            if self.typeList.currentText() == "PushButton":
-                self.valueOn = self.valueText.text()
-                if self.valueOn == "":
-                    return
-            elif self.typeList.currentText() == "Switch":
-                self.valueOn = self.valueOnText.text()
-                self.valueOff = self.valueOffText.text()
-                if self.valueOn == "" or self.valueOff == "":
-                    return
-            elif self.typeList.currentText() == "Slider":
-                self.maxSlider = int(float(self.maxSliderText.text()))
-                self.minSlider = int(float(self.minSliderText.text()))
-                self.stepSlider = int(float(self.stepSliderText.text()))
-                if self.maxSlider == "" or self.minSlider == "" or self.stepSlider == "":
-                    return
-            self.widgetType = self.typeList.currentText()
-            self.ok = True
-        self.close()
+        for p in self.modules[module]:
+            self.paramList.addItem(p)
+
+    def _getData(self):
+        msg = dict()
+        msg['name'] = self.nameText.text()
+        msg['widgetType'] = self.typeList.currentText()
+        msg['module'] = self.moduleList.currentText()
+        msg['parameter'] = self.paramList.currentText()
+
+        if self.typeList.currentText() == "PushButton":
+            msg['valueOn'] = self.valueText.text()
+        elif self.typeList.currentText() == "Switch":
+            msg['valueOn'] = self.valueOnText.text()
+            msg['valueOff'] = self.valueOffText.text()
+        elif self.typeList.currentText() == "Slider":
+            msg['minSlider'] = self.minSliderText.text()
+            msg['maxSlider'] = self.maxSliderText.text()
+            msg['stepSlider'] = self.stepSliderText.text()
+
+        return msg
+
+    @staticmethod
+    def getData(exp=None, **kwargs):
+        dialog = RemoteWidgetEdit(exp=exp, **kwargs)
+        result = dialog.exec_()
+        msg = dialog._getData()
+
+        return msg, result == QDialog.Accepted
 
 
 class FreeLayout(QLayout):
     """
     An empty layout for widgets with no position and placement management
     """
+
     def __init__(self):
         super(FreeLayout, self).__init__()
         self.list = []
@@ -523,19 +530,21 @@ class MovableWidget:
                 event.ignore()
                 return
 
+            menu = QMenu(self)
+            removeAction = menu.addAction("Remove")
+            editAction = menu.addAction("Edit")
+            action = menu.exec_(self.mapToGlobal(event.pos()))
+            if action == removeAction:
+                pass
+            elif action == editAction:
+                pass
+
 
 class MovablePushButton(QPushButton, MovableWidget):
     def __init__(self, name, valueOn, **kwargs):
         MovableWidget.__init__(self, name, **kwargs)
         QPushButton.__init__(self, name=name)
         self.valueOn = valueOn
-
-    def contextMenuEvent(self, event):
-        if self._mousePressPos is not None:
-            moved = event.globalPos() - self._mousePressPos
-            if moved.manhattanLength() > 0:
-                event.ignore()
-                return
 
 
 class MovableSlider(QSlider, MovableWidget):
@@ -550,13 +559,6 @@ class MovableSlider(QSlider, MovableWidget):
         self.setMaximum(self.maxSlider)
         self.setTickInterval(self.stepSlider)
 
-    def contextMenuEvent(self, event):
-        if self._mousePressPos is not None:
-            moved = event.globalPos() - self._mousePressPos
-            if moved.manhattanLength() > 0:
-                event.ignore()
-                return
-
 
 class MovableSwitch(QPushButton, MovableWidget):
     def __init__(self, name, valueOn, valueOff, **kwargs):
@@ -564,10 +566,3 @@ class MovableSwitch(QPushButton, MovableWidget):
         QPushButton.__init__(self, name=name)
         self.valueOn = valueOn
         self.valueOff = valueOff
-
-    def contextMenuEvent(self, event):
-        if self._mousePressPos is not None:
-            moved = event.globalPos() - self._mousePressPos
-            if moved.manhattanLength() > 0:
-                event.ignore()
-                return

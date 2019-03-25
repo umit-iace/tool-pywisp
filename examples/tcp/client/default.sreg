@@ -47,3 +47,10 @@
     Value2: 22.1
     Value3: 4
     Value4: 1
+
+  Remote:
+    PushExample:
+      Module: Test
+      Parameter: Value1
+      valueOn: '12.99'
+      widgetType: PushButton

@@ -255,8 +255,8 @@ class MainGui(QMainWindow):
 
         # remote dock
         self.remoteWidget = QWidget()
-        # self.remoteWidget.setContextMenuPolicy(Qt.CustomContextMenu)
-        # self.remoteWidget.customContextMenuRequested.connect(self.remoteWidgetMenue)
+        self.remoteWidget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.remoteWidget.customContextMenuRequested.connect(self.remoteWidgetMenue)
         self.remoteWidgetLayout = FreeLayout()
         self.remoteWidget.setLayout(self.remoteWidgetLayout)
         self.remoteDock.addWidget(self.remoteWidget)
@@ -1055,11 +1055,13 @@ class MainGui(QMainWindow):
                         msg['valueOn'] = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOn'])
                     elif msg['widgetType'] == "Switch":
                         msg['valueOn'] = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOn'])
-                        msg['valueOff'] = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOff'])
+                        msg['valueOff'] = str(
+                            self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOff'])
                     elif msg['widgetType'] == "Slider":
                         msg['minSlider'] = self._experiments[self._currentExperimentIndex]['Remote'][name]['minSlider']
                         msg['maxSlider'] = self._experiments[self._currentExperimentIndex]['Remote'][name]['maxSlider']
-                        msg['stepSlider'] = self._experiments[self._currentExperimentIndex]['Remote'][name]['stepSlider']
+                        msg['stepSlider'] = self._experiments[self._currentExperimentIndex]['Remote'][name][
+                            'stepSlider']
                     else:
                         continue
                     self.remoteAddWidget(msg)
@@ -1100,11 +1102,13 @@ class MainGui(QMainWindow):
                         msg['valueOn'] = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOn'])
                     elif msg['widgetType'] == "Switch":
                         msg['valueOn'] = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOn'])
-                        msg['valueOff'] = str(self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOff'])
+                        msg['valueOff'] = str(
+                            self._experiments[self._currentExperimentIndex]['Remote'][name]['valueOff'])
                     elif msg['widgetType'] == "Slider":
                         msg['minSlider'] = self._experiments[self._currentExperimentIndex]['Remote'][name]['minSlider']
                         msg['maxSlider'] = self._experiments[self._currentExperimentIndex]['Remote'][name]['maxSlider']
-                        msg['stepSlider'] = self._experiments[self._currentExperimentIndex]['Remote'][name]['stepSlider']
+                        msg['stepSlider'] = self._experiments[self._currentExperimentIndex]['Remote'][name][
+                            'stepSlider']
                     else:
                         continue
                     self.remoteAddWidget(msg)
@@ -1317,41 +1321,68 @@ class MainGui(QMainWindow):
             qList.item(i).setFont(newfont)
         qList.repaint()
 
-    def remoteAddWidget(self, msg=None):
+    def remoteRemoveWidget(self, widget):
+        # TODO slot to remove widget from remote widget
+        pass
+
+    def remoteAddWidget(self, msg=None, **kwargs):
+        # TODO slot for edit, with msg and kwargs
         """
         Adds a new widget to the remoteDock
         :param msg: RemoteWidgetEdit object containing widget parameters and information
         """
+        changed = False
+        if not msg:
+            exp = self.exp.getExperiment()
+            del exp['Name']
+            msg, ok = RemoteWidgetEdit.getData(exp=exp, **kwargs)
+            if not ok:
+                return
+            else:
+                changed = True
+                if not 'Remote' in self._experiments[self._currentExperimentIndex]:
+                    self._experiments[self._currentExperimentIndex]['Remote'] = {}
+                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']] = {}
+                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['widgetType'] = msg['widgetType']
+                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['parameter'] = msg['parameter']
+
         sliderLabel = None
         if msg['widgetType'] == "PushButton":
             widget = MovablePushButton(msg['name'], msg['valueOn'], module=msg['module'], parameter=msg['parameter'])
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
             widget.setText(msg['name'] + '\n' + msg['valueOn'])
-            widget.clicked.connect(lambda: self.remoteWidgetSendParameter(widget))
-            self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
+            widget.clicked.connect(lambda: self.remotePushButtonSendParameter(widget))
+            if changed:
+                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
         elif msg['widgetType'] == "Switch":
-            widget = MovableSwitch(self, msg['name'], msg['parameter'], module=msg['module'], parameter=msg['parameter'])
+            widget = MovableSwitch(self, msg['name'], msg['parameter'], module=msg['module'],
+                                   parameter=msg['parameter'])
             widget.setCheckable(True)
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
             widget.setText(msg['name'] + '\n' + msg['valueOn'] + '/' + msg['valueOff'])
-            widget.clicked.connect(lambda: self.remoteWidgetSendParameter(widget))
-            self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
-            self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['valueOff'] = msg['valueOff']
+            widget.clicked.connect(lambda: self.remoteSwitchSendParameter(widget))
+            if changed:
+                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
+                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['valueOff'] = msg['valueOff']
         elif msg['widgetType'] == "Slider":
             sliderLabel = QLabel(msg['name'] + ': ' + str(msg['minSlider']) + '-' + str(msg['maxSlider']))
             sliderLabel.setFixedHeight(10)
             self.remoteWidgetLayout.addWidget(sliderLabel)
 
             widget = MovableSlider(msg['name'], msg['minSlider'], msg['maxSlider'], msg['stepSlider'],
-                                   sliderLabel, module=msg['module'], parameter=msg['parameter'] )
+                                   sliderLabel, module=msg['module'], parameter=msg['parameter'])
             widget.setMinimum(msg['minSlider'])
             widget.setMaximum(msg['maxSlider'])
             widget.setTickInterval(msg['stepSlider'])
             widget.setFixedHeight(30)
             widget.setFixedWidth(200)
-            widget.valueChanged.connect(lambda: self.remoteWidgetSendParameter(widget))
+            widget.valueChanged.connect(lambda: self.remoteSliderSendParameter(widget))
+            if changed:
+                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['minSlider'] = msg['minSlider']
+                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['maxSlider'] = msg['maxSlider']
+                self._experiments[self._currentExperimentIndex]['Remote'][msg['name']]['stepSlider'] = msg['stepSlider']
         else:
             return
         if self.remoteWidget.rect().contains((self.remoteWidgetLayout.count() % 2) * 200,
@@ -1362,36 +1393,40 @@ class MainGui(QMainWindow):
                                  (self.remoteWidgetLayout.count() // 2) * 40 + 30)
         self.remoteWidgetLayout.addWidget(widget)
 
-    def remoteWidgetSendParameter(self, widget):
+    def remotePushButtonSendParameter(self, widget):
+        value = widget.valueOn
+        self.remoteSendParamter(widget.module, widget.parameter, value)
+
+    def remoteSwitchSendParameter(self, widget):
+        if widget.isChecked():
+            value = widget.valueOn
+        else:
+            value = widget.valueOff
+
+        self.remoteSendParamter(widget.module, widget.parameter, value)
+
+    def remoteSliderSendParameter(self, widget):
         """
         Gets called when a user interacts with remote widgets and sends the specified parameter to the bench
         :param widget: the widget the user interacted with
         """
-        # TODO sendParamter muss angepasst werden
-        # if widget.widgetType == "PushButton":
-        #     value = widget.valueOn
-        # elif widget.widgetType == "Switch":
-        #     if widget.isChecked():
-        #         value = widget.valueOn
-        #     else:
-        #         value = widget.valueOff
-        # elif widget.widgetType == "Slider":
-        #     widget.valueOn = widget.value()
-        #     value = widget.valueOn
-        # else:
-        #     return
-        # settings = deepcopy(self.exp.getExperiment())
-        # for top in settings:
-        #     if not top == 'Name':
-        #         for key in settings[top]:
-        #             if key == widget.parameter:
-        #                 settings[top][key] = value
-        #                 self.exp.setExperiment(settings)
-        #                 if self.actSendParameter.isEnabled():
-        #                     self.sendParameter()
-        #                     self._logger.info("Parameter '{} = {}' sent".format(widget.parameter, value))
-        #                 return
-        # self._logger.warning("Parameter '{}' does not exist in actual experiment".format(widget.parameter))
+        widget.valueOn = widget.value()
+        value = widget.valueOn
+        self.remoteSendParamter(widget.module, widget.parameter, value)
+
+    def remoteSendParamter(self, module, parameter, value):
+        exp = deepcopy(self.exp.getExperiment())
+        del exp['Name']
+
+        for key, value in exp.items():
+            if key == module:
+                for k, v in value.items():
+                    if k == parameter:
+                        v = value
+                        self.exp.setExperiment(exp)
+                        if self.actSendParameter.isEnabled():
+                            self.sendParameter()
+                        return
 
     def copyRemoteSource(self):
         text = "  Remote:\n"
