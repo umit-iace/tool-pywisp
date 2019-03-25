@@ -1302,17 +1302,62 @@ class MainGui(QMainWindow):
         qList.repaint()
 
     def remoteRemoveWidget(self, widget):
-        # TODO slot to remove widget from remote widget
-        pass
+        self.remoteWidgetLayout.removeWidget(widget)
+
+    def remoteConfigWidget(self, widget, **kwargs):
+        idx = self.experimentList.row(self._currentExpListItem)
+        exp = self.exp.getExperiment()
+        del exp['Name']
+        msg, ok = RemoteWidgetEdit.getData(exp=exp, **kwargs)
+        if not ok:
+            return
+        else:
+            if not 'Remote' in self._experiments[idx]:
+                self._experiments[idx]['Remote'] = {}
+            self._experiments[idx]['Remote'][msg['name']] = {}
+            self._experiments[idx]['Remote'][msg['name']]['widgetType'] = msg['widgetType']
+            self._experiments[idx]['Remote'][msg['name']]['Module'] = msg['module']
+            self._experiments[idx]['Remote'][msg['name']]['Parameter'] = msg['parameter']
+
+            if msg['widgetType'] == 'PushButton':
+                wType = MovablePushButton
+            elif msg['widgetType'] == 'Switch':
+                wType = MovableSwitch
+            else:
+                wType = MovableSlider
+
+        if isinstance(widget, wType):
+            widget.name = msg['name']
+            if msg['widgetType'] == "PushButton":
+                widget.valueOn = msg['valueOn']
+                widget.setText(msg['name'] + '\n' + msg['valueOn'])
+                self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
+            elif msg['widgetType'] == "Switch":
+                widget.valueOn = msg['valueOn']
+                widget.valueOff = msg['valueOff']
+                widget.setText(msg['name'] + '\n' + msg['valueOn'] + '/' + msg['valueOff'])
+                self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
+                self._experiments[idx]['Remote'][msg['name']]['valueOff'] = msg['valueOff']
+            elif msg['widgetType'] == "Slider":
+                widget.minSlider = msg['minSlider']
+                widget.maxSlider = msg['maxSlider']
+                widget.stepSlider = msg['stepSlider']
+                # todo setter method to use setMinimum method
+                # todo set label
+                self._experiments[idx]['Remote'][msg['name']]['minSlider'] = msg['minSlider']
+                self._experiments[idx]['Remote'][msg['name']]['maxSlider'] = msg['maxSlider']
+                self._experiments[idx]['Remote'][msg['name']]['stepSlider'] = msg['stepSlider']
+        # todo
+        # else
+        # position merken und an die selbe stelle das neue object setzen
 
     def remoteAddWidget(self, msg=None, **kwargs):
-        # TODO slot for edit, with msg and kwargs
         """
         Adds a new widget to the remoteDock
         :param msg: RemoteWidgetEdit object containing widget parameters and information
         """
         changed = False
-        idx = self._currentExperimentIndex
+        idx = self.experimentList.row(self._currentExpListItem)
         if not msg:
             exp = self.exp.getExperiment()
             del exp['Name']
@@ -1325,7 +1370,8 @@ class MainGui(QMainWindow):
                     self._experiments[idx]['Remote'] = {}
                 self._experiments[idx]['Remote'][msg['name']] = {}
                 self._experiments[idx]['Remote'][msg['name']]['widgetType'] = msg['widgetType']
-                self._experiments[idx]['Remote'][msg['name']]['parameter'] = msg['parameter']
+                self._experiments[idx]['Remote'][msg['name']]['Module'] = msg['module']
+                self._experiments[idx]['Remote'][msg['name']]['Parameter'] = msg['parameter']
 
         sliderLabel = None
         if msg['widgetType'] == "PushButton":
@@ -1334,16 +1380,20 @@ class MainGui(QMainWindow):
             widget.setFixedWidth(100)
             widget.setText(msg['name'] + '\n' + msg['valueOn'])
             widget.clicked.connect(lambda: self.remotePushButtonSendParameter(widget))
+            widget.editAction.triggered.connect(lambda _, msg=None, data=widget.getData(): self.remoteConfigWidget(widget, **data))
+            widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
             if changed:
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
         elif msg['widgetType'] == "Switch":
-            widget = MovableSwitch(self, msg['name'], msg['parameter'], module=msg['module'],
+            widget = MovableSwitch(msg['name'], msg['valueOn'], msg['valueOff'], module=msg['module'],
                                    parameter=msg['parameter'])
             widget.setCheckable(True)
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
             widget.setText(msg['name'] + '\n' + msg['valueOn'] + '/' + msg['valueOff'])
             widget.clicked.connect(lambda: self.remoteSwitchSendParameter(widget))
+            widget.editAction.triggered.connect(lambda _, msg=None, data=widget.getData(): self.remoteConfigWidget(widget, **data))
+            widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
             if changed:
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
                 self._experiments[idx]['Remote'][msg['name']]['valueOff'] = msg['valueOff']
@@ -1360,6 +1410,8 @@ class MainGui(QMainWindow):
             widget.setFixedHeight(30)
             widget.setFixedWidth(200)
             widget.valueChanged.connect(lambda: self.remoteSliderSendParameter(widget))
+            widget.editAction.triggered.connect(lambda _, data=widget.getData(): self.remoteConfigWidget(widget, **data))
+            widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
             if changed:
                 self._experiments[idx]['Remote'][msg['name']]['minSlider'] = msg['minSlider']
                 self._experiments[idx]['Remote'][msg['name']]['maxSlider'] = msg['maxSlider']

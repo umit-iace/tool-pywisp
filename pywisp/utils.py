@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
+import copy as cp
 import logging
-import os
-
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 import pandas as pd
 from PyQt5.QtCore import Qt, QRegExp, QSize
 from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator
@@ -314,6 +314,7 @@ class RemoteWidgetEdit(QDialog):
     """
     Creates a dialog to add and edit remote widgets of different types
     """
+
     def __init__(self, **kwargs):
         parent = kwargs.get('parent', None)
         super(RemoteWidgetEdit, self).__init__(parent)
@@ -325,8 +326,12 @@ class RemoteWidgetEdit(QDialog):
         self.maxSlider = str(kwargs.get('maxSlider', 0.0))
         self.stepSlider = str(kwargs.get('stepSlider', 0.0))
 
+        self.curModule = kwargs.get('module', None)
+        self.curParameter = kwargs.get('parameter', None)
+
         self.minSliderText = None
         self.maxSliderText = None
+        self.stepSliderText = None
         self.valueOffText = None
         self.valueOnText = None
         self.valueText = None
@@ -354,8 +359,15 @@ class RemoteWidgetEdit(QDialog):
             self.moduleList.addItem(key)
 
         self.moduleList.currentIndexChanged.connect(self.moduleChanged)
-        self.moduleList.setCurrentIndex(0)
-        self.moduleChanged(0)
+        if self.curModule is None:
+            self.moduleList.setCurrentIndex(0)
+            self.moduleChanged(0)
+        else:
+            self.moduleList.setCurrentText(self.curModule)
+            self.moduleChanged(0)
+
+        if self.curParameter is not None:
+            self.paramList.setCurrentText(self.curParameter)
 
         mainLayout.addRow(QLabel("Modules:"), self.moduleList)
         mainLayout.addRow(QLabel("Parameter:"), self.paramList)
@@ -408,10 +420,10 @@ class RemoteWidgetEdit(QDialog):
             self.settingsWidgetLayout.addRow(QLabel("Min"), self.minSliderText)
             self.minSliderText.setValidator(QDoubleValidator())
             self.minSliderText.mousePressEvent = lambda event: self.minSliderText.selectAll()
-            stepSliderText = QLineEdit(str(self.stepSlider))
-            self.settingsWidgetLayout.addRow(QLabel("Step Size"), stepSliderText)
-            stepSliderText.setValidator(QDoubleValidator())
-            stepSliderText.mousePressEvent = lambda event: stepSliderText.selectAll()
+            self.stepSliderText = QLineEdit(str(self.stepSlider))
+            self.settingsWidgetLayout.addRow(QLabel("Step Size"), self.stepSliderText)
+            self.stepSliderText.setValidator(QDoubleValidator())
+            self.stepSliderText.mousePressEvent = lambda event: self.stepSliderText.selectAll()
 
     def moduleChanged(self, value):
         self.paramList.clear()
@@ -477,6 +489,14 @@ class FreeLayout(QLayout):
             self.labelList.append(widget)
         super(FreeLayout, self).addWidget(widget)
 
+    def removeWidget(self, widget):
+        if widget in self.list:
+            self.list.remove(widget)
+
+        if widget in self.labelList:
+            self.labelList.remove(widget)
+        widget.setParent(None)
+
     def clearAll(self):
         for i in self.list:
             i.setParent(None)
@@ -487,14 +507,18 @@ class FreeLayout(QLayout):
         self.labelList = []
 
 
-class MovableWidget:
+class MovableWidget(object):
     def __init__(self, name, label=None, **kwargs):
-        self.name = name
+        self.widgetName = name
         self.label = label
-        self.module = kwargs.get('module', None)
-        self.parameter = kwargs.get('parameter', None)
+        self.module = cp.copy(kwargs.get('module', None))
+        self.parameter = cp.copy(kwargs.get('parameter', None))
         self._mousePressPos = None
         self.__mouseMovePos = None
+
+        self.contextMenu = QMenu()
+        self.removeAction = self.contextMenu.addAction("Remove")
+        self.editAction = self.contextMenu.addAction("Edit")
 
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
@@ -530,14 +554,7 @@ class MovableWidget:
                 event.ignore()
                 return
 
-            menu = QMenu(self)
-            removeAction = menu.addAction("Remove")
-            editAction = menu.addAction("Edit")
-            action = menu.exec_(self.mapToGlobal(event.pos()))
-            if action == removeAction:
-                pass
-            elif action == editAction:
-                pass
+            self.contextMenu.exec_(self.mapToGlobal(event.pos()))
 
 
 class MovablePushButton(QPushButton, MovableWidget):
@@ -545,6 +562,15 @@ class MovablePushButton(QPushButton, MovableWidget):
         MovableWidget.__init__(self, name, **kwargs)
         QPushButton.__init__(self, name=name)
         self.valueOn = valueOn
+
+    def getData(self):
+        data = dict()
+
+        data['widgetType'] = 'Switch'
+        data['name'] = self.widgetName
+        data['valueOn'] = self.valueOn
+
+        return data
 
 
 class MovableSlider(QSlider, MovableWidget):
@@ -559,10 +585,33 @@ class MovableSlider(QSlider, MovableWidget):
         self.setMaximum(self.maxSlider)
         self.setTickInterval(self.stepSlider)
 
+    def getData(self):
+        data = dict()
+
+        data['widgetType'] = 'Switch'
+        data['name'] = self.widgetName
+        data['minSlider'] = self.minSlider
+        data['maxSlider'] = self.maxSlider
+        data['stepSlider'] = self.stepSlider
+
+        return data
+
 
 class MovableSwitch(QPushButton, MovableWidget):
     def __init__(self, name, valueOn, valueOff, **kwargs):
-        MovableWidget.__init__(self, name, **kwargs)
         QPushButton.__init__(self, name=name)
+        MovableWidget.__init__(self, name, **kwargs)
         self.valueOn = valueOn
         self.valueOff = valueOff
+
+    def getData(self):
+        data = dict()
+
+        data['widgetType'] = 'Switch'
+        data['name'] = self.widgetName
+        data['valueOn'] = self.valueOn
+        data['valueOff'] = self.valueOff
+        data['module'] = self.module
+        data['parameter'] = self.parameter
+
+        return data
