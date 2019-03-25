@@ -1005,44 +1005,47 @@ class MainGui(QMainWindow):
             self.updateDataPoints(dataPointNames)
 
         if success:
-            if self.visualizer is not None:
-                for i in reversed(range(self.animationLayout.count())):
-                    self.animationLayout.itemAt(i).widget().setParent(None)
-            availableVis = getRegisteredVisualizers()
-            if availableVis and 'Visu' in self._experiments[idx]:
-                used = []
-                if self._experiments[idx]['Visu'] is not None:
-                    for vis in self._experiments[idx]['Visu']:
-                        for avis in availableVis:
-                            if vis == avis[1]:
-                                used.append(avis)
-                                break
-                else:
-                    self._logger.warning("No Visualization configured!")
-
-            if len(used) == 1:
-                self._logger.info("loading visualizer '{}'".format(used[0][1]))
-                self.visualizer = used[0][0](self.animationWidget,
-                                             self.animationLayout)
-                self.animationDock.addWidget(self.animationWidget)
-            elif len(used) > 1:
-                self.visComboBox = QComboBox()
-                for vis in used:
-                    self.visComboBox.addItem(vis[1])
-                self.visComboBox.currentIndexChanged.connect(self.visualizerChanged)
-
-                self._logger.info("loading visualizer '{}'".format(used[0][1]))
-                self.visualizer = used[0][0](QWidget(),
-                                             QVBoxLayout())
-
-                self.animationLayout.addWidget(self.visComboBox)
-                self.animationLayout.addWidget(self.visualizer.qWidget)
-                self.animationWidget.setLayout(self.animationLayout)
-                self.animationDock.addWidget(self.animationWidget)
-            else:
-                self.visualizer = None
+            self.configureVisualizer(idx)
 
         return success
+
+    def configureVisualizer(self, idx):
+        if self.visualizer is not None:
+            for i in reversed(range(self.animationLayout.count())):
+                self.animationLayout.itemAt(i).widget().setParent(None)
+        availableVis = getRegisteredVisualizers()
+        used = []
+        if availableVis and 'Visu' in self._experiments[idx]:
+            if self._experiments[idx]['Visu'] is not None:
+                for vis in self._experiments[idx]['Visu']:
+                    for avis in availableVis:
+                        if vis == avis[1]:
+                            used.append(avis)
+                            break
+            else:
+                self._logger.warning("No Visualization configured!")
+
+        if len(used) == 1:
+            self._logger.info("loading visualizer '{}'".format(used[0][1]))
+            self.visualizer = used[0][0](self.animationWidget,
+                                         self.animationLayout)
+            self.animationDock.addWidget(self.animationWidget)
+        elif len(used) > 1:
+            self.visComboBox = QComboBox()
+            for vis in used:
+                self.visComboBox.addItem(vis[1])
+            self.visComboBox.currentIndexChanged.connect(self.visualizerChanged)
+
+            self._logger.info("loading visualizer '{}'".format(used[0][1]))
+            self.visualizer = used[0][0](QWidget(),
+                                         QVBoxLayout())
+
+            self.animationLayout.addWidget(self.visComboBox)
+            self.animationLayout.addWidget(self.visualizer.qWidget)
+            self.animationWidget.setLayout(self.animationLayout)
+            self.animationDock.addWidget(self.animationWidget)
+        else:
+            self.visualizer = None
 
     @pyqtSlot(QListWidgetItem)
     def experimentDclicked(self, item):
@@ -1050,7 +1053,8 @@ class MainGui(QMainWindow):
         Apply the selected experiment to the current target and set it bold.
         :param item: item of the experiment in the `ExperimentList`
         """
-        success = self._applyExperimentByIdx(self.experimentList.row(item))
+        idx = self.experimentList.row(item)
+        success = self._applyExperimentByIdx(idx)
         self._currentExpListItem = item
 
         self.setQListItemBold(self.experimentList, item, success)
@@ -1062,43 +1066,7 @@ class MainGui(QMainWindow):
             self.updateDataPoints(dataPointNames)
 
         if success:
-            if self.visualizer is not None:
-                for i in reversed(range(self.animationLayout.count())):
-                    self.animationLayout.itemAt(i).widget().setParent(None)
-
-            availableVis = getRegisteredVisualizers()
-            if availableVis and 'Visu' in self._experiments[self.experimentList.row(item)]:
-                used = []
-                if self._experiments[self.experimentList.row(item)]['Visu'] is not None:
-                    for vis in self._experiments[self.experimentList.row(item)]['Visu']:
-                        for avis in availableVis:
-                            if vis == avis[1]:
-                                used.append(avis)
-                                break
-                else:
-                    self._logger.warning("No Visualization configured!")
-
-            if len(used) == 1:
-                self._logger.info("loading visualizer '{}'".format(used[0][1]))
-                self.visualizer = used[0][0](self.animationWidget,
-                                             self.animationLayout)
-                self.animationDock.addWidget(self.animationWidget)
-            elif len(used) > 1:
-                self.visComboBox = QComboBox()
-                for vis in used:
-                    self.visComboBox.addItem(vis[1])
-                self.visComboBox.currentIndexChanged.connect(self.visualizerChanged)
-
-                self._logger.info("loading visualizer '{}'".format(used[0][1]))
-                self.visualizer = used[0][0](QWidget(),
-                                             QVBoxLayout())
-
-                self.animationLayout.addWidget(self.visComboBox)
-                self.animationLayout.addWidget(self.visualizer.qWidget)
-                self.animationWidget.setLayout(self.animationLayout)
-                self.animationDock.addWidget(self.animationWidget)
-            else:
-                self.visualizer = None
+            self.configureVisualizer(idx)
 
     def _applyExperimentByIdx(self, index=0):
         """
