@@ -1011,11 +1011,14 @@ class MainGui(QMainWindow):
             availableVis = getRegisteredVisualizers()
             if availableVis and 'Visu' in self._experiments[idx]:
                 used = []
-                for vis in self._experiments[idx]['Visu']:
-                    for avis in availableVis:
-                        if vis == avis[1]:
-                            used.append(avis)
-                            break
+                if self._experiments[idx]['Visu'] is not None:
+                    for vis in self._experiments[idx]['Visu']:
+                        for avis in availableVis:
+                            if vis == avis[1]:
+                                used.append(avis)
+                                break
+                else:
+                    self._logger.warning("No Visualization configured!")
 
             if len(used) == 1:
                 self._logger.info("loading visualizer '{}'".format(used[0][1]))
@@ -1066,11 +1069,14 @@ class MainGui(QMainWindow):
             availableVis = getRegisteredVisualizers()
             if availableVis and 'Visu' in self._experiments[self.experimentList.row(item)]:
                 used = []
-                for vis in self._experiments[self.experimentList.row(item)]['Visu']:
-                    for avis in availableVis:
-                        if vis == avis[1]:
-                            used.append(avis)
-                            break
+                if self._experiments[self.experimentList.row(item)]['Visu'] is not None:
+                    for vis in self._experiments[self.experimentList.row(item)]['Visu']:
+                        for avis in availableVis:
+                            if vis == avis[1]:
+                                used.append(avis)
+                                break
+                else:
+                    self._logger.warning("No Visualization configured!")
 
             if len(used) == 1:
                 self._logger.info("loading visualizer '{}'".format(used[0][1]))
