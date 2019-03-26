@@ -382,10 +382,6 @@ class RemoteWidgetEdit(QDialog):
         self.typeListChanged()
 
         self.setLayout(mainLayout)
-        self.setWindowTitle("Add Remote Widget ...")
-        resPath = get_resource("icon.svg")
-        self.icon = QIcon(resPath)
-        self.setWindowIcon(self.icon)
 
         # OK and Cancel buttons
         buttons = QDialogButtonBox(
@@ -394,6 +390,12 @@ class RemoteWidgetEdit(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         mainLayout.addWidget(buttons)
+
+        self.setWindowTitle("Add Remote Widget ...")
+        resPath = get_resource("icon.svg")
+        self.icon = QIcon(resPath)
+        self.setWindowIcon(self.icon)
+        self.setFixedSize(self.sizeHint())
 
     def typeListChanged(self):
         for i in reversed(range(self.settingsWidgetLayout.count())):
@@ -404,6 +406,9 @@ class RemoteWidgetEdit(QDialog):
             self.settingsWidgetLayout.addRow(QLabel("Value"), self.valueText)
             self.valueText.setValidator(QDoubleValidator())
             self.valueText.mousePressEvent = lambda event: self.valueText.selectAll()
+            dummy = QLabel("")
+            dummy.setFixedHeight(44)
+            self.settingsWidgetLayout.addRow(None, dummy)
         elif self.typeList.currentText() == "Switch":
             self.valueOnText = QLineEdit(self.valueOn)
             self.settingsWidgetLayout.addRow(QLabel("Value On"), self.valueOnText)
@@ -413,6 +418,9 @@ class RemoteWidgetEdit(QDialog):
             self.settingsWidgetLayout.addRow(QLabel("Value Off"), self.valueOffText)
             self.valueOffText.mousePressEvent = lambda event: self.valueOffText.selectAll()
             self.valueOffText.setValidator(QDoubleValidator())
+            dummy = QLabel("")
+            dummy.setFixedHeight(19)
+            self.settingsWidgetLayout.addRow(None, dummy)
         elif self.typeList.currentText() == "Slider":
             self.maxSliderText = QLineEdit(str(self.maxSlider))
             self.settingsWidgetLayout.addRow(QLabel("Max"), self.maxSliderText)
