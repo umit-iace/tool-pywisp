@@ -1,4 +1,5 @@
 from collections import deque
+import time
 
 from socket import socket, AF_INET, SOCK_STREAM
 from struct import pack
@@ -7,10 +8,12 @@ from threading import Thread
 
 class Sender:
 
-    def __init__(self, connection, queueSize, msgLength):
+    def __init__(self, connection, queueSize, msgLength, minWaitTime=0.009):
         self.connection = connection
         self.deque = deque(maxlen=queueSize)
         self.msgLength = msgLength
+        self.minWaitTime = minWaitTime
+        self.lastSendAll = time.time()
 
     def put(self, id, data, format):
         id = pack('>B', id)
@@ -23,8 +26,11 @@ class Sender:
         self.deque.append(msg)
 
     def send_all(self):
-        while len(self.deque):
-            self.connection.send(self.deque.popleft())
+        t = time.time()
+        if t - self.lastSendAll >= self.minWaitTime:
+            self.lastSendAll = t
+            while len(self.deque):
+                self.connection.send(self.deque.popleft())
 
 
 class Receiver(Thread):

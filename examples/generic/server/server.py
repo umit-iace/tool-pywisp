@@ -17,9 +17,9 @@ def threadDebug(debug):
 
 
 def cycle(t):
-    global sender, solver, input_, cycleTime
+    global sender, solver, input_
 
-    control = input_.control()
+    control = input_.control() * 10
     solver.set_f_params(control)
     x = solver.integrate(t)
 
@@ -28,7 +28,7 @@ def cycle(t):
         time.sleep(1)
         return False
 
-    if np.abs(x[0]) > 1.5:
+    if np.abs(x[0]) > 1.7:
         x[0] = x[0] * -1
         solver.set_initial_value(x, t)
 
@@ -47,7 +47,7 @@ if __name__ == '__main__':
     # system setup
     system = System()
     solver = ode(system.rhs)
-    xInit = np.array([0, 0, np.pi, 0, np.pi, 0])
+    xInit = np.array([.4, 0, np.pi, 0, np.pi, 0])
     xMagic = np.array([0, 0, 1e-3, 0, 0, 0])
     input_ = get_input_device()
     cycleTime = 0.02
@@ -65,9 +65,9 @@ if __name__ == '__main__':
                      "receive: {:10.6f}\t | \t"
                      "send: {:10.6f}\t | \t"
                      "timeouts in total {}")
-    start_time = time.time()
-    lastReset = start_time
-    loopStart = start_time
+    startTime = time.time()
+    lastReset = startTime
+    loopStart = startTime
     loopTimeMax = 0
     rtErrors = 0
     debug = False
@@ -80,13 +80,18 @@ if __name__ == '__main__':
 
         # simulate system up to t
         cycleStart = time.time()
-        t = cycleStart - start_time
+        t = cycleStart - startTime
         if (len(msg) or input_.reset()) and cycleStart - lastReset > 2:
             start = True
             solver.set_initial_value(xInit - xMagic, t)
             lastReset = cycleStart
+
         elif start:
             start = cycle(t)
+
+            if input_.cheat() and not system.feedForwardIsRunning(t) and cycleStart - lastReset < 2:
+                system.ffLastStart = t
+                solver.set_initial_value(xInit, t)
 
         # send data if available
         sendStart = time.time()

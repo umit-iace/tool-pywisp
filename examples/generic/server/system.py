@@ -1,4 +1,5 @@
 import sympy as sp
+import pickle
 from sympy import cos, sin, Matrix, lambdify
 import numpy as np
 import settings as st
@@ -37,8 +38,26 @@ class System:
         inputVars = F
         self.f = lambdify((stateVars, inputVars), solution, modules='numpy')
 
+        self.ffLastStart = 0
+        with open("ex8_ConstrainedDoublePendulum.pkl", "rb") as ffFile:
+            self.ffTraj = pickle.load(ffFile, fix_imports=True, encoding="latin1")
+        self.ffStart = self.ffTraj[0, 0]
+        self.ffDuration = self.ffTraj[-1, 0] - self.ffStart
+
+    def feedForwardControl(self, t):
+        relTime = t - self.ffLastStart - self.ffStart
+
+        if 0 <= relTime <= self.ffDuration:
+            return np.interp( relTime, self.ffTraj[:, 0], self.ffTraj[:, 1])
+
+        else:
+            return 0
+
+    def feedForwardIsRunning(self, t):
+        return t - self.ffLastStart - self.ffStart < self.ffDuration
+
     def rhs(self, t, x, u):
-        return self.f(x, u)
+        return self.f(x, u + self.feedForwardControl(t))
 
 
 if __name__ == "__main__":
