@@ -1304,48 +1304,42 @@ class MainGui(QMainWindow):
     def remoteRemoveWidget(self, widget):
         self.remoteWidgetLayout.removeWidget(widget)
 
-    def remoteConfigWidget(self, widget, **kwargs):
+    def remoteConfigWidget(self, widget, editWidget=False):
         idx = self.experimentList.row(self._currentExpListItem)
         exp = self.exp.getExperiment()
         del exp['Name']
-        msg, ok = RemoteWidgetEdit.getData(exp=exp, **kwargs)
+        msg, ok = RemoteWidgetEdit.getData(exp, editWidget, **(widget.getData()))
         if not ok:
             return
         else:
             if not 'Remote' in self._experiments[idx]:
                 self._experiments[idx]['Remote'] = {}
+            del self._experiments[idx]['Remote'][widget.widgetName]
             self._experiments[idx]['Remote'][msg['name']] = {}
             self._experiments[idx]['Remote'][msg['name']]['widgetType'] = msg['widgetType']
             self._experiments[idx]['Remote'][msg['name']]['Module'] = msg['module']
             self._experiments[idx]['Remote'][msg['name']]['Parameter'] = msg['parameter']
 
-            if msg['widgetType'] == 'PushButton':
-                wType = MovablePushButton
-            elif msg['widgetType'] == 'Switch':
-                wType = MovableSwitch
-            else:
-                wType = MovableSlider
-
-        if isinstance(widget, wType):
-            widget.name = msg['name']
+            widget.widgetName = msg['name']
+            widget.widgetType = msg['widgetType']
+            widget.module = msg['module']
+            widget.parameter = msg['parameter']
             if msg['widgetType'] == "PushButton":
                 widget.valueOn = msg['valueOn']
-                widget.setText(msg['name'] + '\n' + msg['valueOn'])
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
             elif msg['widgetType'] == "Switch":
                 widget.valueOn = msg['valueOn']
                 widget.valueOff = msg['valueOff']
-                widget.setText(msg['name'] + '\n' + msg['valueOn'] + '/' + msg['valueOff'])
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
                 self._experiments[idx]['Remote'][msg['name']]['valueOff'] = msg['valueOff']
             elif msg['widgetType'] == "Slider":
                 widget.minSlider = msg['minSlider']
                 widget.maxSlider = msg['maxSlider']
                 widget.stepSlider = msg['stepSlider']
-                # todo setter method to use setMinimum method
                 self._experiments[idx]['Remote'][msg['name']]['minSlider'] = msg['minSlider']
                 self._experiments[idx]['Remote'][msg['name']]['maxSlider'] = msg['maxSlider']
                 self._experiments[idx]['Remote'][msg['name']]['stepSlider'] = msg['stepSlider']
+            widget.updateData()
 
     def remoteAddWidget(self, msg=None, **kwargs):
         """
@@ -1365,19 +1359,20 @@ class MainGui(QMainWindow):
                 if not 'Remote' in self._experiments[idx]:
                     self._experiments[idx]['Remote'] = {}
                 self._experiments[idx]['Remote'][msg['name']] = {}
-                self._experiments[idx]['Remote'][msg['name']]['widgetType'] = msg['widgetType']
-                self._experiments[idx]['Remote'][msg['name']]['Module'] = msg['module']
-                self._experiments[idx]['Remote'][msg['name']]['Parameter'] = msg['parameter']
 
+        if changed:
+            self._experiments[idx]['Remote'][msg['name']]['widgetType'] = msg['widgetType']
+            self._experiments[idx]['Remote'][msg['name']]['Module'] = msg['module']
+            self._experiments[idx]['Remote'][msg['name']]['Parameter'] = msg['parameter']
         sliderLabel = None
         if msg['widgetType'] == "PushButton":
             widget = MovablePushButton(msg['name'], msg['valueOn'], module=msg['module'], parameter=msg['parameter'])
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
             widget.clicked.connect(lambda: self.remotePushButtonSendParameter(widget))
-            widget.editAction.triggered.connect(lambda _, msg=None, data=widget.getData(): self.remoteConfigWidget(
-                widget, editWidget=True, **data))
-            widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
+            widget.editAction.triggered.connect(lambda _, : self.remoteConfigWidget(
+                widget, editWidget=True))
+            widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
             if changed:
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
         elif msg['widgetType'] == "Switch":
@@ -1386,9 +1381,9 @@ class MainGui(QMainWindow):
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
             widget.clicked.connect(lambda: self.remoteSwitchSendParameter(widget))
-            widget.editAction.triggered.connect(lambda _, msg=None, data=widget.getData(): self.remoteConfigWidget(
-                widget, editWidget=True, **data))
-            widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
+            widget.editAction.triggered.connect(lambda _, : self.remoteConfigWidget(
+                widget, editWidget=True))
+            widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
             if changed:
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
                 self._experiments[idx]['Remote'][msg['name']]['valueOff'] = msg['valueOff']
@@ -1402,8 +1397,8 @@ class MainGui(QMainWindow):
             widget.setFixedHeight(30)
             widget.setFixedWidth(200)
             widget.valueChanged.connect(lambda: self.remoteSliderSendParameter(widget))
-            widget.editAction.triggered.connect(lambda _, data=widget.getData(): self.remoteConfigWidget(
-                widget, editWidget=True, **data))
+            widget.editAction.triggered.connect(lambda _, : self.remoteConfigWidget(
+                widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
             if changed:
                 self._experiments[idx]['Remote'][msg['name']]['minSlider'] = msg['minSlider']

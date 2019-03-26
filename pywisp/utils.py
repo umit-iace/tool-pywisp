@@ -315,21 +315,21 @@ class RemoteWidgetEdit(QDialog):
     Creates a dialog to add and edit remote widgets of different types
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, editWidget=False, **kwargs):
         parent = kwargs.get('parent', None)
         super(RemoteWidgetEdit, self).__init__(parent)
         self.widgetType = kwargs.get('widgetType', 'PushButton')
         self.name = kwargs.get('name', 'New')
         self.valueOn = str(kwargs.get('valueOn', 0.0))
         self.valueOff = str(kwargs.get('valueOff', 0.0))
-        self.minSlider = str(kwargs.get('minSlider', 0.0))
-        self.maxSlider = str(kwargs.get('maxSlider', 0.0))
-        self.stepSlider = str(kwargs.get('stepSlider', 0.0))
+        self.minSlider = str(kwargs.get('minSlider', 0))
+        self.maxSlider = str(kwargs.get('maxSlider', 0))
+        self.stepSlider = str(kwargs.get('stepSlider', 0))
 
         self.curModule = kwargs.get('module', None)
         self.curParameter = kwargs.get('parameter', None)
 
-        self.editWidget = kwargs.get('editWidget', False)
+        self.editWidget = editWidget
 
         self.minSliderText = None
         self.maxSliderText = None
@@ -363,10 +363,10 @@ class RemoteWidgetEdit(QDialog):
         self.moduleList.currentIndexChanged.connect(self.moduleChanged)
         if self.curModule is None:
             self.moduleList.setCurrentIndex(0)
-            self.moduleChanged(0)
+            self.moduleChanged()
         else:
             self.moduleList.setCurrentText(self.curModule)
-            self.moduleChanged(0)
+            self.moduleChanged()
 
         if self.curParameter is not None:
             self.paramList.setCurrentText(self.curParameter)
@@ -427,12 +427,13 @@ class RemoteWidgetEdit(QDialog):
             self.stepSliderText.setValidator(QDoubleValidator())
             self.stepSliderText.mousePressEvent = lambda event: self.stepSliderText.selectAll()
 
-    def moduleChanged(self, value):
+    def moduleChanged(self):
         self.paramList.clear()
         module = self.moduleList.currentText()
 
         for p in self.modules[module]:
             self.paramList.addItem(p)
+
 
     def _getData(self):
         msg = dict()
@@ -454,8 +455,8 @@ class RemoteWidgetEdit(QDialog):
         return msg
 
     @staticmethod
-    def getData(exp=None, **kwargs):
-        dialog = RemoteWidgetEdit(exp=exp, **kwargs)
+    def getData(exp=None, editWidget=False, **kwargs):
+        dialog = RemoteWidgetEdit(exp=exp, editWidget=editWidget, **kwargs)
         result = dialog.exec_()
         msg = dialog._getData()
 
@@ -558,13 +559,20 @@ class MovableWidget(object):
 
             self.contextMenu.exec_(self.mapToGlobal(event.pos()))
 
+    def getData(self):
+        pass
+
+    def updateData(self):
+        pass
+
+
 class MovablePushButton(QPushButton, MovableWidget):
     def __init__(self, name, valueOn, **kwargs):
         MovableWidget.__init__(self, name, **kwargs)
         QPushButton.__init__(self, name=name)
         self.valueOn = valueOn
 
-        self.setText(name + '\n' + valueOn)
+        self.updateData()
 
     def getData(self):
         data = dict()
@@ -572,8 +580,13 @@ class MovablePushButton(QPushButton, MovableWidget):
         data['widgetType'] = 'PushButton'
         data['name'] = self.widgetName
         data['valueOn'] = self.valueOn
+        data['module'] = self.module
+        data['parameter'] = self.parameter
 
         return data
+
+    def updateData(self):
+        self.setText(self.widgetName + '\n' + self.valueOn)
 
 
 class MovableSlider(QSlider, MovableWidget):
@@ -585,13 +598,7 @@ class MovableSlider(QSlider, MovableWidget):
         self.stepSlider = stepSlider
         self.label = label
 
-        self.setValue(0)
-        self.label.setText(self.widgetName + ': ' + str(0))
-        self.setMinimum(self.minSlider)
-        self.setMaximum(self.maxSlider)
-        self.setTickInterval(self.stepSlider)
-        self.setPageStep(self.stepSlider)
-        self.setSingleStep(self.stepSlider)
+        self.updateData()
 
     def getData(self):
         data = dict()
@@ -601,8 +608,19 @@ class MovableSlider(QSlider, MovableWidget):
         data['minSlider'] = self.minSlider
         data['maxSlider'] = self.maxSlider
         data['stepSlider'] = self.stepSlider
+        data['module'] = self.module
+        data['parameter'] = self.parameter
 
         return data
+
+    def updateData(self):
+        self.setValue(0)
+        self.label.setText(self.widgetName + ': ' + str(0))
+        self.setMinimum(int(self.minSlider))
+        self.setMaximum(int(self.maxSlider))
+        self.setTickInterval(int(self.stepSlider))
+        self.setPageStep(int(self.stepSlider))
+        self.setSingleStep(int(self.stepSlider))
 
 
 class MovableSwitch(QPushButton, MovableWidget):
@@ -612,10 +630,7 @@ class MovableSwitch(QPushButton, MovableWidget):
         self.valueOn = valueOn
         self.valueOff = valueOff
 
-        self.setText(self.widgetName + '\n' + valueOn)
-
-        self.setCheckable(True)
-        self.setChecked(False)
+        self.updateData()
 
     def getData(self):
         data = dict()
@@ -628,3 +643,8 @@ class MovableSwitch(QPushButton, MovableWidget):
         data['parameter'] = self.parameter
 
         return data
+
+    def updateData(self):
+        self.setCheckable(True)
+        self.setChecked(False)
+        self.setText(self.widgetName + '\n' + self.valueOn)
