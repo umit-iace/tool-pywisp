@@ -329,6 +329,8 @@ class RemoteWidgetEdit(QDialog):
         self.curModule = kwargs.get('module', None)
         self.curParameter = kwargs.get('parameter', None)
 
+        self.editWidget = kwargs.get('editWidget', False)
+
         self.minSliderText = None
         self.maxSliderText = None
         self.stepSliderText = None
@@ -346,7 +348,7 @@ class RemoteWidgetEdit(QDialog):
         self.typeList.addItems(["PushButton", "Switch", "Slider"])
         self.typeList.setCurrentText(self.widgetType)
         self.typeList.currentIndexChanged.connect(self.typeListChanged)
-        self.typeList.setEnabled(True)
+        self.typeList.setEnabled(not self.editWidget)
         mainLayout.addRow(QLabel("Widget type"), self.typeList)
 
         self.moduleList = QComboBox()
@@ -566,7 +568,7 @@ class MovablePushButton(QPushButton, MovableWidget):
     def getData(self):
         data = dict()
 
-        data['widgetType'] = 'Switch'
+        data['widgetType'] = 'PushButton'
         data['name'] = self.widgetName
         data['valueOn'] = self.valueOn
 
@@ -588,7 +590,7 @@ class MovableSlider(QSlider, MovableWidget):
     def getData(self):
         data = dict()
 
-        data['widgetType'] = 'Switch'
+        data['widgetType'] = 'Slider'
         data['name'] = self.widgetName
         data['minSlider'] = self.minSlider
         data['maxSlider'] = self.maxSlider

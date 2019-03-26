@@ -1347,9 +1347,6 @@ class MainGui(QMainWindow):
                 self._experiments[idx]['Remote'][msg['name']]['minSlider'] = msg['minSlider']
                 self._experiments[idx]['Remote'][msg['name']]['maxSlider'] = msg['maxSlider']
                 self._experiments[idx]['Remote'][msg['name']]['stepSlider'] = msg['stepSlider']
-        # todo
-        # else
-        # position merken und an die selbe stelle das neue object setzen
 
     def remoteAddWidget(self, msg=None, **kwargs):
         """
@@ -1380,7 +1377,8 @@ class MainGui(QMainWindow):
             widget.setFixedWidth(100)
             widget.setText(msg['name'] + '\n' + msg['valueOn'])
             widget.clicked.connect(lambda: self.remotePushButtonSendParameter(widget))
-            widget.editAction.triggered.connect(lambda _, msg=None, data=widget.getData(): self.remoteConfigWidget(widget, **data))
+            widget.editAction.triggered.connect(lambda _, msg=None, data=widget.getData(): self.remoteConfigWidget(
+                widget, editWidget=True, **data))
             widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
             if changed:
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
@@ -1392,7 +1390,8 @@ class MainGui(QMainWindow):
             widget.setFixedWidth(100)
             widget.setText(msg['name'] + '\n' + msg['valueOn'] + '/' + msg['valueOff'])
             widget.clicked.connect(lambda: self.remoteSwitchSendParameter(widget))
-            widget.editAction.triggered.connect(lambda _, msg=None, data=widget.getData(): self.remoteConfigWidget(widget, **data))
+            widget.editAction.triggered.connect(lambda _, msg=None, data=widget.getData(): self.remoteConfigWidget(
+                widget, editWidget=True, **data))
             widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
             if changed:
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
@@ -1410,7 +1409,8 @@ class MainGui(QMainWindow):
             widget.setFixedHeight(30)
             widget.setFixedWidth(200)
             widget.valueChanged.connect(lambda: self.remoteSliderSendParameter(widget))
-            widget.editAction.triggered.connect(lambda _, data=widget.getData(): self.remoteConfigWidget(widget, **data))
+            widget.editAction.triggered.connect(lambda _, data=widget.getData(): self.remoteConfigWidget(
+                widget, editWidget=True, **data))
             widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
             if changed:
                 self._experiments[idx]['Remote'][msg['name']]['minSlider'] = msg['minSlider']
