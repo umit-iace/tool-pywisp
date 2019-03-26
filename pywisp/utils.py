@@ -527,6 +527,8 @@ class MovableWidget(object):
         if event.button() == Qt.RightButton:
             self._mousePressPos = event.globalPos()
             self.__mouseMovePos = event.globalPos()
+        else:
+            self.mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.RightButton:
@@ -550,7 +552,7 @@ class MovableWidget(object):
             moved = event.globalPos() - self._mousePressPos
             if moved.manhattanLength() > 0:
                 return
-            
+
             self.contextMenu.exec_(self.mapToGlobal(event.pos()))
 
     def getData(self):
