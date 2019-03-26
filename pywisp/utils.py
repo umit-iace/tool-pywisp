@@ -245,6 +245,10 @@ class DataIntDialog(QDialog):
         buttons.rejected.connect(self.reject)
         mainLayout.addWidget(buttons)
 
+        resPath = get_resource("icon.svg")
+        self.icon = QIcon(resPath)
+        self.setWindowIcon(self.icon)
+
     def _getData(self):
         return self.data.text()
 
@@ -297,6 +301,10 @@ class DataTcpIpDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         mainLayout.addWidget(buttons)
+
+        resPath = get_resource("icon.svg")
+        self.icon = QIcon(resPath)
+        self.setWindowIcon(self.icon)
 
     def _getData(self):
         return self.ipData.text(), self.portData.text()
