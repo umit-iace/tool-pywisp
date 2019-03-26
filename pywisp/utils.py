@@ -558,12 +558,13 @@ class MovableWidget(object):
 
             self.contextMenu.exec_(self.mapToGlobal(event.pos()))
 
-
 class MovablePushButton(QPushButton, MovableWidget):
     def __init__(self, name, valueOn, **kwargs):
         MovableWidget.__init__(self, name, **kwargs)
         QPushButton.__init__(self, name=name)
         self.valueOn = valueOn
+
+        self.setText(name + '\n' + valueOn)
 
     def getData(self):
         data = dict()
@@ -582,10 +583,15 @@ class MovableSlider(QSlider, MovableWidget):
         self.minSlider = minSlider
         self.maxSlider = maxSlider
         self.stepSlider = stepSlider
+        self.label = label
 
+        self.setValue(0)
+        self.label.setText(self.widgetName + ': ' + str(0))
         self.setMinimum(self.minSlider)
         self.setMaximum(self.maxSlider)
         self.setTickInterval(self.stepSlider)
+        self.setPageStep(self.stepSlider)
+        self.setSingleStep(self.stepSlider)
 
     def getData(self):
         data = dict()
@@ -605,6 +611,11 @@ class MovableSwitch(QPushButton, MovableWidget):
         MovableWidget.__init__(self, name, **kwargs)
         self.valueOn = valueOn
         self.valueOff = valueOff
+
+        self.setText(self.widgetName + '\n' + valueOn)
+
+        self.setCheckable(True)
+        self.setChecked(False)
 
     def getData(self):
         data = dict()

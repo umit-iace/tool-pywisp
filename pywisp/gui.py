@@ -1343,7 +1343,6 @@ class MainGui(QMainWindow):
                 widget.maxSlider = msg['maxSlider']
                 widget.stepSlider = msg['stepSlider']
                 # todo setter method to use setMinimum method
-                # todo set label
                 self._experiments[idx]['Remote'][msg['name']]['minSlider'] = msg['minSlider']
                 self._experiments[idx]['Remote'][msg['name']]['maxSlider'] = msg['maxSlider']
                 self._experiments[idx]['Remote'][msg['name']]['stepSlider'] = msg['stepSlider']
@@ -1375,7 +1374,6 @@ class MainGui(QMainWindow):
             widget = MovablePushButton(msg['name'], msg['valueOn'], module=msg['module'], parameter=msg['parameter'])
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
-            widget.setText(msg['name'] + '\n' + msg['valueOn'])
             widget.clicked.connect(lambda: self.remotePushButtonSendParameter(widget))
             widget.editAction.triggered.connect(lambda _, msg=None, data=widget.getData(): self.remoteConfigWidget(
                 widget, editWidget=True, **data))
@@ -1385,10 +1383,8 @@ class MainGui(QMainWindow):
         elif msg['widgetType'] == "Switch":
             widget = MovableSwitch(msg['name'], msg['valueOn'], msg['valueOff'], module=msg['module'],
                                    parameter=msg['parameter'])
-            widget.setCheckable(True)
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
-            widget.setText(msg['name'] + '\n' + msg['valueOn'] + '/' + msg['valueOff'])
             widget.clicked.connect(lambda: self.remoteSwitchSendParameter(widget))
             widget.editAction.triggered.connect(lambda _, msg=None, data=widget.getData(): self.remoteConfigWidget(
                 widget, editWidget=True, **data))
@@ -1397,15 +1393,12 @@ class MainGui(QMainWindow):
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
                 self._experiments[idx]['Remote'][msg['name']]['valueOff'] = msg['valueOff']
         elif msg['widgetType'] == "Slider":
-            sliderLabel = QLabel(msg['name'] + ': ' + str(msg['minSlider']) + '-' + str(msg['maxSlider']))
+            sliderLabel = QLabel()
             sliderLabel.setFixedHeight(10)
             self.remoteWidgetLayout.addWidget(sliderLabel)
 
             widget = MovableSlider(msg['name'], msg['minSlider'], msg['maxSlider'], msg['stepSlider'],
                                    sliderLabel, module=msg['module'], parameter=msg['parameter'])
-            widget.setMinimum(msg['minSlider'])
-            widget.setMaximum(msg['maxSlider'])
-            widget.setTickInterval(msg['stepSlider'])
             widget.setFixedHeight(30)
             widget.setFixedWidth(200)
             widget.valueChanged.connect(lambda: self.remoteSliderSendParameter(widget))
@@ -1433,8 +1426,10 @@ class MainGui(QMainWindow):
     def remoteSwitchSendParameter(self, widget):
         if widget.isChecked():
             value = widget.valueOn
+            widget.setText(widget.widgetName + '\n' + widget.valueOff)
         else:
             value = widget.valueOff
+            widget.setText(widget.widgetName + '\n' + widget.valueOn)
 
         self.remoteSendParamter(widget.module, widget.parameter, value)
 
@@ -1445,6 +1440,7 @@ class MainGui(QMainWindow):
         """
         widget.valueOn = widget.value()
         value = widget.valueOn
+        widget.label.setText(widget.widgetName + ': ' + str(widget.valueOn))
         self.remoteSendParamter(widget.module, widget.parameter, value)
 
     def remoteSendParamter(self, module, parameter, value):
