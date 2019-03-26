@@ -1110,8 +1110,11 @@ class MainGui(QMainWindow):
             # check if experiment runs
             if not self.actStopExperiment.isEnabled():
                 self.actStartExperiment.setDisabled(False)
-
-        return self.exp.setExperiment(self._experiments[index])
+        sucess = self.exp.setExperiment(self._experiments[index])
+        if sucess:
+            self._currentExperimentIndex = index
+            self._currentExperimentName = self._experiments[index]['Name']
+        return sucess
 
     def closeEvent(self, QCloseEvent):
         """
@@ -1304,7 +1307,7 @@ class MainGui(QMainWindow):
     def remoteRemoveWidget(self, widget):
         self.remoteWidgetLayout.removeWidget(widget)
 
-    def remoteConfigWidget(self, widget, editWidget=False):
+    def remoteConfigWidget(self, widget, editWidget=True):
         idx = self.experimentList.row(self._currentExpListItem)
         exp = self.exp.getExperiment()
         del exp['Name']
@@ -1442,11 +1445,11 @@ class MainGui(QMainWindow):
         exp = deepcopy(self.exp.getExperiment())
         del exp['Name']
 
-        for key, value in exp.items():
+        for key, val in exp.items():
             if key == module:
-                for k, v in value.items():
+                for k, v in val.items():
                     if k == parameter:
-                        v = value
+                        exp[key][k] = value
                         self.exp.setExperiment(exp)
                         if self.actSendParameter.isEnabled():
                             self.sendParameter()

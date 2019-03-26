@@ -564,8 +564,8 @@ class MovableWidget(object):
 
 class MovablePushButton(QPushButton, MovableWidget):
     def __init__(self, name, valueOn, **kwargs):
-        MovableWidget.__init__(self, name, **kwargs)
         QPushButton.__init__(self, name=name)
+        MovableWidget.__init__(self, name, **kwargs)
         self.valueOn = valueOn
 
         self.updateData()
@@ -587,8 +587,8 @@ class MovablePushButton(QPushButton, MovableWidget):
 
 class MovableSlider(QSlider, MovableWidget):
     def __init__(self, name, minSlider, maxSlider, stepSlider, label, **kwargs):
-        MovableWidget.__init__(self, name, label, **kwargs)
         QSlider.__init__(self, Qt.Horizontal, name=name)
+        MovableWidget.__init__(self, name, label, **kwargs)
         self.minSlider = minSlider
         self.maxSlider = maxSlider
         self.stepSlider = stepSlider
@@ -626,6 +626,8 @@ class MovableSwitch(QPushButton, MovableWidget):
         self.valueOn = valueOn
         self.valueOff = valueOff
 
+        self.setCheckable(True)
+
         self.updateData()
 
     def getData(self):
@@ -641,6 +643,5 @@ class MovableSwitch(QPushButton, MovableWidget):
         return data
 
     def updateData(self):
-        self.setCheckable(True)
         self.setChecked(False)
         self.setText(self.widgetName + '\n' + self.valueOn)
