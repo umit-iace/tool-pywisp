@@ -20,12 +20,14 @@
       Parameter: Value1
       valueOn: '99.99'
       widgetType: PushButton
+      shortcut: P
     SwitchExample:
       Module: Test
       Parameter: Value2
       valueOff: '11.1'
       valueOn: '22.2'
       widgetType: Switch
+      shortcut: O
     SliderExample:
       Module: Test
       Parameter: Value3
@@ -33,6 +35,8 @@
       minSlider: 0
       stepSlider: 1
       widgetType: Slider
+      shortcutPlus: H
+      shortcutMinus: G
 
 - Name: RunSystem
 
@@ -54,3 +58,4 @@
       Parameter: Value1
       valueOn: '12.99'
       widgetType: PushButton
+      shortcut: P

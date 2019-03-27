@@ -7,7 +7,7 @@ import numpy as np
 import os
 import pandas as pd
 from PyQt5.QtCore import Qt, QRegExp, QSize
-from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator
+from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator, QKeySequence
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
     QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu
 from pyqtgraph import mkPen
@@ -331,8 +331,11 @@ class RemoteWidgetEdit(QDialog):
         self.valueOn = str(kwargs.get('valueOn', 0.0))
         self.valueOff = str(kwargs.get('valueOff', 0.0))
         self.minSlider = str(kwargs.get('minSlider', 0))
-        self.maxSlider = str(kwargs.get('maxSlider', 0))
-        self.stepSlider = str(kwargs.get('stepSlider', 0))
+        self.maxSlider = str(kwargs.get('maxSlider', 1))
+        self.stepSlider = str(kwargs.get('stepSlider', 1))
+        self.shortcut = str(kwargs.get('shortcut', ""))
+        self.shortcutPlus = str(kwargs.get('shortcutPlus', ""))
+        self.shortcutMinus = str(kwargs.get('shortcutMinus', ""))
 
         self.curModule = kwargs.get('module', None)
         self.curParameter = kwargs.get('parameter', None)
@@ -345,6 +348,9 @@ class RemoteWidgetEdit(QDialog):
         self.valueOffText = None
         self.valueOnText = None
         self.valueText = None
+        self.shortcutField = None
+        self.shortcutFieldPlus = None
+        self.shortcutFieldMinus = None
 
         mainLayout = QFormLayout()
 
@@ -409,14 +415,25 @@ class RemoteWidgetEdit(QDialog):
         for i in reversed(range(self.settingsWidgetLayout.count())):
             self.settingsWidgetLayout.itemAt(i).widget().deleteLater()
 
+        height = QLineEdit().sizeHint().height()
+
         if self.typeList.currentText() == "PushButton":
             self.valueText = QLineEdit(self.valueOn)
             self.settingsWidgetLayout.addRow(QLabel("Value"), self.valueText)
             self.valueText.setValidator(QDoubleValidator())
             self.valueText.mousePressEvent = lambda event: self.valueText.selectAll()
+            self.shortcutField = ShortcutCreator()
+            self.shortcutField.setText(self.shortcut)
+            self.settingsWidgetLayout.addRow(QLabel("Shortcut:"), self.shortcutField)
             dummy = QLabel("")
-            dummy.setFixedHeight(44)
+            dummy.setFixedHeight(height)
             self.settingsWidgetLayout.addRow(None, dummy)
+            dummy2 = QLabel("")
+            dummy2.setFixedHeight(height)
+            self.settingsWidgetLayout.addRow(None, dummy2)
+            dummy3 = QLabel("")
+            dummy3.setFixedHeight(height)
+            self.settingsWidgetLayout.addRow(None, dummy3)
         elif self.typeList.currentText() == "Switch":
             self.valueOnText = QLineEdit(self.valueOn)
             self.settingsWidgetLayout.addRow(QLabel("Value On"), self.valueOnText)
@@ -426,9 +443,15 @@ class RemoteWidgetEdit(QDialog):
             self.settingsWidgetLayout.addRow(QLabel("Value Off"), self.valueOffText)
             self.valueOffText.mousePressEvent = lambda event: self.valueOffText.selectAll()
             self.valueOffText.setValidator(QDoubleValidator())
+            self.shortcutField = ShortcutCreator()
+            self.shortcutField.setText(self.shortcut)
+            self.settingsWidgetLayout.addRow(QLabel("Shortcut:"), self.shortcutField)
             dummy = QLabel("")
-            dummy.setFixedHeight(19)
+            dummy.setFixedHeight(height)
             self.settingsWidgetLayout.addRow(None, dummy)
+            dummy2 = QLabel("")
+            dummy2.setFixedHeight(height)
+            self.settingsWidgetLayout.addRow(None, dummy2)
         elif self.typeList.currentText() == "Slider":
             self.maxSliderText = QLineEdit(str(self.maxSlider))
             self.settingsWidgetLayout.addRow(QLabel("Max"), self.maxSliderText)
@@ -442,6 +465,12 @@ class RemoteWidgetEdit(QDialog):
             self.settingsWidgetLayout.addRow(QLabel("Step Size"), self.stepSliderText)
             self.stepSliderText.setValidator(QDoubleValidator())
             self.stepSliderText.mousePressEvent = lambda event: self.stepSliderText.selectAll()
+            self.shortcutFieldPlus = ShortcutCreator()
+            self.shortcutField.setText(self.shortcutPlus)
+            self.settingsWidgetLayout.addRow(QLabel("Shortcut Plus:"), self.shortcutFieldPlus)
+            self.shortcutFieldMinus = ShortcutCreator()
+            self.shortcutField.setText(self.shortcutMinus)
+            self.settingsWidgetLayout.addRow(QLabel("Shortcut Minus:"), self.shortcutFieldMinus)
 
     def moduleChanged(self):
         self.paramList.clear()
@@ -460,13 +489,17 @@ class RemoteWidgetEdit(QDialog):
 
         if self.typeList.currentText() == "PushButton":
             msg['valueOn'] = self.valueText.text()
+            msg['shortcut'] = self.shortcutField.getKeySequence()
         elif self.typeList.currentText() == "Switch":
             msg['valueOn'] = self.valueOnText.text()
             msg['valueOff'] = self.valueOffText.text()
+            msg['shortcut'] = self.shortcutField.getKeySequence()
         elif self.typeList.currentText() == "Slider":
             msg['minSlider'] = self.minSliderText.text()
             msg['maxSlider'] = self.maxSliderText.text()
             msg['stepSlider'] = self.stepSliderText.text()
+            msg['shortcutPlus'] = self.shortcutFieldPlus.getKeySequence()
+            msg['shortcutMinus'] = self.shortcutFieldMinus.getKeySequence()
 
         return msg
 
@@ -487,7 +520,6 @@ class FreeLayout(QLayout):
     def __init__(self):
         super(FreeLayout, self).__init__()
         self.list = []
-        self.labelList = []
 
     def count(self):
         return len(self.list)
@@ -504,26 +536,21 @@ class FreeLayout(QLayout):
     def addWidget(self, widget):
         if not isinstance(widget, QLabel):
             self.list.append(widget)
-        else:
-            self.labelList.append(widget)
         super(FreeLayout, self).addWidget(widget)
 
     def removeWidget(self, widget):
         if widget in self.list:
+            if widget.label:
+                widget.label.setParent(None)
             self.list.remove(widget)
-
-        if widget in self.labelList:
-            self.labelList.remove(widget)
         widget.setParent(None)
 
     def clearAll(self):
         for i in self.list:
+            if i.label:
+                i.label.setParent(None)
             i.setParent(None)
-        for i in self.labelList:
-            i.setParent(None)
-
         self.list = []
-        self.labelList = []
 
 
 class MovableWidget(object):
@@ -579,10 +606,11 @@ class MovableWidget(object):
 
 
 class MovablePushButton(QPushButton, MovableWidget):
-    def __init__(self, name, valueOn, **kwargs):
+    def __init__(self, name, valueOn, shortcut,  **kwargs):
         QPushButton.__init__(self, name=name)
         MovableWidget.__init__(self, name, **kwargs)
         self.valueOn = valueOn
+        self.shortcut = shortcut
 
         self.updateData()
 
@@ -594,6 +622,7 @@ class MovablePushButton(QPushButton, MovableWidget):
         data['valueOn'] = self.valueOn
         data['module'] = self.module
         data['parameter'] = self.parameter
+        data['shortcut'] = self.shortcut
 
         return data
 
@@ -602,13 +631,15 @@ class MovablePushButton(QPushButton, MovableWidget):
 
 
 class MovableSlider(QSlider, MovableWidget):
-    def __init__(self, name, minSlider, maxSlider, stepSlider, label, **kwargs):
+    def __init__(self, name, minSlider, maxSlider, stepSlider, label, shortcutPlus, shortcutMinus,  **kwargs):
         QSlider.__init__(self, Qt.Horizontal, name=name)
         MovableWidget.__init__(self, name, label, **kwargs)
         self.minSlider = minSlider
         self.maxSlider = maxSlider
         self.stepSlider = stepSlider
         self.label = label
+        self.shortcutPlus = shortcutPlus
+        self.shortcutMinus = shortcutMinus
 
         self.updateData()
 
@@ -622,6 +653,8 @@ class MovableSlider(QSlider, MovableWidget):
         data['stepSlider'] = self.stepSlider
         data['module'] = self.module
         data['parameter'] = self.parameter
+        data['shortcutPlus'] = self.shortcutPlus
+        data['shortcutMinus'] = self.shortcutMinus
 
         return data
 
@@ -636,11 +669,12 @@ class MovableSlider(QSlider, MovableWidget):
 
 
 class MovableSwitch(QPushButton, MovableWidget):
-    def __init__(self, name, valueOn, valueOff, **kwargs):
+    def __init__(self, name, valueOn, valueOff, shortcut, **kwargs):
         QPushButton.__init__(self, name=name)
         MovableWidget.__init__(self, name, **kwargs)
         self.valueOn = valueOn
         self.valueOff = valueOff
+        self.shortcut = shortcut
 
         self.setCheckable(True)
 
@@ -655,9 +689,27 @@ class MovableSwitch(QPushButton, MovableWidget):
         data['valueOff'] = self.valueOff
         data['module'] = self.module
         data['parameter'] = self.parameter
+        data['shortcut'] = self.shortcut
 
         return data
 
     def updateData(self):
         self.setChecked(False)
         self.setText(self.widgetName + '\n' + self.valueOn)
+
+
+class ShortcutCreator(QLineEdit):
+    def __init__(self, parent=None):
+        super(ShortcutCreator, self).__init__(parent)
+        self.KeySequence = None
+
+    def keyPressEvent(self, event):
+        self.KeySequence = QKeySequence(event.key()).toString()
+        self.setText(self.KeySequence)
+
+    def getKeySequence(self):
+        return self.KeySequence
+
+    def setText(self, p_str):
+        self.KeySequence = p_str
+        super(ShortcutCreator, self).setText(p_str)
