@@ -28,8 +28,8 @@ class PyGamePad(Thread):
 
             time.sleep(0.001)
             for event in pygame.event.get():
-                if event.type == pygame.QUIT:  # If user clicked close
-                    done = True  # Flag that we are done so we exit this loop
+                if event.type == pygame.QUIT:
+                    done = True
                 if event.type == pygame.JOYBUTTONDOWN:
                     print("Joystick button pressed.")
                 if event.type == pygame.JOYBUTTONUP:
@@ -38,32 +38,33 @@ class PyGamePad(Thread):
             print_list = list()
             joystick_count = pygame.joystick.get_count()
 
-
-            # For each joystick:
             for i in range(joystick_count):
                 joystick = pygame.joystick.Joystick(i)
                 joystick.init()
-
-
-                # Get the name from the OS for the controller/joystick
                 name = joystick.get_name()
 
-                # Usually axis run in pairs, up/down for one, and left/right for
-                # the other.
                 axes = joystick.get_numaxes()
                 for i in range(axes):
                     axis = joystick.get_axis(i)
-                    print_list.append((i, axis))
+                    if i == 0:
+                        self.LStickX = axis
+                    elif i == 3:
+                        self.RStickX = axis
+                    #print_list.append((i, axis))
                     # print("Axis {} value: {:>6.3f}".format(i, axis))
-                buttons = joystick.get_numbuttons()
 
+                buttons = joystick.get_numbuttons()
                 for i in range(buttons):
                     button = joystick.get_button(i)
+                    if i == 8:
+                        self.Key9 = button
+                    elif i == 6:
+                        self.KeyBtnBase2 = button
+                    elif i == 7:
+                        self.KeyBtnPinkie = button
                     # print_list.append((i, button))
-                    # print("Button {:>2} value: {}".format(i,button))
+                    #print("Button {:>2} value: {}".format(i,button))
 
-                # Hat switch. All or nothing for direction, not like joysticks.
-                # Value comes back in an array.
                 hats = joystick.get_numhats()
 
                 for i in range(hats):
@@ -71,12 +72,10 @@ class PyGamePad(Thread):
                     # print_list.append((i, hat))
                     # print( "Hat {} value: {}".format(i, str(hat)))
 
-                print(name, print_list)
-
+                #print(name, print_list)
 
     def getStickValue(self, value):
-        res = ((value - 128) / 128)
-        return res if abs(res) > 0.08 else 0
+        return value if abs(value) > 0.08 else 0
 
     def control(self):
         roughControl = self.getStickValue(self.LStickX)
