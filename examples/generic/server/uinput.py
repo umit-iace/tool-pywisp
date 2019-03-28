@@ -1,6 +1,94 @@
 from threading import Thread
+import time
 from inputs import get_gamepad, get_key, devices
 
+try:
+    import pygame
+    usePygame = True
+except ImportError:
+    usePygame = False
+
+class PyGamePad(Thread):
+
+    def __init__(self):
+        Thread.__init__(self)
+        pygame.init()
+        pygame.joystick.init()
+        self.Key9 = 0
+        self.Key10 = 0
+        self.LStickX = 128
+        self.LStickY = 128
+        self.RStickX = 128
+        self.RStickY = 128
+        self.KeyBtnBase2 = 0
+        self.KeyBtnPinkie = 0
+
+    def run(self):
+        while True:
+
+            time.sleep(0.001)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:  # If user clicked close
+                    done = True  # Flag that we are done so we exit this loop
+                if event.type == pygame.JOYBUTTONDOWN:
+                    print("Joystick button pressed.")
+                if event.type == pygame.JOYBUTTONUP:
+                    print("Joystick button released.")
+
+            print_list = list()
+            joystick_count = pygame.joystick.get_count()
+
+
+            # For each joystick:
+            for i in range(joystick_count):
+                joystick = pygame.joystick.Joystick(i)
+                joystick.init()
+
+
+                # Get the name from the OS for the controller/joystick
+                name = joystick.get_name()
+
+                # Usually axis run in pairs, up/down for one, and left/right for
+                # the other.
+                axes = joystick.get_numaxes()
+                for i in range(axes):
+                    axis = joystick.get_axis(i)
+                    print_list.append((i, axis))
+                    # print("Axis {} value: {:>6.3f}".format(i, axis))
+                buttons = joystick.get_numbuttons()
+
+                for i in range(buttons):
+                    button = joystick.get_button(i)
+                    # print_list.append((i, button))
+                    # print("Button {:>2} value: {}".format(i,button))
+
+                # Hat switch. All or nothing for direction, not like joysticks.
+                # Value comes back in an array.
+                hats = joystick.get_numhats()
+
+                for i in range(hats):
+                    hat = joystick.get_hat(i)
+                    # print_list.append((i, hat))
+                    # print( "Hat {} value: {}".format(i, str(hat)))
+
+                print(name, print_list)
+
+
+    def getStickValue(self, value):
+        res = ((value - 128) / 128)
+        return res if abs(res) > 0.08 else 0
+
+    def control(self):
+        roughControl = self.getStickValue(self.LStickX)
+        sensitivControl = self.getStickValue(self.RStickX) * 0.4
+
+        return roughControl + sensitivControl
+
+    def cheat(self):
+        return self.KeyBtnBase2 and self.KeyBtnPinkie
+
+    def reset(self):
+        return bool(self.Key9)
 
 class GamePad(Thread):
 
@@ -84,15 +172,18 @@ class Keyboard(Thread):
         return (self.Right - self.Left) / 2
 
     def cheat(self):
-        return self.Enter == 2
+        return self.Enter == 1
 
     def reset(self):
-        return self.Backspace == 2
+        return self.Backspace == 1
 
 
 def get_input_device():
     msg = "{} as input device connected"
-    if any(["GamePad" in des for des in [it[0] for it in [dir(dev) for dev in devices]]]):
+    if usePygame:
+        input_ = PyGamePad()
+
+    elif any(["GamePad" in des for des in [it[0] for it in [dir(dev) for dev in devices]]]):
         input_ = GamePad()
         print(msg.format("gamepad"))
 
