@@ -96,8 +96,6 @@ class MainGui(QMainWindow):
         self.area.addDock(self.remoteDock, "right", self.propertyDock)
         self.nonPlottingDocks = list(self.area.findAll()[1].keys())
 
-        self.standardDockState = self.area.saveState()
-
         # property dock
         self.targetView = ExperimentView(self)
         self.targetView.expanded.connect(self.targetViewChanged)
@@ -360,6 +358,9 @@ class MainGui(QMainWindow):
 
         if not self.loadExpFromFile(fileName):
             return
+
+        # todo must be fixed, if a dock is closed, an exception appears
+        self.standardDockState = self.area.saveState()
 
         self.exp = ExperimentInteractor(self.targetView, self)
         self.exp.sendData.connect(self.writeToConnection)

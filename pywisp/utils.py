@@ -466,10 +466,10 @@ class RemoteWidgetEdit(QDialog):
             self.stepSliderText.setValidator(QDoubleValidator())
             self.stepSliderText.mousePressEvent = lambda event: self.stepSliderText.selectAll()
             self.shortcutFieldPlus = ShortcutCreator()
-            self.shortcutField.setText(self.shortcutPlus)
+            self.shortcutFieldPlus.setText(self.shortcutPlus)
             self.settingsWidgetLayout.addRow(QLabel("Shortcut Plus:"), self.shortcutFieldPlus)
             self.shortcutFieldMinus = ShortcutCreator()
-            self.shortcutField.setText(self.shortcutMinus)
+            self.shortcutFieldMinus.setText(self.shortcutMinus)
             self.settingsWidgetLayout.addRow(QLabel("Shortcut Minus:"), self.shortcutFieldMinus)
 
     def moduleChanged(self):
@@ -478,7 +478,6 @@ class RemoteWidgetEdit(QDialog):
 
         for p in self.modules[module]:
             self.paramList.addItem(p)
-
 
     def _getData(self):
         msg = dict()
@@ -606,7 +605,7 @@ class MovableWidget(object):
 
 
 class MovablePushButton(QPushButton, MovableWidget):
-    def __init__(self, name, valueOn, shortcut,  **kwargs):
+    def __init__(self, name, valueOn, shortcut, **kwargs):
         QPushButton.__init__(self, name=name)
         MovableWidget.__init__(self, name, **kwargs)
         self.valueOn = valueOn
@@ -631,7 +630,7 @@ class MovablePushButton(QPushButton, MovableWidget):
 
 
 class MovableSlider(QSlider, MovableWidget):
-    def __init__(self, name, minSlider, maxSlider, stepSlider, label, shortcutPlus, shortcutMinus,  **kwargs):
+    def __init__(self, name, minSlider, maxSlider, stepSlider, label, shortcutPlus, shortcutMinus, **kwargs):
         QSlider.__init__(self, Qt.Horizontal, name=name)
         MovableWidget.__init__(self, name, label, **kwargs)
         self.minSlider = minSlider
@@ -704,8 +703,16 @@ class ShortcutCreator(QLineEdit):
         self.KeySequence = None
 
     def keyPressEvent(self, event):
-        self.KeySequence = QKeySequence(event.key()).toString()
-        self.setText(self.KeySequence)
+        if event.key() == 16777249 or \
+                event.key() == 16777251 or \
+                event.key() == 16777248 or \
+                event.key() == 16781571 or \
+                event.key() == 16777250 or \
+                event.key() == 16777216:
+            self.setText('')
+        else:
+            self.KeySequence = QKeySequence(event.key()).toString()
+            self.setText(self.KeySequence)
 
     def getKeySequence(self):
         return self.KeySequence
