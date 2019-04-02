@@ -1490,7 +1490,8 @@ class MainGui(QMainWindow):
 
     def copyRemoteSource(self):
         text = "  Remote:\n"
-        text += yaml.dump(self._experiments[self._currentExperimentIndex]['Remote'], default_flow_style=False)
+        if 'Remote' in self._experiments[self._currentExperimentIndex]:
+            text += yaml.dump(self._experiments[self._currentExperimentIndex]['Remote'], default_flow_style=False)
         text = text.replace("\n", "\n    ")
         clipboard = QApplication.clipboard()
         clipboard.setText(text)
