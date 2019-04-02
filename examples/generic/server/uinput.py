@@ -1,60 +1,78 @@
 from threading import Thread
 import time
-from inputs import get_gamepad, get_key
+from inputs import get_gamepad, get_key, devices
 
 try:
     import pygame
-    pygame.init()
-    pygame.joystick.init()
-    pygameAvailable = True
-    inputsAvailable = False
+    usePygame = True
 except ImportError:
-    pygameAvailable = False
-    try:
-        import inputs
-        inputsAvailable = True
-    except ImportError:
-        inputsAvailable = False
-
+    usePygame = False
 
 class PyGamePad(Thread):
 
     def __init__(self):
         Thread.__init__(self)
+        pygame.init()
+        pygame.joystick.init()
         self.Key9 = 0
         self.Key10 = 0
-        self.LStickX = 0
-        self.LStickY = 0
-        self.RStickX = 0
-        self.RStickY = 0
+        self.LStickX = 128
+        self.LStickY = 128
+        self.RStickX = 128
+        self.RStickY = 128
         self.KeyBtnBase2 = 0
         self.KeyBtnPinkie = 0
 
-        joystick_count = pygame.joystick.get_count()
-        for i in range(joystick_count):
-            joystick = pygame.joystick.Joystick(i)
-            joystick.init()
-
     def run(self):
-
         while True:
-            for event in pygame.event.get():
-                print(event)
-                if "button" in event.dict:
-                    joystick = pygame.joystick.Joystick(event.dict["joy"])
-                    if event.dict["button"] == 8:
-                        self.Key9 = joystick.get_button(event.dict["button"])
-                    elif event.dict["button"] == 5:
-                        self.KeyBtnBase2 = joystick.get_button(event.dict["button"])
-                    elif event.dict["button"] == 7:
-                        self.KeyBtnPinkie = joystick.get_button(event.dict["button"])
 
-                elif "axis" in event.dict:
-                    print(event)
-                    if event.dict["axis"] == 0:
-                        self.LStickX = event.dict["value"]
-                    elif event.dict["axis"] == 2:
-                        self.RStickX = event.dict["value"]
+            time.sleep(0.001)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    done = True
+                if event.type == pygame.JOYBUTTONDOWN:
+                    print("Joystick button pressed.")
+                if event.type == pygame.JOYBUTTONUP:
+                    print("Joystick button released.")
+
+            print_list = list()
+            joystick_count = pygame.joystick.get_count()
+
+            for i in range(joystick_count):
+                joystick = pygame.joystick.Joystick(i)
+                joystick.init()
+                name = joystick.get_name()
+
+                axes = joystick.get_numaxes()
+                for i in range(axes):
+                    axis = joystick.get_axis(i)
+                    if i == 0:
+                        self.LStickX = axis
+                    elif i == 2:
+                        self.RStickX = axis
+                    #print_list.append((i, axis))
+                    # print("Axis {} value: {:>6.3f}".format(i, axis))
+
+                buttons = joystick.get_numbuttons()
+                for i in range(buttons):
+                    button = joystick.get_button(i)
+                    if i == 8:
+                        self.Key9 = button
+                    elif i == 5:
+                        self.KeyBtnBase2 = button
+                    elif i == 7:
+                        self.KeyBtnPinkie = button
+                    #print_list.append((i, button))
+                    #print("Button {:>2} value: {}".format(i,button))
+
+                hats = joystick.get_numhats()
+
+                for i in range(hats):
+                    hat = joystick.get_hat(i)
+                    #print_list.append((i, hat))
+                    # print( "Hat {} value: {}".format(i, str(hat)))
+
+                #print(name, print_list)
 
     def getStickValue(self, value):
         return value if abs(value) > 0.08 else 0
@@ -161,13 +179,12 @@ class Keyboard(Thread):
 
 def get_input_device():
     msg = "{} as input device connected"
-    if pygameAvailable and pygame.joystick.get_count() > 0:
+    if usePygame:
         input_ = PyGamePad()
-        print(msg.format("gamepad (with pygame)"))
 
-    elif inputsAvailable and len(inputs.devices.gamepads) > 0:
+    elif any(["GamePad" in des for des in [it[0] for it in [dir(dev) for dev in devices]]]):
         input_ = GamePad()
-        print(msg.format("gamepad (with inputs)"))
+        print(msg.format("gamepad"))
 
     else:
         input_ = Keyboard()
@@ -184,4 +201,4 @@ if __name__ == "__main__":
 
     while True:
         time.sleep(1)
-        print(input_.cheat(), input_.control(), input_.reset())
+        print(input_.control())
