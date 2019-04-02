@@ -639,6 +639,7 @@ class MovableSlider(QSlider, MovableWidget):
         self.label = label
         self.shortcutPlus = shortcutPlus
         self.shortcutMinus = shortcutMinus
+        self.setTracking(False)
 
         self.updateData()
 
