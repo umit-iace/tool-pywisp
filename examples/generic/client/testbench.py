@@ -21,7 +21,7 @@ class TwoPendulum(ExperimentModule):
         ExperimentModule.__init__(self)
 
     @staticmethod
-    def handleFrame(frame):
+    def handleFrame(self, frame):
         dataPoints = {}
         fid = frame.min_id
         if fid == 10:
