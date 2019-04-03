@@ -3,3 +3,6 @@
 - Name: RunSystem
 
   TwoPendulum:
+
+  Visu:
+    MplTwoPendulumVisualizer:
