@@ -1439,12 +1439,12 @@ class MainGui(QMainWindow):
             sliderLabel = QLabel()
             sliderLabel.setFixedHeight(10)
             self.remoteWidgetLayout.addWidget(sliderLabel)
-
             widget = MovableSlider(msg['name'], msg['minSlider'], msg['maxSlider'], msg['stepSlider'],
                                    sliderLabel, msg['shortcutPlus'], msg['shortcutMinus'], module=msg['module'], parameter=msg['parameter'])
             widget.setFixedHeight(30)
             widget.setFixedWidth(200)
-            widget.valueChanged.connect(lambda: self.remoteSliderSendParameter(widget))
+            widget.valueChanged.connect(lambda value: self.remoteSliderSendParameter(widget, value))
+            widget.sliderMoved.connect(lambda value: self.remoteSliderUpdate(widget, value))
             widget.editAction.triggered.connect(lambda _, : self.remoteConfigWidget(
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
@@ -1471,10 +1471,18 @@ class MainGui(QMainWindow):
         self.remoteWidgetLayout.addWidget(widget)
 
     def remotePushButtonSendParameter(self, widget):
+        """
+                Gets called when a user interacts with the pushbutton and sends the specified parameter to the bench
+                :param widget: the widget the user interacted with
+        """
         value = widget.valueOn
         self.remoteSendParamter(widget.module, widget.parameter, value)
 
     def remoteSwitchSendParameter(self, widget):
+        """
+                Gets called when a user interacts with the switch and sends the specified parameter to the bench
+                :param widget: the widget the user interacted with
+        """
         if widget.isChecked():
             value = widget.valueOn
             widget.setText(widget.widgetName + '\n' + widget.valueOff)
@@ -1484,15 +1492,23 @@ class MainGui(QMainWindow):
 
         self.remoteSendParamter(widget.module, widget.parameter, value)
 
-    def remoteSliderSendParameter(self, widget):
+    def remoteSliderSendParameter(self, widget, value):
         """
-        Gets called when a user interacts with remote widgets and sends the specified parameter to the bench
+        Gets called when a user interacts with the slider and sends the specified parameter to the bench
         :param widget: the widget the user interacted with
+        :param value: the actual value of the widget
         """
-        widget.valueOn = widget.value()
-        value = widget.valueOn
+        self.remoteSliderUpdate(widget, value)
+        self.remoteSendParamter(widget.module, widget.parameter, widget.valueOn)
+
+    def remoteSliderUpdate(self, widget, value):
+        """
+        Gets called when a user interacts with the slider
+        :param widget: the widget the user interacted with
+        :param value: the actual value of the widget
+        """
+        widget.valueOn = value
         widget.label.setText(widget.widgetName + ': ' + str(widget.valueOn))
-        self.remoteSendParamter(widget.module, widget.parameter, value)
 
     def remoteSendParamter(self, module, parameter, value):
         exp = deepcopy(self.exp.getExperiment())

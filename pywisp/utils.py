@@ -659,8 +659,8 @@ class MovableSlider(QSlider, MovableWidget):
         return data
 
     def updateData(self):
-        self.setValue(0)
-        self.label.setText(self.widgetName + ': ' + str(0))
+        self.setValue(int(self.minSlider))
+        self.label.setText(self.widgetName + ': ' + str(self.minSlider))
         self.setMinimum(int(self.minSlider))
         self.setMaximum(int(self.maxSlider))
         self.setTickInterval(int(self.stepSlider))
