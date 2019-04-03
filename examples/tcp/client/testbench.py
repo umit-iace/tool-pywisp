@@ -3,6 +3,7 @@ from collections import OrderedDict
 
 import struct
 from connection import ConnTestTCP
+
 from pywisp.experimentModules import ExperimentModule
 
 
@@ -18,6 +19,8 @@ class Test(ExperimentModule):
                                   ("Value3", 320),
                                   ("Value4", 10)])
 
+    ids = [10, 12]
+
     connection = ConnTestTCP.__name__
 
     def __init__(self):
@@ -29,23 +32,22 @@ class Test(ExperimentModule):
                               float(data[1]),
                               int(data[2]),
                               int(data[3]) % 256)
-        dataPoint = {'id': 12,
+        dataPoint = {'id': self.ids[1],
                      'msg': payload
                      }
         return dataPoint
 
-    @staticmethod
-    def handleFrame(frame):
+    def handleFrame(self, frame):
         dataPoints = {}
         fid = frame.min_id
-        if fid == 10:
+        if fid == self.ids[0]:
             data = struct.unpack('>Ldfhb', frame.payload[:19])
             dataPoints['Time'] = data[0]
             dataPoints['DataPoints'] = {'Value1': data[1],
-                                    'Value2': data[2],
-                                    'Value3': data[3],
-                                    'Value4': data[4],
-                                    }
+                                        'Value2': data[2],
+                                        'Value3': data[3],
+                                        'Value4': data[4],
+                                        }
         else:
             dataPoints = None
 

@@ -242,6 +242,8 @@ class ExperimentInteractor(QObject):
 
             if key == 'Remote':
                 continue
+            if key == 'Visu':
+                continue
 
             name = PropertyItem(key)
             value = None
@@ -265,6 +267,8 @@ class ExperimentInteractor(QObject):
                 continue
 
             if moduleName == 'Remote':
+                continue
+            if moduleName == 'Visu':
                 continue
 
             if not moduleValue:
@@ -309,7 +313,7 @@ class ExperimentInteractor(QObject):
 
             for module in getRegisteredExperimentModules():
                 if module[1] == moduleName and module[0].connection == connection.__name__:
-                    dataPoints = module[0].handleFrame(frame)
+                    dataPoints = module[0].handleFrame(module[0], frame)
                     if dataPoints is not None:
                         return dataPoints
 
@@ -330,7 +334,7 @@ class ExperimentInteractor(QObject):
 
             for module in getRegisteredExperimentModules():
                 if module[1] == moduleName:
-                    startParams = module[0].getStartParams(self)
+                    startParams = module[0].getStartParams(module[0])
                     if startParams is not None:
                         startParams['connection'] = module[0].connection
                         data.append(startParams)
@@ -340,7 +344,7 @@ class ExperimentInteractor(QObject):
                     for key, val in settings.items():
                         if val is not None:
                             vals.append(val)
-                    params = module[0].getParams(self, vals)
+                    params = module[0].getParams(module[0], vals)
                     if params and not None:
                         params['connection'] = module[0].connection
                         data.append(params)
@@ -372,7 +376,7 @@ class ExperimentInteractor(QObject):
                     for key, val in settings.items():
                         if val is not None:
                             vals.append(val)
-                    params = module[0].getParams(self, vals)
+                    params = module[0].getParams(module[0], vals)
                     if params and not None:
                         params['connection'] = module[0].connection
                         data.append(params)
@@ -400,7 +404,7 @@ class ExperimentInteractor(QObject):
 
             for module in getRegisteredExperimentModules():
                 if module[1] == moduleName:
-                    stopParams = module[0].getStopParams(self)
+                    stopParams = module[0].getStopParams(module[0])
                     if stopParams is not None:
                         stopParams['connection'] = module[0].connection
                         data.append(stopParams)

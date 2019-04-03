@@ -38,24 +38,5 @@
       shortcutPlus: H
       shortcutMinus: G
 
-- Name: RunSystem
-
-  RampTrajectory:
-   StartTime: 5
-   StartValue: 28.0
-   EndTime: 70
-   EndValue: 5.0
-
-  Test:
-    Value1: 11.2
-    Value2: 22.1
-    Value3: 4
-    Value4: 1
-
-  Remote:
-    PushExample:
-      Module: Test
-      Parameter: Value1
-      valueOn: '12.99'
-      widgetType: PushButton
-      shortcut: P
+  Visu:
+    MplExampleVisualizer:

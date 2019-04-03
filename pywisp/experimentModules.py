@@ -46,9 +46,8 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
     def connection(self):
         pass
 
-    @staticmethod
     @abstractmethod
-    def handleFrame(frame):
+    def handleFrame(self, frame):
         pass
 
     @abstractmethod
