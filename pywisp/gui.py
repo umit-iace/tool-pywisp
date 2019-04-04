@@ -939,7 +939,8 @@ class MainGui(QMainWindow):
         self.loadLastMeas(item)
 
         for conn, connInstance in self.connections.items():
-            connInstance.doRead = True
+            if connInstance:
+                connInstance.doRead = True
 
         self.timer.start(int(self._currentTimerTime))
         self.exp.runExperiment()
@@ -962,8 +963,9 @@ class MainGui(QMainWindow):
         time.sleep(1)
 
         for conn, connInstance in self.connections.items():
-            connInstance.doRead = False
-            connInstance.clear()
+            if connInstance:
+                connInstance.doRead = False
+                connInstance.clear()
 
     def sendParameter(self):
         """
