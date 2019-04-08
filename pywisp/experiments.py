@@ -43,7 +43,6 @@ class PropertyItem(QStandardItem):
         self._logger = logging.getLogger(self.__class__.__name__)
         self._data = data
         self._text = self._getText(data)
-        self.isUsed = False
 
     def type(self):
         return QStandardItem.UserType
@@ -66,8 +65,6 @@ class PropertyItem(QStandardItem):
 
         else:
             raise NotImplementedError
-
-        self.emitDataChanged()
 
     def data(self, role=None, *args, **kwargs):
         if role == Qt.DisplayRole:
