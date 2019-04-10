@@ -136,7 +136,7 @@ class PlotChart(object):
                 datax = self.dataPoints[curve.name()].time
                 datay = self.dataPoints[curve.name()].values
                 if datax:
-                    if len(datax) < self.interpolationPoints:
+                    if self.interpolationPoints == 0 or len(datax) < self.interpolationPoints:
                         curve.setData(datax, datay)
                     else:
                         interpx = np.linspace(datax[0], datax[-1], self.interpolationPoints)
@@ -233,6 +233,7 @@ class DataIntDialog(QDialog):
 
         self.data = QLineEdit(self)
         self.data.setText(str(self.currentValue))
+
         self.data.setValidator(QIntValidator(self.minValue, self.maxValue, self))
 
         mainLayout.addWidget(self.data)
