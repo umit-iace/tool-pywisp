@@ -1521,7 +1521,7 @@ class MainGui(QMainWindow):
                 for k, v in val.items():
                     if k == parameter:
                         exp[key][k] = value
-                        self.exp.setExperiment(exp)
+                        self.exp.editExperiment(exp)
                         if self.actSendParameter.isEnabled():
                             self.sendParameter()
                         return
