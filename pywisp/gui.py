@@ -1356,15 +1356,19 @@ class MainGui(QMainWindow):
             widget.parameter = msg['parameter']
             if msg['widgetType'] == "PushButton":
                 widget.valueOn = msg['valueOn']
-                widget.setShortcut(msg['shortcut'])
-                widget.setShortcutAutoRepeat(0, False)
+                shortcut = QShortcut(widget)
+                shortcut.setKey(msg['shortcut'])
+                shortcut.setAutoRepeat(False)
+                shortcut.activated.connect(lambda: widget.animateClick())
                 self._experiments[idx]['Remote'][msg['name']]['shortcut'] = msg['shortcut']
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
             elif msg['widgetType'] == "Switch":
                 widget.valueOn = msg['valueOn']
                 widget.valueOff = msg['valueOff']
-                widget.setShortcut(msg['shortcut'])
-                widget.setShortcutAutoRepeat(0, False)
+                shortcut = QShortcut(widget)
+                shortcut.setKey(msg['shortcut'])
+                shortcut.setAutoRepeat(False)
+                shortcut.activated.connect(lambda: widget.animateClick())
                 self._experiments[idx]['Remote'][msg['name']]['shortcut'] = msg['shortcut']
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
                 self._experiments[idx]['Remote'][msg['name']]['valueOff'] = msg['valueOff']
@@ -1410,15 +1414,18 @@ class MainGui(QMainWindow):
             self._experiments[idx]['Remote'][msg['name']]['Parameter'] = msg['parameter']
         sliderLabel = None
         if msg['widgetType'] == "PushButton":
-            widget = MovablePushButton(msg['name'], msg['valueOn'], msg['shortcut'], module=msg['module'], parameter=msg['parameter'])
+            widget = MovablePushButton(msg['name'], msg['valueOn'], msg['shortcut'], module=msg['module'],
+                                       parameter=msg['parameter'])
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
             widget.clicked.connect(lambda: self.remotePushButtonSendParameter(widget))
-            widget.editAction.triggered.connect(lambda _, : self.remoteConfigWidget(
+            widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
-            widget.setShortcut(msg['shortcut'])
-            widget.setShortcutAutoRepeat(0, False)
+            shortcut = QShortcut(widget)
+            shortcut.setKey(msg['shortcut'])
+            shortcut.setAutoRepeat(False)
+            shortcut.activated.connect(lambda: widget.animateClick())
             if changed:
                 self._experiments[idx]['Remote'][msg['name']]['shortcut'] = msg['shortcut']
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
@@ -1428,11 +1435,13 @@ class MainGui(QMainWindow):
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
             widget.clicked.connect(lambda: self.remoteSwitchSendParameter(widget))
-            widget.editAction.triggered.connect(lambda _, : self.remoteConfigWidget(
+            widget.editAction.triggered.connect(lambda _,: self.remoteConfigWidget(
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
-            widget.setShortcut(msg['shortcut'])
-            widget.setShortcutAutoRepeat(0, False)
+            shortcut = QShortcut(widget)
+            shortcut.setKey(msg['shortcut'])
+            shortcut.setAutoRepeat(False)
+            shortcut.activated.connect(lambda: widget.animateClick())
             if changed:
                 self._experiments[idx]['Remote'][msg['name']]['shortcut'] = msg['shortcut']
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
@@ -1442,12 +1451,13 @@ class MainGui(QMainWindow):
             sliderLabel.setFixedHeight(10)
             self.remoteWidgetLayout.addWidget(sliderLabel)
             widget = MovableSlider(msg['name'], msg['minSlider'], msg['maxSlider'], msg['stepSlider'],
-                                   sliderLabel, msg['shortcutPlus'], msg['shortcutMinus'], module=msg['module'], parameter=msg['parameter'])
+                                   sliderLabel, msg['shortcutPlus'], msg['shortcutMinus'], module=msg['module'],
+                                   parameter=msg['parameter'])
             widget.setFixedHeight(30)
             widget.setFixedWidth(200)
             widget.valueChanged.connect(lambda value: self.remoteSliderSendParameter(widget, value))
             widget.sliderMoved.connect(lambda value: self.remoteSliderUpdate(widget, value))
-            widget.editAction.triggered.connect(lambda _, : self.remoteConfigWidget(
+            widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
             shortcut = QShortcut(widget)
