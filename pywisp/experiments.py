@@ -230,7 +230,7 @@ class ExperimentInteractor(QObject):
         if exp is None:
             return
         if isinstance(exp, list):
-            self._logger.error("setExperiment(): only scalar input allowed!")
+            self._logger.error("editExperiment(): only scalar input allowed!")
             return False
 
         return self._editExperiment(exp)
@@ -327,14 +327,11 @@ class ExperimentInteractor(QObject):
                     if self.targetModel.data(modules.child(row, 0).index()) == valKey:
                         valueIdx = self.targetModel.index(row, 1, self.targetModel.indexFromItem(modules))
                         self.targetModel.setData(valueIdx, valVal, role=PropertyItem.RawDataRole)
+                        self.targetModel.dataChanged.emit(valueIdx, valueIdx)
                         break
                 else:
                     self._logger.warning("_applyExperiment(): Setting: '{0}' not "
                                          "available for Module: '{1}'".format(valKey, moduleName))
-
-        self.targetView.setModel(self.targetModel)
-        # todo repaint() doesnt work instant, only on click into dock or scrolling
-        self.targetView.repaint()
 
         return True
 
