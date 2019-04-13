@@ -1435,7 +1435,7 @@ class MainGui(QMainWindow):
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
             widget.clicked.connect(lambda: self.remoteSwitchSendParameter(widget))
-            widget.editAction.triggered.connect(lambda _,: self.remoteConfigWidget(
+            widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
             shortcut = QShortcut(widget)
