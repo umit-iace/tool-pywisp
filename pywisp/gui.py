@@ -41,6 +41,14 @@ class MainGui(QMainWindow):
             pkg_resources.require("PyWisp")[0].version)
         QCoreApplication.setApplicationName(globals()["__package__"])
 
+        # Create and display the splash screen
+        self.splashScreenIcon = QPixmap(get_resource("icon.svg"))
+        self.splashScreen = QSplashScreen(self.splashScreenIcon, Qt.WindowStaysOnTopHint)
+        self.splashScreen.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+        self.splashScreen.setEnabled(False)
+        #self.splashScreen.showMessage("...loading...", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
+        self.splashScreen.show()
+
         self.connections = {}
         self.isConnected = False
 
@@ -346,6 +354,9 @@ class MainGui(QMainWindow):
         self._updateExperimentsList()
 
         self._applyFirstExperiment()
+
+        # close splash screen
+        self.splashScreen.finish(self)
 
     def visualizerChanged(self, idx):
         self.animationLayout.removeWidget(self.visualizer.qWidget)
