@@ -11,6 +11,7 @@ from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleV
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
     QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu
 from pyqtgraph import mkPen
+from pyqtgraph.dockarea import Dock
 
 __all__ = ["get_resource"]
 
@@ -721,3 +722,9 @@ class ShortcutCreator(QLineEdit):
     def setText(self, p_str):
         self.KeySequence = p_str
         super(ShortcutCreator, self).setText(p_str)
+
+
+class FixedDock(Dock):
+    def __init__(self, *args):
+        super(FixedDock, self).__init__(*args)
+        self.label.mouseDoubleClickEvent = lambda event: event.ignore()
