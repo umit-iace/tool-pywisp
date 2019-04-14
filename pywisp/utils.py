@@ -724,7 +724,7 @@ class ShortcutCreator(QLineEdit):
         super(ShortcutCreator, self).setText(p_str)
 
 
-class FixedDock(Dock):
+class PinnedDock(Dock):
     def __init__(self, *args):
-        super(FixedDock, self).__init__(*args)
+        super(PinnedDock, self).__init__(*args)
         self.label.mouseDoubleClickEvent = lambda event: event.ignore()

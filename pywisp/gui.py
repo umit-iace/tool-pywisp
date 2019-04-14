@@ -22,7 +22,7 @@ from .connection import SerialConnection, TcpConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
-    DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, FixedDock
+    DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, PinnedDock
 
 
 class MainGui(QMainWindow):
@@ -78,13 +78,13 @@ class MainGui(QMainWindow):
         self.setCentralWidget(self.area)
 
         # create docks
-        self.experimentDock = FixedDock("Experiments")
-        self.lastMeasDock = FixedDock("Last Measurements")
-        self.propertyDock = FixedDock("Parameters")
-        self.logDock = FixedDock("Log")
-        self.dataDock = FixedDock("Data")
-        self.animationDock = FixedDock("Animation")
-        self.remoteDock = FixedDock("Remote")
+        self.experimentDock = PinnedDock("Experiments")
+        self.lastMeasDock = PinnedDock("Last Measurements")
+        self.propertyDock = PinnedDock("Parameters")
+        self.logDock = PinnedDock("Log")
+        self.dataDock = PinnedDock("Data")
+        self.animationDock = PinnedDock("Animation")
+        self.remoteDock = PinnedDock("Remote")
 
         # arrange docks
         self.area.addDock(self.animationDock, "right")
