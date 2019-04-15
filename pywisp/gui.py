@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
+import time
+
 import logging
 import os
-from copy import deepcopy
-
 import pkg_resources
 import serial.tools.list_ports
-import time
 import yaml
+from copy import deepcopy
 
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
@@ -45,7 +45,6 @@ class MainGui(QMainWindow):
         self.splashScreenIcon = QPixmap(get_resource("icon.svg"))
         self.splashScreen = QSplashScreen(self, self.splashScreenIcon, Qt.WindowStaysOnTopHint)
         self.splashScreen.setEnabled(False)
-        #self.splashScreen.showMessage("...loading...", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
         self.splashScreen.show()
 
         self.connections = {}
@@ -355,6 +354,9 @@ class MainGui(QMainWindow):
 
         # close splash screen
         self.splashScreen.finish(self)
+
+        # if success
+        self.selectedExp = True
 
     def visualizerChanged(self, idx):
         self.animationLayout.removeWidget(self.visualizer.qWidget)
@@ -945,7 +947,7 @@ class MainGui(QMainWindow):
         item = QListWidgetItem(str(self.lastMeasList.count() + 1) + ": "
                                + self._currentExperimentName + " ~current~")
         self.lastMeasList.addItem(item)
-        self.loadLastMeas(item)
+        self.copyLastMeas(item)
 
         for conn, connInstance in self.connections.items():
             if connInstance:
@@ -959,7 +961,8 @@ class MainGui(QMainWindow):
         """
         Stops the experiment, the timer, clears the connections, and enables the start button.
         """
-        self.actStartExperiment.setDisabled(False)
+        if self.selectedExp:
+            self.actStartExperiment.setDisabled(False)
         self.actStopExperiment.setDisabled(True)
         self.actSendParameter.setDisabled(True)
         for i in range(self.experimentList.count()):
@@ -1129,6 +1132,11 @@ class MainGui(QMainWindow):
             self.configureRemote(idx)
             self.configureVisualizer(idx)
 
+            # check if experiment runs
+            if not self.actStopExperiment.isEnabled():
+                self.actStartExperiment.setDisabled(False)
+            self.selectedExp = True
+
     def _applyExperimentByIdx(self, index=0):
         """
         Applies the given experiment.
@@ -1175,7 +1183,7 @@ class MainGui(QMainWindow):
                 self._logger.info("Connection for {} established!".format(conn.__name__))
                 self.actConnect.setEnabled(False)
                 self.actDisconnect.setEnabled(True)
-                if self._currentExpListItem is not None:
+                if self._currentExpListItem is not None and self.selectedExp:
                     self.actStartExperiment.setEnabled(True)
                 self.actStopExperiment.setEnabled(False)
                 self.statusbarLabel.setText("Connected!")
@@ -1279,11 +1287,28 @@ class MainGui(QMainWindow):
         idx = self.lastMeasList.row(item)
         self.measurements[idx].update({'dataPointBuffers': deepcopy(self._currentDataPointBuffers)})
 
+    def copyLastMeas(self, item):
+        self._currentLastMeasItem = item
+        idx = self.lastMeasList.row(item)
+
+        measurement = self.measurements[idx]
+
+        dataPointNames = self.exp.getDataPoints()
+        dataPointBuffers = measurement['dataPointBuffers']
+        if dataPointNames:
+            self.updateDataPoints(dataPointNames)
+
+        for i in range(self.dataPointTreeWidget.topLevelItemCount()):
+            self.updatePlot(self.dataPointTreeWidget.topLevelItem(i), dataPointBuffers)
+
     def loadLastMeas(self, item):
         """
         Loads the measurement data from the measurement dict by given item from last measurement list
         :param item: last measurement list item
         """
+        self.actStartExperiment.setDisabled(True)
+        self.selectedExp = False
+
         expName = str(item.text())
         self._currentLastMeasItem = item
         try:
@@ -1471,10 +1496,10 @@ class MainGui(QMainWindow):
             widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
             shortcut = QShortcut(widget)
             shortcut.setKey(msg['shortcutPlus'])
-            shortcut.activated.connect(lambda: widget.setValue(widget.value()+int(widget.stepSlider)))
+            shortcut.activated.connect(lambda: widget.setValue(widget.value() + int(widget.stepSlider)))
             shortcut = QShortcut(widget)
             shortcut.setKey(msg['shortcutMinus'])
-            shortcut.activated.connect(lambda: widget.setValue(widget.value()-int(widget.stepSlider)))
+            shortcut.activated.connect(lambda: widget.setValue(widget.value() - int(widget.stepSlider)))
             if changed:
                 self._experiments[idx]['Remote'][msg['name']]['shortcutPlus'] = msg['shortcutPlus']
                 self._experiments[idx]['Remote'][msg['name']]['shortcutMinus'] = msg['shortcutMinus']
@@ -1540,7 +1565,7 @@ class MainGui(QMainWindow):
                 for k, v in val.items():
                     if k == parameter:
                         exp[key][k] = value
-                        self.exp.setExperiment(exp)
+                        self.exp.editExperiment(exp)
                         if self.actSendParameter.isEnabled():
                             self.sendParameter()
                         return

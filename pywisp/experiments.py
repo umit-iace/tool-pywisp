@@ -221,6 +221,20 @@ class ExperimentInteractor(QObject):
 
         return self._applyExperiment(exp)
 
+    def editExperiment(self, exp):
+        """
+        Edit the given experiment settings into the target model.
+        :param exp: the given experiment
+        :return: `True` if successful, `False` if errors occurred.
+        """
+        if exp is None:
+            return
+        if isinstance(exp, list):
+            self._logger.error("editExperiment(): only scalar input allowed!")
+            return False
+
+        return self._editExperiment(exp)
+
     def _applyExperiment(self, exp):
         """
         Set all module settings to those provided in the experiment.
@@ -285,6 +299,39 @@ class ExperimentInteractor(QObject):
                         valKey, moduleName))
 
         self.targetView.setModel(self.targetModel)
+
+        return True
+
+    def _editExperiment(self, exp):
+        """
+        Edit all module settings to those provided in the experiment.
+        :param exp: the provided experiment
+        :return: `True` if successful, `False` if errors occurred.
+        """
+        for moduleName, moduleValue in exp.items():
+            if moduleName == 'Name':
+                continue
+
+            if moduleName == 'Remote':
+                continue
+            if moduleName == 'Visu':
+                continue
+
+            if not moduleValue:
+                continue
+
+            for valKey, valVal in moduleValue.items():
+                modules = self.targetModel.findItems(moduleName)[0]
+
+                for row in range(modules.rowCount()):
+                    if self.targetModel.data(modules.child(row, 0).index()) == valKey:
+                        valueIdx = self.targetModel.index(row, 1, self.targetModel.indexFromItem(modules))
+                        self.targetModel.setData(valueIdx, valVal, role=PropertyItem.RawDataRole)
+                        self.targetModel.dataChanged.emit(valueIdx, valueIdx)
+                        break
+                else:
+                    self._logger.warning("_applyExperiment(): Setting: '{0}' not "
+                                         "available for Module: '{1}'".format(valKey, moduleName))
 
         return True
 
