@@ -463,7 +463,7 @@ class MainGui(QMainWindow):
         Sets the amount of interpolation points in settings with a dialog.
         """
         self._settings.beginGroup('plot')
-        intPoints, ok = DataIntDialog.getData(min=2, max=1000000, current=self._settings.value("interpolation_points"))
+        intPoints, ok = DataIntDialog.getData(min=0, max=1000000, current=self._settings.value("interpolation_points"))
 
         if ok:
             self._settings.setValue("interpolation_points", int(intPoints))
