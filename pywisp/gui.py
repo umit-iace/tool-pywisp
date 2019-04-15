@@ -892,7 +892,7 @@ class MainGui(QMainWindow):
             self._logger.info("Export successful as '{}.".format(filename[0]))
 
     @pyqtSlot(QModelIndex)
-    def targetViewChanged(self, index):
+    def targetViewChanged(self, index=None):
         self.targetView.resizeColumnToContents(0)
 
     @pyqtSlot()
@@ -1038,6 +1038,7 @@ class MainGui(QMainWindow):
         if success:
             self.configureRemote(idx)
             self.configureVisualizer(idx)
+            self.targetViewChanged()
 
         return success
 
@@ -1158,6 +1159,7 @@ class MainGui(QMainWindow):
         if sucess:
             self._currentExperimentIndex = index
             self._currentExperimentName = self._experiments[index]['Name']
+            self.targetViewChanged()
         return sucess
 
     def closeEvent(self, QCloseEvent):
@@ -1591,3 +1593,4 @@ class MainGui(QMainWindow):
             self.remoteAddWidget()
         elif action == saveAction:
             self.copyRemoteSource()
+
