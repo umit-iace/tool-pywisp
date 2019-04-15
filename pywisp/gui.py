@@ -43,8 +43,7 @@ class MainGui(QMainWindow):
 
         # Create and display the splash screen
         self.splashScreenIcon = QPixmap(get_resource("icon.svg"))
-        self.splashScreen = QSplashScreen(self.splashScreenIcon, Qt.WindowStaysOnTopHint)
-        self.splashScreen.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+        self.splashScreen = QSplashScreen(self, self.splashScreenIcon, Qt.WindowStaysOnTopHint)
         self.splashScreen.setEnabled(False)
         #self.splashScreen.showMessage("...loading...", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
         self.splashScreen.show()
