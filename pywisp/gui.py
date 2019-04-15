@@ -1133,9 +1133,10 @@ class MainGui(QMainWindow):
             self.configureRemote(idx)
             self.configureVisualizer(idx)
 
-            # check if experiment runs
-            if not self.actStopExperiment.isEnabled():
-                self.actStartExperiment.setDisabled(False)
+            if self.isConnected:
+                # check if experiment runs
+                if not self.actStopExperiment.isEnabled():
+                    self.actStartExperiment.setDisabled(False)
             self.selectedExp = True
 
     def _applyExperimentByIdx(self, index=0):
