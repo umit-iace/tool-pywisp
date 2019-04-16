@@ -581,6 +581,8 @@ class MainGui(QMainWindow):
 
         for index in range(self.dataPointTreeWidget.topLevelItemCount()):
             self.dataPointTreeWidget.topLevelItem(index).setSelected(False)
+            for childIndex in range(self.dataPointTreeWidget.topLevelItem(index).childCount()):
+                self.dataPointTreeWidget.topLevelItem(index).child(childIndex).setSelected(False)
         topLevelItem.setSelected(True)
 
     def removeSelectedPlotTreeItems(self):
