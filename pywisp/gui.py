@@ -506,7 +506,7 @@ class MainGui(QMainWindow):
         movingStep, ok = DataIntDialog.getData(min=0, max=10000, current=PlotChart.movingIndexStep)
 
         if ok:
-            PlotChart.movingIndexStep = movingStep
+            PlotChart.movingIndexStep = int(movingStep)
             self._logger.info("Set Moving Window Step to {}".format(movingStep))
 
     def _addSetting(self, group, setting, value):
