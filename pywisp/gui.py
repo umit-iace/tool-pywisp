@@ -263,6 +263,9 @@ class MainGui(QMainWindow):
         self.actTimerTime = QAction("&Timer time", self)
         self.optMenu.addAction(self.actTimerTime)
         self.actTimerTime.triggered.connect(self.setTimerTime)
+        self.actMovingStep = QAction("&Moving Window Step", self)
+        self.optMenu.addAction(self.actMovingStep)
+        self.actMovingStep.triggered.connect(self.setMovingStep)
 
         # experiment
         self.expMenu = self.menuBar().addMenu('&Experiment')
@@ -495,6 +498,16 @@ class MainGui(QMainWindow):
             self._logger.info("Set timer time to {}".format(timerTime))
 
         self._settings.endGroup()
+
+    def setMovingStep(self):
+        """
+        Sets the timer time in settings with a dialog.
+        """
+        movingStep, ok = DataIntDialog.getData(min=0, max=10000, current=PlotChart.movingIndexStep)
+
+        if ok:
+            PlotChart.movingIndexStep = movingStep
+            self._logger.info("Set Moving Window Step to {}".format(movingStep))
 
     def _addSetting(self, group, setting, value):
         """
@@ -811,21 +824,27 @@ class MainGui(QMainWindow):
         qActionSep1.setSeparator(True)
         qActionSep2 = QAction("", self)
         qActionSep2.setSeparator(True)
+        qActionSep3 = QAction("", self)
+        qActionSep3.setSeparator(True)
         widget.scene().contextMenu = [qActionSep1,
                                       QAction("Auto Range All", self),
                                       qActionSep2,
                                       QAction("Export as ...", self),
+                                      qActionSep3,
+                                      QAction("Moving Window", self),
                                       ]
 
         def _export_wrapper(export_func):
             def _wrapper():
-                return export_func(widget.getPlotItem(),
-                                   )
+                return export_func(widget.getPlotItem(),)
 
             return _wrapper
 
         widget.scene().contextMenu[1].triggered.connect(lambda: self.setAutoRange(widget))
         widget.scene().contextMenu[3].triggered.connect(_export_wrapper(self.exportPlotItem))
+        widget.scene().contextMenu[5].triggered.connect(lambda: self.movewindow(chart))
+        widget.scene().contextMenu[5].setCheckable(True)
+        widget.scene().contextMenu[5].setChecked(False)
 
         # create dock container and add it to dock area
         dock = Dock(title, closable=True)
@@ -837,6 +856,12 @@ class MainGui(QMainWindow):
             self.area.addDock(dock, "above", plotWidgets[0])
         else:
             self.area.addDock(dock, "bottom", self.animationDock)
+
+    def movewindow(self, chart):
+        if chart.plotWidget.scene().contextMenu[5].isChecked():
+            chart.movingEnable = True
+        else:
+            chart.movingEnable = False
 
     def closedDock(self):
         """

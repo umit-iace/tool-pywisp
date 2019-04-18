@@ -100,6 +100,7 @@ class PlotChart(object):
     """
     Object containing the plot widgets and the associated plot curves
     """
+    movingIndexStep = 50
 
     def __init__(self, title, settings):
         self.title = title
@@ -108,6 +109,7 @@ class PlotChart(object):
         self.plotCurves = []
         self.interpolationPoints = 100
         self.settings = settings
+        self.movingEnable = False
 
     def addPlotCurve(self, name, data):
         """
@@ -134,8 +136,13 @@ class PlotChart(object):
         """
         if self.plotWidget:
             for indx, curve in enumerate(self.plotCurves):
-                datax = self.dataPoints[curve.name()].time
-                datay = self.dataPoints[curve.name()].values
+                startPlotRange = 0
+                if self.movingEnable:
+                    startPlotRange = len(self.dataPoints[curve.name()].time) - self.movingIndexStep
+                    if startPlotRange < 0:
+                        startPlotRange = 0
+                datax = self.dataPoints[curve.name()].time[startPlotRange:]
+                datay = self.dataPoints[curve.name()].values[startPlotRange:]
                 if datax:
                     if self.interpolationPoints == 0 or len(datax) < self.interpolationPoints:
                         curve.setData(datax, datay)
