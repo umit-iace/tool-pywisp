@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, Q
     QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu
 from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
+from bisect import bisect_left
 
 __all__ = ["get_resource"]
 
@@ -109,6 +110,7 @@ class PlotChart(object):
         self.interpolationPoints = 100
         self.settings = settings
         self.movingEnable = False
+        self.movingSteps = 60
 
     def addPlotCurve(self, name, data):
         """
@@ -129,17 +131,22 @@ class PlotChart(object):
     def setInterpolationPoints(self, interpolationPoints):
         self.interpolationPoints = int(interpolationPoints)
 
+    def setMovingSteps(self, movingSteps):
+        self.movingSteps = int(movingSteps)
+
     def updatePlot(self):
         """
         Updates all curves of the plot with the actual data in the buffers
         """
         if self.plotWidget:
-            for indx, curve in enumerate(self.plotCurves):
-                startPlotRange = 0
+            startPlotRange = 0
+            if self.plotCurves[0]:
                 if self.movingEnable:
-                    startPlotRange = len(self.dataPoints[curve.name()].time) - self.settings.value("moving_step")
-                    if startPlotRange < 0:
+                    startPlotRange = bisect_left(self.dataPoints[self.plotCurves[0].name()].time,
+                                                 self.dataPoints[self.plotCurves[0].name()].time[-1] - self.movingSteps)
+                    if startPlotRange < 0 or startPlotRange > len(self.dataPoints[self.plotCurves[0].name()].time):
                         startPlotRange = 0
+            for indx, curve in enumerate(self.plotCurves):
                 datax = self.dataPoints[curve.name()].time[startPlotRange:]
                 datay = self.dataPoints[curve.name()].values[startPlotRange:]
                 if datax:

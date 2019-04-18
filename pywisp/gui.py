@@ -332,6 +332,7 @@ class MainGui(QMainWindow):
 
         self._currentTimerTime = 10
         self._currentInterpolationPoints = 10
+        self._currentMovingStep = 60
 
         self._currentExpListItem = None
         self._currentLastMeasItem = None
@@ -504,7 +505,7 @@ class MainGui(QMainWindow):
         Sets the moving step in settings with a dialog.
         """
         self._settings.beginGroup('plot')
-        movingStep, ok = DataIntDialog.getData(min=0, max=10000, current=self._settings.value("moving_step"))
+        movingStep, ok = DataIntDialog.getData(min=1, max=10000, current=self._settings.value("moving_step"))
 
         if ok:
             self._settings.setValue("moving_step", int(movingStep))
@@ -537,7 +538,7 @@ class MainGui(QMainWindow):
         # plot management
         self._addSetting("plot", "interpolation_points", 10000)
         self._addSetting("plot", "timer_time", 10000)
-        self._addSetting("plot", "moving_step", 100)
+        self._addSetting("plot", "moving_step", 60)
 
         # log management
         self._addSetting("log_colors", "CRITICAL", "#DC143C")
@@ -945,6 +946,7 @@ class MainGui(QMainWindow):
         self._settings.beginGroup('plot')
         self._currentInterpolationPoints = self._settings.value("interpolation_points")
         self._currentTimerTime = self._settings.value("timer_time")
+        self._currentMovingStep = self._settings.value("moving_step")
         self._settings.endGroup()
 
         if self._currentExperimentIndex is None:
@@ -972,6 +974,7 @@ class MainGui(QMainWindow):
 
         for chart in self.plotCharts:
             chart.setInterpolationPoints(self._currentInterpolationPoints)
+            chart.setMovingSteps(self._currentMovingStep)
             chart.updatePlot()
 
         data = {}
