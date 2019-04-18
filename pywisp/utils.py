@@ -109,8 +109,8 @@ class PlotChart(object):
         self.plotCurves = []
         self.interpolationPoints = 100
         self.settings = settings
-        self.movingEnable = False
-        self.movingSteps = 60
+        self.movingWindowEnable = False
+        self.movingWindowWidth = 60
 
     def addPlotCurve(self, name, data):
         """
@@ -131,8 +131,8 @@ class PlotChart(object):
     def setInterpolationPoints(self, interpolationPoints):
         self.interpolationPoints = int(interpolationPoints)
 
-    def setMovingSteps(self, movingSteps):
-        self.movingSteps = int(movingSteps)
+    def setMovingWindowWidth(self, movingWindowWidth):
+        self.movingWindowWidth = int(movingWindowWidth)
 
     def updatePlot(self):
         """
@@ -141,9 +141,9 @@ class PlotChart(object):
         if self.plotWidget:
             startPlotRange = 0
             if self.plotCurves[0]:
-                if self.movingEnable:
+                if self.movingWindowEnable:
                     startPlotRange = bisect_left(self.dataPoints[self.plotCurves[0].name()].time,
-                                                 self.dataPoints[self.plotCurves[0].name()].time[-1] - self.movingSteps)
+                                                 self.dataPoints[self.plotCurves[0].name()].time[-1] - self.movingWindowWidth)
                     if startPlotRange < 0 or startPlotRange > len(self.dataPoints[self.plotCurves[0].name()].time):
                         startPlotRange = 0
             for indx, curve in enumerate(self.plotCurves):

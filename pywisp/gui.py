@@ -263,9 +263,9 @@ class MainGui(QMainWindow):
         self.actTimerTime = QAction("&Timer time", self)
         self.optMenu.addAction(self.actTimerTime)
         self.actTimerTime.triggered.connect(self.setTimerTime)
-        self.actMovingStep = QAction("&Moving Window Step", self)
-        self.optMenu.addAction(self.actMovingStep)
-        self.actMovingStep.triggered.connect(self.setMovingStep)
+        self.actMovingWindowWidth = QAction("&Moving Window Width", self)
+        self.optMenu.addAction(self.actMovingWindowWidth)
+        self.actMovingWindowWidth.triggered.connect(self.setMovingWindowWidth)
 
         # experiment
         self.expMenu = self.menuBar().addMenu('&Experiment')
@@ -332,7 +332,7 @@ class MainGui(QMainWindow):
 
         self._currentTimerTime = 10
         self._currentInterpolationPoints = 10
-        self._currentMovingStep = 60
+        self._currentMovingWindowWidth = 60
 
         self._currentExpListItem = None
         self._currentLastMeasItem = None
@@ -500,16 +500,16 @@ class MainGui(QMainWindow):
 
         self._settings.endGroup()
 
-    def setMovingStep(self):
+    def setMovingWindowWidth(self):
         """
         Sets the moving step in settings with a dialog.
         """
         self._settings.beginGroup('plot')
-        movingStep, ok = DataIntDialog.getData(min=1, max=10000, current=self._settings.value("moving_step"))
+        movingWindowWidth, ok = DataIntDialog.getData(min=1, max=10000, current=self._settings.value("moving_window_width"))
 
         if ok:
-            self._settings.setValue("moving_step", int(movingStep))
-            self._logger.info("Set Moving Window Step to {}".format(movingStep))
+            self._settings.setValue("moving_window_width", int(movingWindowWidth))
+            self._logger.info("Set Moving Window Width to {}".format(movingWindowWidth))
 
         self._settings.endGroup()
 
@@ -538,7 +538,7 @@ class MainGui(QMainWindow):
         # plot management
         self._addSetting("plot", "interpolation_points", 10000)
         self._addSetting("plot", "timer_time", 10000)
-        self._addSetting("plot", "moving_step", 60)
+        self._addSetting("plot", "moving_window_width", 60)
 
         # log management
         self._addSetting("log_colors", "CRITICAL", "#DC143C")
@@ -864,9 +864,9 @@ class MainGui(QMainWindow):
 
     def movewindow(self, chart):
         if chart.plotWidget.scene().contextMenu[5].isChecked():
-            chart.movingEnable = True
+            chart.movingWindowEnable = True
         else:
-            chart.movingEnable = False
+            chart.movingWindowEnable = False
 
     def closedDock(self):
         """
@@ -946,7 +946,7 @@ class MainGui(QMainWindow):
         self._settings.beginGroup('plot')
         self._currentInterpolationPoints = self._settings.value("interpolation_points")
         self._currentTimerTime = self._settings.value("timer_time")
-        self._currentMovingStep = self._settings.value("moving_step")
+        self._currentMovingWindowWidth = self._settings.value("moving_window_width")
         self._settings.endGroup()
 
         if self._currentExperimentIndex is None:
@@ -974,7 +974,7 @@ class MainGui(QMainWindow):
 
         for chart in self.plotCharts:
             chart.setInterpolationPoints(self._currentInterpolationPoints)
-            chart.setMovingSteps(self._currentMovingStep)
+            chart.setMovingWindowWidth(self._currentMovingWindowWidth)
             chart.updatePlot()
 
         data = {}
