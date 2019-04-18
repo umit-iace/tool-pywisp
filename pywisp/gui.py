@@ -501,13 +501,16 @@ class MainGui(QMainWindow):
 
     def setMovingStep(self):
         """
-        Sets the timer time in settings with a dialog.
+        Sets the moving step in settings with a dialog.
         """
-        movingStep, ok = DataIntDialog.getData(min=0, max=10000, current=PlotChart.movingIndexStep)
+        self._settings.beginGroup('plot')
+        movingStep, ok = DataIntDialog.getData(min=0, max=10000, current=self._settings.value("moving_step"))
 
         if ok:
-            PlotChart.movingIndexStep = int(movingStep)
+            self._settings.setValue("moving_step", int(movingStep))
             self._logger.info("Set Moving Window Step to {}".format(movingStep))
+
+        self._settings.endGroup()
 
     def _addSetting(self, group, setting, value):
         """
@@ -534,6 +537,7 @@ class MainGui(QMainWindow):
         # plot management
         self._addSetting("plot", "interpolation_points", 10000)
         self._addSetting("plot", "timer_time", 10000)
+        self._addSetting("plot", "moving_step", 100)
 
         # log management
         self._addSetting("log_colors", "CRITICAL", "#DC143C")

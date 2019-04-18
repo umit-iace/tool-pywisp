@@ -100,7 +100,6 @@ class PlotChart(object):
     """
     Object containing the plot widgets and the associated plot curves
     """
-    movingIndexStep = 50
 
     def __init__(self, title, settings):
         self.title = title
@@ -138,7 +137,7 @@ class PlotChart(object):
             for indx, curve in enumerate(self.plotCurves):
                 startPlotRange = 0
                 if self.movingEnable:
-                    startPlotRange = len(self.dataPoints[curve.name()].time) - self.movingIndexStep
+                    startPlotRange = len(self.dataPoints[curve.name()].time) - self.settings.value("moving_step")
                     if startPlotRange < 0:
                         startPlotRange = 0
                 datax = self.dataPoints[curve.name()].time[startPlotRange:]
