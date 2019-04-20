@@ -143,7 +143,8 @@ class PlotChart(object):
             if self.plotCurves[0]:
                 if self.movingWindowEnable:
                     startPlotRange = bisect_left(self.dataPoints[self.plotCurves[0].name()].time,
-                                                 self.dataPoints[self.plotCurves[0].name()].time[-1] - self.movingWindowWidth)
+                                                 self.dataPoints[self.plotCurves[0].name()].time[-1]
+                                                 - self.movingWindowWidth)
                     if startPlotRange < 0 or startPlotRange > len(self.dataPoints[self.plotCurves[0].name()].time):
                         startPlotRange = 0
             for indx, curve in enumerate(self.plotCurves):
@@ -227,15 +228,20 @@ class DataIntDialog(QDialog):
     """
 
     def __init__(self, **kwargs):
-        parent = kwargs.get('parent', None)
+        parent = kwargs.get("parent", None)
         super(DataIntDialog, self).__init__(parent)
 
         self.minValue = kwargs.get("min", 1)
         self.maxValue = kwargs.get("max", 1000)
         self.currentValue = kwargs.get("current", 0)
+        self.unit = kwargs.get("unit", "")
+        self.title = kwargs.get("title", "pywisp")
+
+        self.setWindowTitle(self.title)
 
         mainLayout = QVBoxLayout(self)
         labelLayout = QHBoxLayout()
+        inputLayout = QHBoxLayout()
 
         minLabel = QLabel(self)
         minLabel.setText("min. value: {}".format(self.minValue))
@@ -250,7 +256,14 @@ class DataIntDialog(QDialog):
 
         self.data.setValidator(QIntValidator(self.minValue, self.maxValue, self))
 
-        mainLayout.addWidget(self.data)
+        inputLayout.addWidget(self.data)
+
+        if not self.unit == "":
+            unitLabel = QLabel(self)
+            unitLabel.setText(self.unit)
+            inputLayout.addWidget(unitLabel)
+
+        mainLayout.addLayout(inputLayout)
 
         # OK and Cancel buttons
         buttons = QDialogButtonBox(

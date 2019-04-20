@@ -479,7 +479,8 @@ class MainGui(QMainWindow):
         Sets the amount of interpolation points in settings with a dialog.
         """
         self._settings.beginGroup('plot')
-        intPoints, ok = DataIntDialog.getData(min=0, max=1000000, current=self._settings.value("interpolation_points"))
+        intPoints, ok = DataIntDialog.getData(title="Interpolation Points", min=0, max=1000000,
+                                              current=self._settings.value("interpolation_points"))
 
         if ok:
             self._settings.setValue("interpolation_points", int(intPoints))
@@ -492,7 +493,8 @@ class MainGui(QMainWindow):
         Sets the timer time in settings with a dialog.
         """
         self._settings.beginGroup('plot')
-        timerTime, ok = DataIntDialog.getData(min=2, max=10000, current=self._settings.value("timer_time"))
+        timerTime, ok = DataIntDialog.getData(title="Timer Time", min=2, max=10000,
+                                              current=self._settings.value("timer_time"))
 
         if ok:
             self._settings.setValue("timer_time", int(timerTime))
@@ -505,7 +507,8 @@ class MainGui(QMainWindow):
         Sets the moving step in settings with a dialog.
         """
         self._settings.beginGroup('plot')
-        movingWindowWidth, ok = DataIntDialog.getData(min=1, max=10000, current=self._settings.value("moving_window_width"))
+        movingWindowWidth, ok = DataIntDialog.getData(title="Moving Window Width", min=1, max=10000,
+                                                      current=self._settings.value("moving_window_width"), unit="s")
 
         if ok:
             self._settings.setValue("moving_window_width", int(movingWindowWidth))
