@@ -263,6 +263,9 @@ class MainGui(QMainWindow):
         self.actTimerTime = QAction("&Timer time", self)
         self.optMenu.addAction(self.actTimerTime)
         self.actTimerTime.triggered.connect(self.setTimerTime)
+        self.actMovingWindowWidth = QAction("&Moving Window Width", self)
+        self.optMenu.addAction(self.actMovingWindowWidth)
+        self.actMovingWindowWidth.triggered.connect(self.setMovingWindowWidth)
 
         # experiment
         self.expMenu = self.menuBar().addMenu('&Experiment')
@@ -329,6 +332,7 @@ class MainGui(QMainWindow):
 
         self._currentTimerTime = 10
         self._currentInterpolationPoints = 10
+        self._currentMovingWindowWidth = 60
 
         self._currentExpListItem = None
         self._currentLastMeasItem = None
@@ -475,7 +479,8 @@ class MainGui(QMainWindow):
         Sets the amount of interpolation points in settings with a dialog.
         """
         self._settings.beginGroup('plot')
-        intPoints, ok = DataIntDialog.getData(min=0, max=1000000, current=self._settings.value("interpolation_points"))
+        intPoints, ok = DataIntDialog.getData(title="Interpolation Points", min=0, max=1000000,
+                                              current=self._settings.value("interpolation_points"))
 
         if ok:
             self._settings.setValue("interpolation_points", int(intPoints))
@@ -488,11 +493,26 @@ class MainGui(QMainWindow):
         Sets the timer time in settings with a dialog.
         """
         self._settings.beginGroup('plot')
-        timerTime, ok = DataIntDialog.getData(min=2, max=10000, current=self._settings.value("timer_time"))
+        timerTime, ok = DataIntDialog.getData(title="Timer Time", min=2, max=10000,
+                                              current=self._settings.value("timer_time"))
 
         if ok:
             self._settings.setValue("timer_time", int(timerTime))
             self._logger.info("Set timer time to {}".format(timerTime))
+
+        self._settings.endGroup()
+
+    def setMovingWindowWidth(self):
+        """
+        Sets the moving step in settings with a dialog.
+        """
+        self._settings.beginGroup('plot')
+        movingWindowWidth, ok = DataIntDialog.getData(title="Moving Window Width", min=1, max=10000,
+                                                      current=self._settings.value("moving_window_width"), unit="s")
+
+        if ok:
+            self._settings.setValue("moving_window_width", int(movingWindowWidth))
+            self._logger.info("Set Moving Window Width to {}".format(movingWindowWidth))
 
         self._settings.endGroup()
 
@@ -521,6 +541,7 @@ class MainGui(QMainWindow):
         # plot management
         self._addSetting("plot", "interpolation_points", 10000)
         self._addSetting("plot", "timer_time", 10000)
+        self._addSetting("plot", "moving_window_width", 60)
 
         # log management
         self._addSetting("log_colors", "CRITICAL", "#DC143C")
@@ -811,21 +832,27 @@ class MainGui(QMainWindow):
         qActionSep1.setSeparator(True)
         qActionSep2 = QAction("", self)
         qActionSep2.setSeparator(True)
+        qActionSep3 = QAction("", self)
+        qActionSep3.setSeparator(True)
         widget.scene().contextMenu = [qActionSep1,
                                       QAction("Auto Range All", self),
                                       qActionSep2,
                                       QAction("Export as ...", self),
+                                      qActionSep3,
+                                      QAction("Moving Window", self),
                                       ]
 
         def _export_wrapper(export_func):
             def _wrapper():
-                return export_func(widget.getPlotItem(),
-                                   )
+                return export_func(widget.getPlotItem(),)
 
             return _wrapper
 
         widget.scene().contextMenu[1].triggered.connect(lambda: self.setAutoRange(widget))
         widget.scene().contextMenu[3].triggered.connect(_export_wrapper(self.exportPlotItem))
+        widget.scene().contextMenu[5].triggered.connect(lambda: self.movewindow(chart))
+        widget.scene().contextMenu[5].setCheckable(True)
+        widget.scene().contextMenu[5].setChecked(False)
 
         # create dock container and add it to dock area
         dock = Dock(title, closable=True)
@@ -837,6 +864,12 @@ class MainGui(QMainWindow):
             self.area.addDock(dock, "above", plotWidgets[0])
         else:
             self.area.addDock(dock, "bottom", self.animationDock)
+
+    def movewindow(self, chart):
+        if chart.plotWidget.scene().contextMenu[5].isChecked():
+            chart.movingWindowEnable = True
+        else:
+            chart.movingWindowEnable = False
 
     def closedDock(self):
         """
@@ -916,6 +949,7 @@ class MainGui(QMainWindow):
         self._settings.beginGroup('plot')
         self._currentInterpolationPoints = self._settings.value("interpolation_points")
         self._currentTimerTime = self._settings.value("timer_time")
+        self._currentMovingWindowWidth = self._settings.value("moving_window_width")
         self._settings.endGroup()
 
         if self._currentExperimentIndex is None:
@@ -943,6 +977,7 @@ class MainGui(QMainWindow):
 
         for chart in self.plotCharts:
             chart.setInterpolationPoints(self._currentInterpolationPoints)
+            chart.setMovingWindowWidth(self._currentMovingWindowWidth)
             chart.updatePlot()
 
         data = {}

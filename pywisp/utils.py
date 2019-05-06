@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, Q
     QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu
 from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
+from bisect import bisect_left
 
 __all__ = ["get_resource"]
 
@@ -108,6 +109,8 @@ class PlotChart(object):
         self.plotCurves = []
         self.interpolationPoints = 100
         self.settings = settings
+        self.movingWindowEnable = False
+        self.movingWindowWidth = 60
 
     def addPlotCurve(self, name, data):
         """
@@ -128,14 +131,27 @@ class PlotChart(object):
     def setInterpolationPoints(self, interpolationPoints):
         self.interpolationPoints = int(interpolationPoints)
 
+    def setMovingWindowWidth(self, movingWindowWidth):
+        self.movingWindowWidth = int(movingWindowWidth)
+
     def updatePlot(self):
         """
         Updates all curves of the plot with the actual data in the buffers
         """
         if self.plotWidget:
+            startPlotRange = 0
+            if self.plotCurves[0]:
+                if self.movingWindowEnable:
+                    timeLen = len(self.dataPoints[self.plotCurves[0].name()].time)
+                    if timeLen > 0:
+                        startPlotRange = bisect_left(self.dataPoints[self.plotCurves[0].name()].time,
+                                                     self.dataPoints[self.plotCurves[0].name()].time[-1]
+                                                     - self.movingWindowWidth)
+                    if startPlotRange < 0 or startPlotRange > timeLen:
+                        startPlotRange = 0
             for indx, curve in enumerate(self.plotCurves):
-                datax = self.dataPoints[curve.name()].time
-                datay = self.dataPoints[curve.name()].values
+                datax = self.dataPoints[curve.name()].time[startPlotRange:]
+                datay = self.dataPoints[curve.name()].values[startPlotRange:]
                 if datax:
                     if self.interpolationPoints == 0 or len(datax) < self.interpolationPoints:
                         curve.setData(datax, datay)
@@ -214,15 +230,20 @@ class DataIntDialog(QDialog):
     """
 
     def __init__(self, **kwargs):
-        parent = kwargs.get('parent', None)
+        parent = kwargs.get("parent", None)
         super(DataIntDialog, self).__init__(parent)
 
         self.minValue = kwargs.get("min", 1)
         self.maxValue = kwargs.get("max", 1000)
         self.currentValue = kwargs.get("current", 0)
+        self.unit = kwargs.get("unit", "")
+        self.title = kwargs.get("title", "pywisp")
+
+        self.setWindowTitle(self.title)
 
         mainLayout = QVBoxLayout(self)
         labelLayout = QHBoxLayout()
+        inputLayout = QHBoxLayout()
 
         minLabel = QLabel(self)
         minLabel.setText("min. value: {}".format(self.minValue))
@@ -237,7 +258,14 @@ class DataIntDialog(QDialog):
 
         self.data.setValidator(QIntValidator(self.minValue, self.maxValue, self))
 
-        mainLayout.addWidget(self.data)
+        inputLayout.addWidget(self.data)
+
+        if not self.unit == "":
+            unitLabel = QLabel(self)
+            unitLabel.setText(self.unit)
+            inputLayout.addWidget(unitLabel)
+
+        mainLayout.addLayout(inputLayout)
 
         # OK and Cancel buttons
         buttons = QDialogButtonBox(
