@@ -1073,6 +1073,7 @@ class MainGui(QMainWindow):
                         msg['minSlider'] = self._experiments[idx]['Remote'][name]['minSlider']
                         msg['maxSlider'] = self._experiments[idx]['Remote'][name]['maxSlider']
                         msg['stepSlider'] = self._experiments[idx]['Remote'][name]['stepSlider']
+                        msg['startValue'] = self._experiments[idx][msg['module']][msg['parameter']]
                     else:
                         continue
                     self.remoteAddWidget(msg)
@@ -1491,10 +1492,13 @@ class MainGui(QMainWindow):
                 self._experiments[idx]['Remote'][msg['name']]['valueOff'] = msg['valueOff']
         elif msg['widgetType'] == "Slider":
             sliderLabel = QLabel()
-            sliderLabel.setFixedHeight(10)
+            sliderLabel.setFixedHeight(15)
+            labelFont = sliderLabel.font()
+            labelFont.setPointSize(8)
+            sliderLabel.setFont(labelFont)
             self.remoteWidgetLayout.addWidget(sliderLabel)
             widget = MovableSlider(msg['name'], msg['minSlider'], msg['maxSlider'], msg['stepSlider'],
-                                   sliderLabel, msg['shortcutPlus'], msg['shortcutMinus'], module=msg['module'],
+                                   sliderLabel, msg['shortcutPlus'], msg['shortcutMinus'], msg['startValue'], module=msg['module'],
                                    parameter=msg['parameter'])
             widget.setFixedHeight(30)
             widget.setFixedWidth(200)

@@ -510,6 +510,9 @@ class RemoteWidgetEdit(QDialog):
         result = dialog.exec_()
         msg = dialog._getData()
 
+        if msg['widgetType'] == "Slider":
+            msg['startValue'] = exp[msg['module']][msg['parameter']]
+
         return msg, result == QDialog.Accepted
 
 
@@ -632,7 +635,7 @@ class MovablePushButton(QPushButton, MovableWidget):
 
 
 class MovableSlider(QSlider, MovableWidget):
-    def __init__(self, name, minSlider, maxSlider, stepSlider, label, shortcutPlus, shortcutMinus, **kwargs):
+    def __init__(self, name, minSlider, maxSlider, stepSlider, label, shortcutPlus, shortcutMinus, startValue, **kwargs):
         QSlider.__init__(self, Qt.Horizontal, name=name)
         MovableWidget.__init__(self, name, label, **kwargs)
         self.minSlider = minSlider
@@ -641,6 +644,7 @@ class MovableSlider(QSlider, MovableWidget):
         self.label = label
         self.shortcutPlus = shortcutPlus
         self.shortcutMinus = shortcutMinus
+        self.startValue = startValue
         self.setTracking(False)
 
         self.updateData()
@@ -661,8 +665,8 @@ class MovableSlider(QSlider, MovableWidget):
         return data
 
     def updateData(self):
-        self.setValue(int(self.minSlider))
-        self.label.setText(self.widgetName + ': ' + str(self.minSlider))
+        self.setValue(int(self.startValue))
+        self.label.setText(self.widgetName + ': ' + str(self.startValue))
         self.setMinimum(int(self.minSlider))
         self.setMaximum(int(self.maxSlider))
         self.setTickInterval(int(self.stepSlider))
