@@ -16,7 +16,7 @@ from time import time
 from serial import Serial, SerialException
 
 __all__ = ["MINFrame", "MINTransport", "MINTransportSerial",
-           "ThreadsafeTransportMINSerialHandler", "MINConnectionError"]
+           "ThreadsafeTransportMINSerialHandler", "MINConnectionError", "int32_to_bytes"]
 
 randomizer = SystemRandom()
 
