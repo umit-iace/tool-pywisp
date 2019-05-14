@@ -16,7 +16,7 @@ from time import time
 from serial import Serial, SerialException
 
 __all__ = ["MINFrame", "MINTransport", "MINTransportSerial",
-           "ThreadsafeTransportMINSerialHandler", "MINConnectionError", "int32_to_bytes"]
+           "ThreadsafeTransportMINSerialHandler", "MINConnectionError", "MINWithoutTransport"]
 
 randomizer = SystemRandom()
 
@@ -43,6 +43,239 @@ class MINFrame:
         self.seq = seq
         self.is_transport = transport
         self.last_sent_time = None  # type: int
+
+
+class MINWithoutTransport:
+    """
+    Handle MIN Transport. Runs as a polled system; typically will be subclassed to run in a threaded environment that puts thread locks
+    around API calls.
+    """
+
+    # Calls to bind this to a serial system in a host
+    def _serial_write(self, data):
+        self._logger.debug("_serial_write: {}".format(bytes_to_hexstr(data)))
+        self._serial.write(data)
+
+    def _serial_any(self):
+        return self._serial.in_waiting > 0
+
+    def _serial_read_all(self):
+        return self._serial.read_all()
+
+    def _serial_close(self):
+        self._serial.close()
+
+    HEADER_BYTE = 0xaa
+    STUFF_BYTE = 0x55
+    EOF_BYTE = 0x55
+
+    SEARCHING_FOR_SOF = 0
+    RECEIVING_ID_CONTROL = 1
+    RECEIVING_LENGTH = 2
+    RECEIVING_SEQ = 3
+    RECEIVING_PAYLOAD = 4
+    RECEIVING_CHECKSUM_3 = 5
+    RECEIVING_CHECKSUM_2 = 6
+    RECEIVING_CHECKSUM_1 = 7
+    RECEIVING_CHECKSUM_0 = 8
+    RECEIVING_EOF = 9
+
+    def __init__(self):
+        # initialize logger
+        self._logger = logging.getLogger(self.__class__.__name__)
+        self._logger.setLevel(logging.ERROR)
+
+        # State for receiving a MIN frame
+        self._rx_frame_buf = bytearray()
+        self._rx_header_bytes_seen = 0
+        self._rx_frame_state = self.SEARCHING_FOR_SOF
+        self._rx_frame_checksum = 0
+        self._rx_payload_bytes = bytearray()
+        self._rx_frame_id_control = 0
+        self._rx_frame_seq = 0
+        self._rx_frame_length = 0
+        self._rx_control = 0
+        self._rx_list = []
+        self._stashed_rx_dict = {}
+
+    def _rx_reset(self):
+        self._stashed_rx_dict = {}
+        self._rx_list = []
+
+    def send_frame(self, min_id: int, payload: bytes):
+        """
+        Sends a MIN frame with a given ID directly on the wire. Will be silently discarded if any line noise.
+        :param min_id: ID of MIN frame (0 .. 63)
+        :param payload: up to 255 bytes of payload
+        :return:
+        """
+        if len(payload) not in range(256):
+            raise ValueError("MIN payload too large")
+        if min_id not in range(64):
+            raise ValueError("MIN ID out of range")
+        frame = MINFrame(min_id=min_id, payload=payload, transport=False, seq=0)
+        on_wire_bytes = self._on_wire_bytes(frame=frame)
+        self._logger.info("Sending MIN frame, min_id={}, payload={}".format(min_id, bytes_to_hexstr(payload)))
+        self._logger.debug("Sending MIN frame, on wire bytes={}".format(bytes_to_hexstr(on_wire_bytes)))
+        self._serial_write(on_wire_bytes)
+
+    def _rx_bytes(self, data: bytes):
+        """
+        Called by handler to pass over a sequence of bytes
+        :param data:
+        """
+        self._logger.debug("Received bytes: {}".format(bytes_to_hexstr(data)))
+        for byte in data:
+            if self._rx_header_bytes_seen == 2:
+                self._rx_header_bytes_seen = 0
+                if byte == self.HEADER_BYTE:
+                    self._rx_frame_state = self.RECEIVING_ID_CONTROL
+                    continue
+                if byte == self.STUFF_BYTE:
+                    # Discard this byte; carry on receiving the next character
+                    continue
+                # By here something must have gone wrong, give up on this frame and look for new header
+                self._rx_frame_state = self.SEARCHING_FOR_SOF
+                continue
+
+            if byte == self.HEADER_BYTE:
+                self._rx_header_bytes_seen += 1
+            else:
+                self._rx_header_bytes_seen = 0
+
+            if self._rx_frame_state == self.SEARCHING_FOR_SOF:
+                pass
+            elif self._rx_frame_state == self.RECEIVING_ID_CONTROL:
+                self._rx_frame_id_control = byte
+                self._rx_payload_bytes = 0
+                if self._rx_frame_id_control & 0x80:
+                    self._rx_frame_state = self.RECEIVING_SEQ
+                else:
+                    self._rx_frame_state = self.RECEIVING_LENGTH
+            elif self._rx_frame_state == self.RECEIVING_SEQ:
+                self._rx_frame_seq = byte
+                self._rx_frame_state = self.RECEIVING_LENGTH
+            elif self._rx_frame_state == self.RECEIVING_LENGTH:
+                self._rx_frame_length = byte
+                self._rx_control = byte
+                self._rx_frame_buf = bytearray()
+                if self._rx_frame_length > 0:
+                    self._rx_frame_state = self.RECEIVING_PAYLOAD
+                else:
+                    self._rx_frame_state = self.RECEIVING_CHECKSUM_3
+            elif self._rx_frame_state == self.RECEIVING_PAYLOAD:
+                self._rx_frame_buf.append(byte)
+                self._rx_frame_length -= 1
+                if self._rx_frame_length == 0:
+                    self._rx_frame_state = self.RECEIVING_CHECKSUM_3
+            elif self._rx_frame_state == self.RECEIVING_CHECKSUM_3:
+                self._rx_frame_checksum = byte << 24
+                self._rx_frame_state = self.RECEIVING_CHECKSUM_2
+            elif self._rx_frame_state == self.RECEIVING_CHECKSUM_2:
+                self._rx_frame_checksum |= byte << 16
+                self._rx_frame_state = self.RECEIVING_CHECKSUM_1
+            elif self._rx_frame_state == self.RECEIVING_CHECKSUM_1:
+                self._rx_frame_checksum |= byte << 8
+                self._rx_frame_state = self.RECEIVING_CHECKSUM_0
+            elif self._rx_frame_state == self.RECEIVING_CHECKSUM_0:
+                self._rx_frame_checksum |= byte
+                if self._rx_frame_id_control & 0x80:
+                    computed_checksum = self._crc32(bytearray(
+                        [self._rx_frame_id_control, self._rx_frame_seq, self._rx_control]) + self._rx_frame_buf)
+                else:
+                    computed_checksum = self._crc32(
+                        bytearray([self._rx_frame_id_control, self._rx_control]) + self._rx_frame_buf)
+
+                if self._rx_frame_checksum != computed_checksum:
+                    self._logger.warning(
+                        "CRC mismatch (0x{:08x} vs 0x{:08x}), frame dropped".format(self._rx_frame_checksum,
+                                                                                    computed_checksum))
+                    # Frame fails checksum, is dropped
+                    self._rx_frame_state = self.SEARCHING_FOR_SOF
+                else:
+                    # Checksum passes, wait for EOF
+                    self._rx_frame_state = self.RECEIVING_EOF
+            elif self._rx_frame_state == self.RECEIVING_EOF:
+                if byte == self.EOF_BYTE:
+                    # Frame received OK, pass up frame for handling")
+                    min_frame = MINFrame(min_id=self._rx_frame_id_control, payload=bytes(self._rx_frame_buf),
+                                         seq=self._rx_frame_seq, transport=False)
+                    self._rx_list.append(min_frame)
+                else:
+                    self._logger.warning("No EOF received, dropping frame")
+
+                # Look for next frame
+                self._rx_frame_state = self.SEARCHING_FOR_SOF
+            else:
+                self._logger.error("Unexpected state, state machine reset")
+                # Should never get here but in case we do just reset
+                self._rx_frame_state = self.SEARCHING_FOR_SOF
+
+    def _on_wire_bytes(self, frame: MINFrame) -> bytes:
+        """
+        Get the on-wire byte sequence for the frame, including stuff bytes after every 0xaa 0xaa pair
+        """
+        if frame.is_transport:
+            prolog = bytes([frame.min_id | 0x80, frame.seq, len(frame.payload)]) + frame.payload
+        else:
+            prolog = bytes([frame.min_id, len(frame.payload)]) + frame.payload
+
+        crc = crc32(prolog, 0)
+        raw = prolog + int32_to_bytes(crc)
+
+        stuffed = bytearray([self.HEADER_BYTE, self.HEADER_BYTE, self.HEADER_BYTE])
+
+        count = 0
+
+        for i in raw:
+            stuffed.append(i)
+            if i == self.HEADER_BYTE:
+                count += 1
+                if count == 2:
+                    stuffed.append(self.STUFF_BYTE)
+                    count = 0
+            else:
+                count = 0
+
+        stuffed.append(self.EOF_BYTE)
+
+        return bytes(stuffed)
+
+    @staticmethod
+    def _crc32(checksummed_data: bytearray, start=0xffffffff):
+        """
+        The 'manual' implementation is left here as a guide to implementing this on
+        microcontrollers. It's cross-checked with the standard Python library version.
+        """
+        crc = start
+        for byte in checksummed_data:
+            crc ^= byte
+            for j in range(8):
+                mask = -(crc & 1)
+                crc = (crc >> 1) ^ (0xedb88320 & mask)
+        checksum = ~crc % (1 << 32)
+
+        if checksum != crc32(checksummed_data, 0):
+            raise AssertionError("CRC algorithm mismatch")
+
+        return checksum
+
+    def poll(self):
+        """
+        Polls the serial line, runs through MIN, sends ACKs, handles retransmits where ACK has gone missing.
+
+        :return: array of accepted MIN frames
+        """
+        self._rx_list = []
+
+        data = self._serial_read_all()
+        if data:
+            self._rx_bytes(data=data)
+
+        return self._rx_list
+
+    def close(self):
+        self._serial_close()
 
 
 class MINTransport:

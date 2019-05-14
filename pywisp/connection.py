@@ -12,10 +12,10 @@ from abc import abstractmethod
 import serial
 import serial.tools.list_ports
 from PyQt5 import QtCore
-
-from . import MINTransportSerial, MINFrame, int32_to_bytes
 from binascii import crc32
+from serial import Serial
 
+from . import MINTransportSerial, MINFrame, MINWithoutTransport
 
 __all__ = ["Connection", "TcpConnection", "SerialConnection", "SerialConnectionWOMin"]
 
@@ -56,6 +56,7 @@ class SerialConnection(Connection, QtCore.QThread):
     """
     A connection derived class for a serial interface connection implemented as a QThread
     """
+
     def __init__(self,
                  port,
                  baud):
@@ -137,6 +138,7 @@ class SerialConnectionWOMin(Connection, QtCore.QThread):
     """
     A connection derived class for a serial interface connection implemented as a QThread
     """
+
     def __init__(self,
                  port,
                  baud):
@@ -173,7 +175,7 @@ class SerialConnectionWOMin(Connection, QtCore.QThread):
             return False
         else:
             try:
-                self.min = MINTransportSerial(self.port, self.baud)
+                self.min = MINWithoutTransport(self.port, self.baud)
             except Exception as e:
                 self._logger.error('{0}'.format(e))
                 return False
@@ -194,7 +196,9 @@ class SerialConnectionWOMin(Connection, QtCore.QThread):
         self._reset(False)
 
     def _reset(self, reset=True):
-        pass
+        if reset:
+            self.min.transport_reset()
+        time.sleep(0.1)
 
     def readData(self, frames):
         """
@@ -204,37 +208,12 @@ class SerialConnectionWOMin(Connection, QtCore.QThread):
         for frame in frames:
             self.received.emit(frame)
 
-    def onWireBytes(self, frame):
-        prolog = bytes([frame.min_id, len(frame.payload)]) + frame.payload
-        crc = crc32(prolog, 0)
-        raw = prolog + int32_to_bytes(crc)
-
-        stuffed = bytearray([self.HEADER_BYTE, self.HEADER_BYTE, self.HEADER_BYTE])
-
-        count = 0
-
-        for i in raw:
-            stuffed.append(i)
-            if i == self.HEADER_BYTE:
-                count += 1
-                if count == 2:
-                    stuffed.append(self.STUFF_BYTE)
-                    count = 0
-            else:
-                count = 0
-
-        stuffed.append(self.EOF_BYTE)
-
-        return bytes(stuffed)
-
     def writeData(self, data):
         """
         Writes the given data frame to the min queue
         :param data: dictionary that includes the min id and payload
         """
-        frame = MINFrame(min_id=data['id'], payload=data['msg'], transport=False, seq=0)
-        onWireBytes = self.onWireBytes(frame=frame)
-        self._serial.write(onWireBytes)
+        self.min.send_frame(min_id=data['id'], payload=data['msg'])
 
 
 class TcpConnection(Connection, QtCore.QThread):
@@ -311,7 +290,8 @@ class TcpConnection(Connection, QtCore.QThread):
             data = self.sock.recv(self.payloadLen + 1)
             if data and data != b'':
                 if len(data) != self.payloadLen + 1:
-                    self._logger.error("Length of data {} differs from payload length {}!".format(len(data), self.payloadLen + 1))
+                    self._logger.error(
+                        "Length of data {} differs from payload length {}!".format(len(data), self.payloadLen + 1))
                 else:
                     frame = MINFrame(data[0], data[1:], 0, False)
                     self.received.emit(frame)
