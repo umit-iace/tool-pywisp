@@ -13,8 +13,7 @@ import serial
 import serial.tools.list_ports
 from PyQt5 import QtCore
 
-from . import MINTransportSerial, MINFrame
-
+from . import MINSerial, MINFrame
 
 __all__ = ["Connection", "TcpConnection", "SerialConnection"]
 
@@ -55,15 +54,18 @@ class SerialConnection(Connection, QtCore.QThread):
     """
     A connection derived class for a serial interface connection implemented as a QThread
     """
+
     def __init__(self,
                  port,
-                 baud):
+                 baud,
+                 withTransport=True):
         super(SerialConnection, self).__init__()
         QtCore.QThread.__init__(self)
 
         self.min = None
         self.baud = baud
         self.port = port
+        self.withTransport = withTransport
         self.moveToThread(self)
 
     def run(self):
@@ -91,7 +93,7 @@ class SerialConnection(Connection, QtCore.QThread):
             return False
         else:
             try:
-                self.min = MINTransportSerial(self.port, self.baud)
+                self.min = MINSerial(self.port, self.baud, self.withTransport)
             except Exception as e:
                 self._logger.error('{0}'.format(e))
                 return False
@@ -113,7 +115,10 @@ class SerialConnection(Connection, QtCore.QThread):
 
     def _reset(self, reset=True):
         if reset:
-            self.min.transport_reset()
+            if self.withTransport:
+                self.min.transport_reset()
+            else:
+                self.min.reset()
         time.sleep(0.1)
 
     def readData(self, frames):
@@ -129,7 +134,10 @@ class SerialConnection(Connection, QtCore.QThread):
         Writes the given data frame to the min queue
         :param data: dictionary that includes the min id and payload
         """
-        self.min.queue_frame(min_id=data['id'], payload=data['msg'])
+        if self.withTransport:
+            self.min.queue_frame(min_id=data['id'], payload=data['msg'])
+        else:
+            self.min.send_frame(min_id=data['id'], payload=data['msg'])
 
 
 class TcpConnection(Connection, QtCore.QThread):
@@ -206,7 +214,8 @@ class TcpConnection(Connection, QtCore.QThread):
             data = self.sock.recv(self.payloadLen + 1)
             if data and data != b'':
                 if len(data) != self.payloadLen + 1:
-                    self._logger.error("Length of data {} differs from payload length {}!".format(len(data), self.payloadLen + 1))
+                    self._logger.error(
+                        "Length of data {} differs from payload length {}!".format(len(data), self.payloadLen + 1))
                 else:
                     frame = MINFrame(data[0], data[1:], 0, False)
                     self.received.emit(frame)

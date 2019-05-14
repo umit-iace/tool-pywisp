@@ -10,13 +10,11 @@ import logging
 from binascii import crc32
 from random import SystemRandom
 from struct import pack
-from threading import Lock
 from time import time
 
 from serial import Serial, SerialException
 
-__all__ = ["MINFrame", "MINTransport", "MINTransportSerial",
-           "ThreadsafeTransportMINSerialHandler", "MINConnectionError"]
+__all__ = ["MINFrame", "MINSerial", "MINConnectionError"]
 
 randomizer = SystemRandom()
 
@@ -45,27 +43,28 @@ class MINFrame:
         self.last_sent_time = None  # type: int
 
 
-class MINTransport:
+class MINSerial:
     """
     Handle MIN Transport. Runs as a polled system; typically will be subclassed to run in a threaded environment that puts thread locks
     around API calls.
     """
 
-    # Calls to bind this to a serial system in a host
-    def _now_ms(self) -> int:
-        raise NotImplementedError
+    def _now_ms(self):
+        now = int(time() * 1000.0)
+        return now
 
     def _serial_write(self, data):
-        raise NotImplementedError
+        self._logger.debug("_serial_write: {}".format(bytes_to_hexstr(data)))
+        self._serial.write(data)
 
-    def _serial_any(self) -> bool:
-        raise NotImplementedError
+    def _serial_any(self):
+        return self._serial.in_waiting > 0
 
-    def _serial_read_all(self) -> bytes:
-        raise NotImplementedError
+    def _serial_read_all(self):
+        return self._serial.read_all()
 
     def _serial_close(self):
-        raise NotImplementedError
+        self._serial.close()
 
     ACK = 0xff
     RESET = 0xfe
@@ -85,8 +84,9 @@ class MINTransport:
     RECEIVING_CHECKSUM_0 = 8
     RECEIVING_EOF = 9
 
-    def __init__(self, window_size=16, rx_window_size=32, transport_fifo_size=100, idle_timeout_ms=3000,
-                 ack_retransmit_timeout_ms=50, frame_retransmit_timeout_ms=100):
+    def __init__(self, port, baud=115200, window_size=16, rx_window_size=32, transport_fifo_size=100,
+                 idle_timeout_ms=3000, ack_retransmit_timeout_ms=50, frame_retransmit_timeout_ms=100,
+                 withTransport=True):
         """
         :param window_size: Number of outstanding unacknowledged frames permitted to send
         :param rx_window_size: Number of outstanding unacknowledged frames that can be received
@@ -98,6 +98,15 @@ class MINTransport:
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
         self._logger.setLevel(logging.ERROR)
+
+        try:
+            self._serial = Serial(port=port, baudrate=baud, timeout=0.1, write_timeout=1.0)
+            self._serial.reset_input_buffer()
+            self._serial.reset_output_buffer()
+        except SerialException:
+            raise MINConnectionError("Transport MIN cannot open port '{}'".format(port))
+
+        self.withTransport = withTransport
 
         self.transport_fifo_size = transport_fifo_size
         self.ack_retransmit_timeout_ms = ack_retransmit_timeout_ms
@@ -194,6 +203,13 @@ class MINTransport:
     def _rx_reset(self):
         self._stashed_rx_dict = {}
         self._rx_list = []
+
+    def reset(self):
+        """
+        Clears out the receive queues
+        :return:
+        """
+        self._rx_reset()
 
     def transport_reset(self):
         """
@@ -545,8 +561,9 @@ class MINTransport:
 
         :return: array of accepted MIN frames
         """
-        remote_connected = (self._now_ms() - self._last_received_anything_ms) < self.idle_timeout_ms
-        remote_active = (self._now_ms() - self._last_received_frame_ms) < self.idle_timeout_ms
+        if self.withTransport:
+            remote_connected = (self._now_ms() - self._last_received_anything_ms) < self.idle_timeout_ms
+            remote_active = (self._now_ms() - self._last_received_frame_ms) < self.idle_timeout_ms
 
         self._rx_list = []
 
@@ -554,135 +571,37 @@ class MINTransport:
         if data:
             self._rx_bytes(data=data)
 
-        window_size = (self._sn_max - self._sn_min) & 0xff
-        if window_size < self.max_window_size and len(self._transport_fifo) > window_size:
-            # Frames still to send
-            frame = self._transport_fifo_get(n=window_size)
-            frame.seq = self._sn_max
-            self._last_sent_frame_ms = self._now_ms()
-            frame.last_sent_time = self._now_ms()
-            self._logger.debug(
-                "Sending new frame id={} seq={} len={} payload={}".format(frame.min_id, frame.seq, len(frame.payload),
-                                                                          bytes_to_hexstr(frame.payload)))
-            self._transport_fifo_send(frame=frame)
-            self._sn_max = (self._sn_max + 1) & 0xff
-        else:
-            # Maybe retransmits
-            if window_size > 0 and remote_connected:
-                oldest_frame = self._find_oldest_frame()
-                if self._now_ms() - oldest_frame.last_sent_time > self.frame_retransmit_timeout_ms:
-                    self._logger.debug("Resending old frame id={} seq={}".format(oldest_frame.min_id, oldest_frame.seq))
-                    self._transport_fifo_send(frame=oldest_frame)
+        if self.withTransport:
+            window_size = (self._sn_max - self._sn_min) & 0xff
+            if window_size < self.max_window_size and len(self._transport_fifo) > window_size:
+                # Frames still to send
+                frame = self._transport_fifo_get(n=window_size)
+                frame.seq = self._sn_max
+                self._last_sent_frame_ms = self._now_ms()
+                frame.last_sent_time = self._now_ms()
+                self._logger.debug(
+                    "Sending new frame id={} seq={} len={} payload={}".format(frame.min_id, frame.seq, len(frame.payload),
+                                                                              bytes_to_hexstr(frame.payload)))
+                self._transport_fifo_send(frame=frame)
+                self._sn_max = (self._sn_max + 1) & 0xff
+            else:
+                # Maybe retransmits
+                if window_size > 0 and remote_connected:
+                    oldest_frame = self._find_oldest_frame()
+                    if self._now_ms() - oldest_frame.last_sent_time > self.frame_retransmit_timeout_ms:
+                        self._logger.debug("Resending old frame id={} seq={}".format(oldest_frame.min_id, oldest_frame.seq))
+                        self._transport_fifo_send(frame=oldest_frame)
 
-        # Periodically transmit ACK
-        if self._now_ms() - self._last_sent_ack_time_ms > self.ack_retransmit_timeout_ms:
-            if remote_active:
-                self._logger.debug("Periodic send of ACK")
-                self._send_ack()
+            # Periodically transmit ACK
+            if self._now_ms() - self._last_sent_ack_time_ms > self.ack_retransmit_timeout_ms:
+                if remote_active:
+                    self._logger.debug("Periodic send of ACK")
+                    self._send_ack()
 
-        if (self._sn_max - self._sn_max) & 0xff > window_size:
-            raise AssertionError
+            if (self._sn_max - self._sn_max) & 0xff > window_size:
+                raise AssertionError
 
         return self._rx_list
 
     def close(self):
         self._serial_close()
-
-
-class MINTransportSerial(MINTransport):
-    """
-    Bound to Pyserial driver. But not thread safe: must not call poll() and send() at the same time.
-    """
-
-    def _now_ms(self):
-        now = int(time() * 1000.0)
-        return now
-
-    def _serial_write(self, data):
-        self._logger.debug("_serial_write: {}".format(bytes_to_hexstr(data)))
-        self._serial.write(data)
-
-    def _serial_any(self):
-        return self._serial.in_waiting > 0
-
-    def _serial_read_all(self):
-        return self._serial.read_all()
-
-    def _serial_close(self):
-        self._serial.close()
-
-    def __init__(self, port, baud=115200):
-        """
-        Open MIN connection on a given port.
-        :param port: serial port
-        :param debug:
-        """
-        try:
-            self._serial = Serial(port=port, baudrate=baud, timeout=0.1, write_timeout=1.0)
-            self._serial.reset_input_buffer()
-            self._serial.reset_output_buffer()
-        except SerialException:
-            raise MINConnectionError("Transport MIN cannot open port '{}'".format(port))
-        super().__init__()
-
-
-class ThreadsafeTransportMINSerialHandler(MINTransportSerial):
-    """
-    This class wraps the API calls with thread locks to prevent concurrent access to the system.
-
-    A typical usage is to create a simple thread that calls poll() in a loop which takes MIN frames received and puts them into a Python queue.
-    The application can send directly and pick up incoming frames from the queue.
-    """
-
-    def __init__(self, port):
-        super().__init__(port=port)
-        self._thread_lock = Lock()
-
-    def close(self):
-        self._thread_lock.acquire()
-        try:
-            super().close()
-        except Exception as e:
-            self._thread_lock.release()
-            raise e
-        self._thread_lock.release()
-
-    def transport_stats(self):
-        self._thread_lock.acquire()
-        try:
-            result = super().transport_stats()
-        except Exception as e:
-            self._thread_lock.release()
-            raise e
-        self._thread_lock.release()
-
-        return result
-
-    def send_frame(self, min_id: int, payload: bytes):
-        self._thread_lock.acquire()
-        try:
-            super().send_frame(min_id=min_id, payload=payload)
-        except Exception as e:
-            self._thread_lock.release()
-            raise e
-        self._thread_lock.release()
-
-    def queue_frame(self, min_id: int, payload: bytes):
-        self._thread_lock.acquire()
-        try:
-            super().queue_frame(min_id=min_id, payload=payload)
-        except Exception as e:
-            self._thread_lock.release()
-            raise e
-        self._thread_lock.release()
-
-    def poll(self):
-        self._thread_lock.acquire()
-        try:
-            result = super().poll()
-        except Exception as e:
-            self._thread_lock.release()
-            raise e
-        self._thread_lock.release()
-
-        return result
