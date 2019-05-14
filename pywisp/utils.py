@@ -6,10 +6,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
-from PyQt5.QtCore import Qt, QRegExp, QSize
+from PyQt5.QtCore import Qt, QRegExp, QSize, pyqtSlot, pyqtSignal
 from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator, QKeySequence
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
-    QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu
+    QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction
 from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
 from bisect import bisect_left
@@ -766,3 +766,42 @@ class PinnedDock(Dock):
     def __init__(self, *args):
         super(PinnedDock, self).__init__(*args)
         self.label.mouseDoubleClickEvent = lambda event: event.ignore()
+
+
+class ContextLineEditAction(QWidgetAction):
+    dataEmit = pyqtSignal(str)
+
+    def __init__(self, **kwargs):
+        parent = kwargs.get("parent", None)
+        super(QWidgetAction, self).__init__(parent)
+
+        self.minValue = kwargs.get("min", 1)
+        self.maxValue = kwargs.get("max", 1000)
+        self.currentValue = kwargs.get("current", 0)
+        self.unit = kwargs.get("unit", "")
+        self.title = kwargs.get("title", "pywisp")
+
+        mainLayout = QHBoxLayout()
+        titleLabel = QLabel(parent)
+        titleLabel.setText(self.title)
+        mainLayout.addWidget(titleLabel)
+
+        self.data = QLineEdit()
+        self.data.setText(str(self.currentValue))
+        self.data.setValidator(QIntValidator(self.minValue, self.maxValue, self))
+
+        mainLayout.addWidget(self.data)
+
+        if not self.unit == "":
+            unitLabel = QLabel()
+            unitLabel.setText(self.unit)
+            mainLayout.addWidget(unitLabel)
+
+        mainWidget = QWidget()
+        mainWidget.setLayout(mainLayout)
+        self.setDefaultWidget(mainWidget)
+
+        self.data.editingFinished.connect(self.onChange)
+
+    def onChange(self):
+        self.dataEmit.emit(self.data.text())

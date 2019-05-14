@@ -22,7 +22,8 @@ from .connection import SerialConnection, TcpConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
-    DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, PinnedDock
+    DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, PinnedDock, \
+    ContextLineEditAction
 
 
 class MainGui(QMainWindow):
@@ -498,16 +499,6 @@ class MainGui(QMainWindow):
 
         self._settings.endGroup()
 
-    def setMovingWindowWidth(self, chart):
-        """
-        Sets the moving step in settings with a dialog.
-        """
-        movingWindowWidth, ok = DataIntDialog.getData(title="Moving Window Width", min=1, max=10000,
-                                                      current=chart.getMovingWindowWidth(), unit="s")
-
-        if ok:
-            chart.setMovingWindowWidth(movingWindowWidth)
-
     def _addSetting(self, group, setting, value):
         """
         Adds a setting, if setting is present, no changes are made.
@@ -829,12 +820,14 @@ class MainGui(QMainWindow):
         qActionMovingWindowEnable = QAction('Enable', self, checkable=True)
         qActionMovingWindowEnable.triggered.connect(lambda state, _chart=chart: self.enableMovingWindow(state, _chart))
 
-        qActionMovingWindowSize = QAction('Size', self)
-        qActionMovingWindowSize.triggered.connect(lambda: self.setMovingWindowWidth(chart))
+        qActionMovingWindowSize = ContextLineEditAction(min=0, max=10000, current=chart.getMovingWindowWidth(),
+                                                        unit='s', title='Size', parent=self)
+        qActionMovingWindowSize.dataEmit.connect(lambda data, _chart=chart: self.setMovingWindowWidth(data, _chart))
 
         qMenuMovingWindow = QMenu('Moving Window', self)
         qMenuMovingWindow.addAction(qActionMovingWindowEnable)
         qMenuMovingWindow.addAction(qActionMovingWindowSize)
+
         widget.scene().contextMenu = [qActionSep1,
                                       QAction("Auto Range All", self),
                                       qActionSep2,
@@ -862,6 +855,12 @@ class MainGui(QMainWindow):
             self.area.addDock(dock, "above", plotWidgets[0])
         else:
             self.area.addDock(dock, "bottom", self.animationDock)
+
+    def setMovingWindowWidth(self, data, chart):
+        """
+        Sets the moving step in settings with a dialog.
+        """
+        chart.setMovingWindowWidth(int(data))
 
     def enableMovingWindow(self, state, chart):
         chart.setEnableMovingWindow(state)
