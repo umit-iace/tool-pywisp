@@ -80,7 +80,19 @@ class MINWithoutTransport:
     RECEIVING_CHECKSUM_0 = 8
     RECEIVING_EOF = 9
 
-    def __init__(self):
+    def __init__(self, port, baud=115200):
+        """
+        Open MIN connection on a given port.
+        :param port: serial port
+        :param debug:
+        """
+        try:
+            self._serial = Serial(port=port, baudrate=baud, timeout=0.1, write_timeout=1.0)
+            self._serial.reset_input_buffer()
+            self._serial.reset_output_buffer()
+        except SerialException:
+            raise MINConnectionError("Transport MIN cannot open port '{}'".format(port))
+
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
         self._logger.setLevel(logging.ERROR)

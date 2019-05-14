@@ -196,9 +196,7 @@ class SerialConnectionWOMin(Connection, QtCore.QThread):
         self._reset(False)
 
     def _reset(self, reset=True):
-        if reset:
-            self.min.transport_reset()
-        time.sleep(0.1)
+        pass
 
     def readData(self, frames):
         """

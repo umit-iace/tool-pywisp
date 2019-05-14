@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import *
 from pyqtgraph import PlotWidget, TextItem
 from pyqtgraph.dockarea import *
 
-from .connection import SerialConnection, TcpConnection
+from .connection import SerialConnection, TcpConnection, SerialConnectionWOMin
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
@@ -282,7 +282,7 @@ class MainGui(QMainWindow):
 
         serialCnt = 0
         for conn, connInstance in self.connections.items():
-            if issubclass(conn, SerialConnection):
+            if issubclass(conn, SerialConnection) or issubclass(conn, SerialConnectionWOMin):
                 serialMenu = self.connMenu.addMenu(conn.__name__)
                 self._getSerialMenu(serialMenu, conn.settings)
                 if conn.settings['port'] == '':
