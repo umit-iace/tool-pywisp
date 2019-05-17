@@ -597,7 +597,6 @@ class MovableWidget(object):
         self.module = cp.copy(kwargs.get('module', None))
         self.parameter = cp.copy(kwargs.get('parameter', None))
         self._mousePressPos = None
-        self.__mouseMovePos = None
 
         self.contextMenu = QMenu()
         self.removeAction = self.contextMenu.addAction("Remove")
@@ -606,7 +605,6 @@ class MovableWidget(object):
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
             self._mousePressPos = event.globalPos()
-            self.__mouseMovePos = event.globalPos()
         else:
             self.mousePressEvent(event)
 
@@ -623,7 +621,7 @@ class MovableWidget(object):
                     newPos.setY(newPos.y() + 30)
                     newPos.setX(newPos.x() + 80)
                     self.label.move(newPos)
-                self.__mouseMovePos = globalPos
+                self._mousePressPos = globalPos
 
         self.mouseMoveEvent(event)
 
