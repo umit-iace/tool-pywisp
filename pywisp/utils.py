@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 import copy as cp
 import logging
+import os
+from bisect import bisect_left
+
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 import pandas as pd
 from PyQt5.QtCore import Qt, QRegExp, QSize, pyqtSignal
 from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator, QKeySequence
@@ -12,7 +14,6 @@ from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, Q
     QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction, QShortcut
 from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
-from bisect import bisect_left
 
 __all__ = ["get_resource"]
 
@@ -597,6 +598,7 @@ class MovableWidget(object):
         self.module = cp.copy(kwargs.get('module', None))
         self.parameter = cp.copy(kwargs.get('parameter', None))
         self._mousePressPos = None
+        self._mouseMovePos = None
 
         self.contextMenu = QMenu()
         self.removeAction = self.contextMenu.addAction("Remove")
@@ -605,15 +607,16 @@ class MovableWidget(object):
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
             self._mousePressPos = event.globalPos()
-        else:
-            self.mousePressEvent(event)
+            self._mouseMovePos = event.globalPos()
+
+        self.mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.RightButton:
             # adjust offset from clicked point to origin of widget
             currPos = self.mapToGlobal(self.pos())
             globalPos = event.globalPos()
-            diff = globalPos - self.__mouseMovePos
+            diff = globalPos - self._mouseMovePos
             newPos = self.mapFromGlobal(currPos + diff)
             if self.parent().rect().contains(newPos):
                 self.move(newPos)
@@ -621,17 +624,22 @@ class MovableWidget(object):
                     newPos.setY(newPos.y() + 30)
                     newPos.setX(newPos.x() + 80)
                     self.label.move(newPos)
-                self._mousePressPos = globalPos
+                self._mouseMovePos = globalPos
 
         self.mouseMoveEvent(event)
 
-    def contextMenuEvent(self, event):
+    def mouseReleaseEvent(self, event):
         if self._mousePressPos is not None:
             moved = event.globalPos() - self._mousePressPos
             if moved.manhattanLength() > 0:
+                event.ignore()
                 return
 
+            self.mouseReleaseEvent(event)
             self.contextMenu.exec_(self.mapToGlobal(event.pos()))
+
+    def contextMenuEvent(self, event):
+        pass
 
     def getData(self):
         pass
