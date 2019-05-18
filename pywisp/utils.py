@@ -629,14 +629,16 @@ class MovableWidget(object):
         self.mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        if self._mousePressPos is not None:
-            moved = event.globalPos() - self._mousePressPos
-            if moved.manhattanLength() > 0:
-                event.ignore()
-                return
-
+        if event.buttons() == Qt.RightButton:
+            if self._mousePressPos is not None:
+                moved = event.globalPos() - self._mousePressPos
+                if moved.manhattanLength() > 0:
+                    event.ignore()
+                    return
+                self.mouseReleaseEvent(event)
+                self.contextMenu.exec_(self.mapToGlobal(event.pos()))
+        else:
             self.mouseReleaseEvent(event)
-            self.contextMenu.exec_(self.mapToGlobal(event.pos()))
 
     def contextMenuEvent(self, event):
         pass
