@@ -22,8 +22,8 @@ from .connection import SerialConnection, TcpConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
-    DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, PinnedDock, \
-    ContextLineEditAction
+    DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, MovableJoystick, \
+    PinnedDock, ContextLineEditAction
 
 
 class MainGui(QMainWindow):
@@ -1103,6 +1103,7 @@ class MainGui(QMainWindow):
                         msg['maxSlider'] = self._experiments[idx]['Remote'][name]['maxSlider']
                         msg['stepSlider'] = self._experiments[idx]['Remote'][name]['stepSlider']
                         msg['startValue'] = self._experiments[idx][msg['module']][msg['parameter']]
+                        #todo joystick
                     else:
                         continue
                     self.remoteAddWidget(msg)
@@ -1450,6 +1451,7 @@ class MainGui(QMainWindow):
                 self._experiments[idx]['Remote'][msg['name']]['minSlider'] = msg['minSlider']
                 self._experiments[idx]['Remote'][msg['name']]['maxSlider'] = msg['maxSlider']
                 self._experiments[idx]['Remote'][msg['name']]['stepSlider'] = msg['stepSlider']
+            #todo joystick
             widget.updateData()
 
     def remoteAddWidget(self, msg=None, **kwargs):
@@ -1525,6 +1527,23 @@ class MainGui(QMainWindow):
                 self._experiments[idx]['Remote'][msg['name']]['minSlider'] = msg['minSlider']
                 self._experiments[idx]['Remote'][msg['name']]['maxSlider'] = msg['maxSlider']
                 self._experiments[idx]['Remote'][msg['name']]['stepSlider'] = msg['stepSlider']
+        elif msg['widgetType'] == "Joystick":
+            widget = MovableJoystick(msg['name'], msg['rangeXMax'], msg['rangeXMin'], msg['rangeXMax'],
+                                     msg['rangeXMin'], msg['shortcutXPlus'], msg['shortcutXMinus'],
+                                     msg['shortcutXPlus'], msg['shortcutXMinus'], module=msg['module'],
+                                     parameter=msg['parameter'])
+            widget.setFixedHeight(200)
+            widget.setFixedWidth(200)
+            widget.valuesChanged.connect(lambda: self.remoteJoystickSendParameter(widget))
+            widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
+                widget, editWidget=True))
+            widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
+            if changed:
+                self._experiments[idx]['Remote'][msg['name']]['shortcutXPlus'] = msg['shortcutXPlus']
+                self._experiments[idx]['Remote'][msg['name']]['shortcutXMinus'] = msg['shortcutXMinus']
+                #self._experiments[idx]['Remote'][msg['name']]['shortcutYPlus'] = msg['shortcutYPlus']
+                #self._experiments[idx]['Remote'][msg['name']]['shortcutYMinus'] = msg['shortcutYMinus']
+                #todo
         else:
             return
         if self.remoteWidget.rect().contains((self.remoteWidgetLayout.count() % 2) * 200,
@@ -1574,6 +1593,15 @@ class MainGui(QMainWindow):
         """
         widget.valueOn = value
         widget.label.setText(widget.widgetName + ': ' + str(widget.valueOn))
+
+    def remoteJoystickSendParameter(self, widget):
+        """
+                Gets called when a user interacts with the pushbutton and sends the specified parameter to the bench
+                :param widget: the widget the user interacted with
+        """
+        #todo
+        value = widget.valueX
+        self.remoteSendParamter(widget.module, widget.parameter, value)
 
     def remoteSendParamter(self, module, parameter, value):
         exp = deepcopy(self.exp.getExperiment())

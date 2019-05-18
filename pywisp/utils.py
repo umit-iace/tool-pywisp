@@ -8,10 +8,10 @@ import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from PyQt5.QtCore import Qt, QRegExp, QSize, pyqtSignal
-from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator, QKeySequence
+from PyQt5.QtCore import Qt, QRegExp, QSize, pyqtSignal, QPoint
+from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator, QKeySequence, QPainter
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
-    QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction, QShortcut
+    QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction, QShortcut, QTabWidget
 from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
 
@@ -372,6 +372,14 @@ class RemoteWidgetEdit(QDialog):
         self.shortcut = str(kwargs.get('shortcut', ""))
         self.shortcutPlus = str(kwargs.get('shortcutPlus', ""))
         self.shortcutMinus = str(kwargs.get('shortcutMinus', ""))
+        self.rangeXMax = str(kwargs.get('rangeXMax', 1))
+        self.rangeXMin = str(kwargs.get('rangeXMin', -1))
+        self.shortcutXPlus = str(kwargs.get('shortcutXPlus', ""))
+        self.shortcutXMinus = str(kwargs.get('shortcutXMinus', ""))
+        self.rangeYMax = str(kwargs.get('rangeYMax', 1))
+        self.rangeYMin = str(kwargs.get('rangeYMin', -1))
+        self.shortcutYPlus = str(kwargs.get('shortcutYPlus', ""))
+        self.shortcutYMinus = str(kwargs.get('shortcutYMinus', ""))
 
         self.curModule = kwargs.get('module', None)
         self.curParameter = kwargs.get('parameter', None)
@@ -387,15 +395,33 @@ class RemoteWidgetEdit(QDialog):
         self.shortcutField = None
         self.shortcutFieldPlus = None
         self.shortcutFieldMinus = None
+        self.rangeXMaxText = None
+        self.rangeXMinText = None
+        self.shortcutFieldXPlus = None
+        self.shortcutFieldXMinus = None
+        self.rangeYMaxText = None
+        self.rangeYMinText = None
+        self.shortcutFieldYPlus = None
+        self.shortcutFieldYMinus = None
 
+        mainwidget = QWidget()
         mainLayout = QFormLayout()
+        mainwidget.setLayout(mainLayout)
+
+        windowLayout = QVBoxLayout()
+
+        self.tabWidget = QTabWidget()
+        self.tabWidget.addTab(mainwidget, "PushButton")
+        windowLayout.addWidget(self.tabWidget)
+        self.setLayout(windowLayout)
+        #todo second tab
 
         self.nameText = QLineEdit(self.name)
         mainLayout.addRow(QLabel("Name"), self.nameText)
         self.nameText.mousePressEvent = lambda event: self.nameText.selectAll()
 
         self.typeList = QComboBox()
-        self.typeList.addItems(["PushButton", "Switch", "Slider"])
+        self.typeList.addItems(["PushButton", "Switch", "Slider", "Joystick"])
         self.typeList.setCurrentText(self.widgetType)
         self.typeList.currentIndexChanged.connect(self.typeListChanged)
         self.typeList.setEnabled(not self.editWidget)
@@ -431,15 +457,13 @@ class RemoteWidgetEdit(QDialog):
 
         self.typeListChanged()
 
-        self.setLayout(mainLayout)
-
         # OK and Cancel buttons
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
             Qt.Horizontal, self)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        mainLayout.addWidget(buttons)
+        windowLayout.addWidget(buttons)
 
         self.setWindowTitle("Add Remote Widget ...")
         resPath = get_resource("icon.svg")
@@ -454,6 +478,7 @@ class RemoteWidgetEdit(QDialog):
         height = QLineEdit().sizeHint().height()
 
         if self.typeList.currentText() == "PushButton":
+            self.tabWidget.setTabText(0, "PushButton")
             self.valueText = QLineEdit(self.valueOn)
             self.settingsWidgetLayout.addRow(QLabel("Value"), self.valueText)
             self.valueText.setValidator(QDoubleValidator())
@@ -471,6 +496,7 @@ class RemoteWidgetEdit(QDialog):
             dummy3.setFixedHeight(height)
             self.settingsWidgetLayout.addRow(None, dummy3)
         elif self.typeList.currentText() == "Switch":
+            self.tabWidget.setTabText(0, "Switch")
             self.valueOnText = QLineEdit(self.valueOn)
             self.settingsWidgetLayout.addRow(QLabel("Value On"), self.valueOnText)
             self.valueOnText.setValidator(QDoubleValidator())
@@ -482,13 +508,8 @@ class RemoteWidgetEdit(QDialog):
             self.shortcutField = ShortcutCreator()
             self.shortcutField.setText(self.shortcut)
             self.settingsWidgetLayout.addRow(QLabel("Shortcut:"), self.shortcutField)
-            dummy = QLabel("")
-            dummy.setFixedHeight(height)
-            self.settingsWidgetLayout.addRow(None, dummy)
-            dummy2 = QLabel("")
-            dummy2.setFixedHeight(height)
-            self.settingsWidgetLayout.addRow(None, dummy2)
         elif self.typeList.currentText() == "Slider":
+            self.tabWidget.setTabText(0, "Slider")
             self.maxSliderText = QLineEdit(str(self.maxSlider))
             self.settingsWidgetLayout.addRow(QLabel("Max"), self.maxSliderText)
             self.maxSliderText.setValidator(QDoubleValidator())
@@ -507,6 +528,22 @@ class RemoteWidgetEdit(QDialog):
             self.shortcutFieldMinus = ShortcutCreator()
             self.shortcutFieldMinus.setText(self.shortcutMinus)
             self.settingsWidgetLayout.addRow(QLabel("Shortcut Minus:"), self.shortcutFieldMinus)
+        elif self.typeList.currentText() == "Joystick":
+            self.tabWidget.setTabText(0, "Joystick X-Axis")
+            self.rangeXMaxText = QLineEdit(self.rangeXMax)
+            self.settingsWidgetLayout.addRow(QLabel("Range Max"), self.rangeXMaxText)
+            self.rangeXMaxText.setValidator(QIntValidator())
+            self.rangeXMaxText.mousePressEvent = lambda event: self.rangeXMaxText.selectAll()
+            self.rangeXMinText = QLineEdit(self.rangeXMin)
+            self.settingsWidgetLayout.addRow(QLabel("Range Min"), self.rangeXMinText)
+            self.rangeXMinText.mousePressEvent = lambda event: self.rangeXMinText.selectAll()
+            self.rangeXMinText.setValidator(QIntValidator())
+            self.shortcutFieldXPlus = ShortcutCreator()
+            self.shortcutFieldXPlus.setText(self.shortcutXPlus)
+            self.settingsWidgetLayout.addRow(QLabel("Shortcut Plus:"), self.shortcutFieldXPlus)
+            self.shortcutFieldXMinus = ShortcutCreator()
+            self.shortcutFieldXMinus.setText(self.shortcutXMinus)
+            self.settingsWidgetLayout.addRow(QLabel("Shortcut Minus:"), self.shortcutFieldXMinus)
 
     def moduleChanged(self):
         self.paramList.clear()
@@ -535,6 +572,15 @@ class RemoteWidgetEdit(QDialog):
             msg['stepSlider'] = self.stepSliderText.text()
             msg['shortcutPlus'] = self.shortcutFieldPlus.getKeySequence()
             msg['shortcutMinus'] = self.shortcutFieldMinus.getKeySequence()
+        elif self.typeList.currentText() == "Joystick":
+            msg['rangeXMax'] = self.rangeXMaxText.text()
+            msg['rangeXMin'] = self.rangeXMinText.text()
+            #msg['rangeYMax'] = self.rangeYMaxText.text()
+            #msg['rangeYMin'] = self.rangeYMinText.text()
+            msg['shortcutXPlus'] = self.shortcutFieldXPlus.getKeySequence()
+            msg['shortcutXMinus'] = self.shortcutFieldXMinus.getKeySequence()
+            #msg['shortcutYPlus'] = self.shortcutFieldYPlus.getKeySequence()
+            #msg['shortcutYMinus'] = self.shortcutFieldYMinus.getKeySequence()
 
         return msg
 
@@ -756,6 +802,104 @@ class MovableSwitch(QPushButton, MovableWidget):
     def updateData(self):
         self.setChecked(False)
         self.setText(self.widgetName + '\n' + self.valueOn)
+
+
+class MovableJoystick(QWidget, MovableWidget):
+    valuesChanged = pyqtSignal()
+    def __init__(self, name, rangeXMax, rangeXMin, rangeYMax, rangeYMin, shortcutXPlusKey, shortcutXMinusKey,
+                 shortcutYPlusKey, shortcutYMinusKey, **kwargs):
+        QWidget.__init__(self, name=name)
+        MovableWidget.__init__(self, name, **kwargs)
+        self.currentX = 100
+        self.currentY = 100
+        self.centerX = 100
+        self.centerY = 100
+
+        self.rangeXMin = rangeXMin
+        self.rangeXMax = rangeXMax
+        self.rangeYMin = rangeYMin
+        self.rangeYMax = rangeYMax
+        self.valueX = int(1/2*(int(self.rangeXMax)-int(self.rangeXMin)+1))+int(self.rangeXMin)
+        self.valueY = int(1/2*(int(self.rangeYMax)-int(self.rangeYMin)+1))+int(self.rangeYMin)
+
+        self.shortcutXPlus = QShortcut(self)
+        self.shortcutXPlus.setKey(shortcutXPlusKey)
+        self.shortcutXPlus.activated.connect(lambda: self.moveCenter(200, self.currentY))
+        self.shortcutXMinus = QShortcut(self)
+        self.shortcutXMinus.setKey(shortcutXMinusKey)
+        self.shortcutXMinus.activated.connect(lambda: self.moveCenter(0, self.currentY))
+
+        self.shortcutYPlus = QShortcut(self)
+        self.shortcutYPlus.setKey(shortcutYPlusKey)
+        self.shortcutYPlus.activated.connect(lambda: self.moveCenter(self.currentX, 200))
+        self.shortcutYMinus = QShortcut(self)
+        self.shortcutYMinus.setKey(shortcutYMinusKey)
+        self.shortcutYMinus.activated.connect(lambda: self.moveCenter(self.currentX, 0))
+
+        self.updateData()
+
+    def paintEvent(self, event):
+        paint = QPainter()
+        paint.begin(self)
+        paint.setRenderHint(QPainter.Antialiasing)
+        paint.setBrush(Qt.white)
+        paint.drawRect(event.rect())
+        radius = 20
+        actualCenter = QPoint(self.currentX, self.currentY)
+        center = QPoint(self.centerX, self.centerY)
+        paint.setBrush(Qt.lightGray)
+        paint.drawEllipse(center, self.height()/2, self.height()/2)
+        paint.setBrush(Qt.black)
+        paint.drawEllipse(actualCenter, radius, radius)
+        paint.drawText(1, 15, self.widgetName);
+        paint.drawText(1, 195, "["+str(self.valueX)+","+str(self.valueY)+"]");
+        paint.setBrush(Qt.red)
+        paint.drawEllipse(center, 5, 5)
+        paint.end()
+
+    def moveCenter(self, x, y):
+        self.currentX = x
+        self.currentY = y
+        self.valueX = int(x/(self.centerX*2)*(int(self.rangeXMax)-int(self.rangeXMin)+1))+int(self.rangeXMin)
+        self.valueY = int(y/(self.centerY*2)*(int(self.rangeYMax)-int(self.rangeYMin)+1))+int(self.rangeYMin)
+        self.repaint()
+        self.valuesChanged.emit()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._mousePressPos = event.pos()
+        elif event.button() == Qt.RightButton:
+            self._mousePressPos = event.globalPos()
+            self._mouseMovePos = event.globalPos()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton:
+            newPos = event.pos()
+            if self.rect().contains(newPos):
+                self.moveCenter(newPos.x(), newPos.y())
+        elif event.buttons() == Qt.RightButton:
+            # adjust offset from clicked point to origin of widget
+            currPos = self.mapToGlobal(self.pos())
+            globalPos = event.globalPos()
+            diff = globalPos - self._mouseMovePos
+            newPos = self.mapFromGlobal(currPos + diff)
+            if self.parent().rect().contains(newPos):
+                self.move(newPos)
+                if self.label:
+                    newPos.setY(newPos.y() + 30)
+                    newPos.setX(newPos.x() + 80)
+                    self.label.move(newPos)
+                self._mouseMovePos = globalPos
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.moveCenter(self.centerX, self.centerY)
+        if self._mousePressPos is not None:
+            moved = event.globalPos() - self._mousePressPos
+            if moved.manhattanLength() > 0:
+                event.ignore()
+                return
+            self.contextMenu.exec_(self.mapToGlobal(event.pos()))
 
 
 class ShortcutCreator(QLineEdit):
