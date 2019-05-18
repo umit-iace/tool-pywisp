@@ -148,7 +148,9 @@ class MainGui(QMainWindow):
         self.logBox = QTextEdit(self)
         self.logBox.setReadOnly(True)
         self.logBox.setLineWrapMode(QTextEdit.NoWrap)
+        self.logBox.moveCursor(QTextCursor.End)
         self.logBox.ensureCursorVisible()
+        self.logBox.moveCursor(QTextCursor.End)
         self.logDock.addWidget(self.logBox)
 
         # daten dock
