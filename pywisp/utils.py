@@ -756,13 +756,15 @@ class ShortcutCreator(QLineEdit):
         self.KeySequence = None
 
     def keyPressEvent(self, event):
-        if event.key() == 16777249 or \
-                event.key() == 16777251 or \
-                event.key() == 16777248 or \
-                event.key() == 16781571 or \
-                event.key() == 16777250 or \
-                event.key() == 16777216:
-            self.setText('')
+        if event.key() == Qt.Key_Control or \
+                event.key() == Qt.Key_Alt or \
+                event.key() == Qt.Key_AltGr or \
+                event.key() == Qt.Key_Escape or \
+                event.key() == Qt.Key_Shift or \
+                event.key() == Qt.Key_CapsLock or \
+                event.key() == Qt.Key_Space or \
+                event.key() == Qt.Key_Tab:
+                self.setText('')
         else:
             self.KeySequence = QKeySequence(event.key()).toString()
             self.setText(self.KeySequence)
