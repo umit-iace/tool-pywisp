@@ -6,10 +6,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
-from PyQt5.QtCore import Qt, QRegExp, QSize, pyqtSlot, pyqtSignal
+from PyQt5.QtCore import Qt, QRegExp, QSize, pyqtSignal
 from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator, QKeySequence
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
-    QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction
+    QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction, QShortcut
 from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
 from bisect import bisect_left
@@ -641,11 +641,15 @@ class MovableWidget(object):
 
 
 class MovablePushButton(QPushButton, MovableWidget):
-    def __init__(self, name, valueOn, shortcut, **kwargs):
+    def __init__(self, name, valueOn, shortcutKey, **kwargs):
         QPushButton.__init__(self, name=name)
         MovableWidget.__init__(self, name, **kwargs)
         self.valueOn = valueOn
-        self.shortcut = shortcut
+
+        self.shortcut = QShortcut(self)
+        self.shortcut.setKey(shortcutKey)
+        self.shortcut.setAutoRepeat(False)
+        self.shortcut.activated.connect(lambda: self.animateClick())
 
         self.updateData()
 
@@ -657,7 +661,7 @@ class MovablePushButton(QPushButton, MovableWidget):
         data['valueOn'] = self.valueOn
         data['module'] = self.module
         data['parameter'] = self.parameter
-        data['shortcut'] = self.shortcut
+        data['shortcut'] = self.shortcut.key().toString()
 
         return data
 
@@ -666,15 +670,22 @@ class MovablePushButton(QPushButton, MovableWidget):
 
 
 class MovableSlider(QSlider, MovableWidget):
-    def __init__(self, name, minSlider, maxSlider, stepSlider, label, shortcutPlus, shortcutMinus, startValue, **kwargs):
+    def __init__(self, name, minSlider, maxSlider, stepSlider, label, shortcutPlusKey, shortcutMinusKey, startValue
+                 , **kwargs):
         QSlider.__init__(self, Qt.Horizontal, name=name)
         MovableWidget.__init__(self, name, label, **kwargs)
         self.minSlider = minSlider
         self.maxSlider = maxSlider
         self.stepSlider = stepSlider
         self.label = label
-        self.shortcutPlus = shortcutPlus
-        self.shortcutMinus = shortcutMinus
+
+        self.shortcutPlus = QShortcut(self)
+        self.shortcutPlus.setKey(shortcutPlusKey)
+        self.shortcutPlus.activated.connect(lambda: self.setValue(self.value() + int(self.stepSlider)))
+        self.shortcutMinus = QShortcut(self)
+        self.shortcutMinus.setKey(shortcutMinusKey)
+        self.shortcutMinus.activated.connect(lambda: self.setValue(self.value() - int(self.stepSlider)))
+
         self.startValue = startValue
         self.setTracking(False)
 
@@ -690,8 +701,8 @@ class MovableSlider(QSlider, MovableWidget):
         data['stepSlider'] = self.stepSlider
         data['module'] = self.module
         data['parameter'] = self.parameter
-        data['shortcutPlus'] = self.shortcutPlus
-        data['shortcutMinus'] = self.shortcutMinus
+        data['shortcutPlus'] = self.shortcutPlus.key().toString()
+        data['shortcutMinus'] = self.shortcutMinus.key().toString()
 
         return data
 
@@ -706,12 +717,16 @@ class MovableSlider(QSlider, MovableWidget):
 
 
 class MovableSwitch(QPushButton, MovableWidget):
-    def __init__(self, name, valueOn, valueOff, shortcut, **kwargs):
+    def __init__(self, name, valueOn, valueOff, shortcutKey, **kwargs):
         QPushButton.__init__(self, name=name)
         MovableWidget.__init__(self, name, **kwargs)
         self.valueOn = valueOn
         self.valueOff = valueOff
-        self.shortcut = shortcut
+
+        self.shortcut = QShortcut(self)
+        self.shortcut.setKey(shortcutKey)
+        self.shortcut.setAutoRepeat(False)
+        self.shortcut.activated.connect(lambda: self.animateClick())
 
         self.setCheckable(True)
 
@@ -726,7 +741,7 @@ class MovableSwitch(QPushButton, MovableWidget):
         data['valueOff'] = self.valueOff
         data['module'] = self.module
         data['parameter'] = self.parameter
-        data['shortcut'] = self.shortcut
+        data['shortcut'] = self.shortcut.key().toString()
 
         return data
 

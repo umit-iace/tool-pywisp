@@ -1427,19 +1427,13 @@ class MainGui(QMainWindow):
             widget.parameter = msg['parameter']
             if msg['widgetType'] == "PushButton":
                 widget.valueOn = msg['valueOn']
-                shortcut = QShortcut(widget)
-                shortcut.setKey(msg['shortcut'])
-                shortcut.setAutoRepeat(False)
-                shortcut.activated.connect(lambda: widget.animateClick())
+                widget.shortcut.setKey(msg['shortcut'])
                 self._experiments[idx]['Remote'][msg['name']]['shortcut'] = msg['shortcut']
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
             elif msg['widgetType'] == "Switch":
                 widget.valueOn = msg['valueOn']
                 widget.valueOff = msg['valueOff']
-                shortcut = QShortcut(widget)
-                shortcut.setKey(msg['shortcut'])
-                shortcut.setAutoRepeat(False)
-                shortcut.activated.connect(lambda: widget.animateClick())
+                widget.shortcut.setKey(msg['shortcut'])
                 self._experiments[idx]['Remote'][msg['name']]['shortcut'] = msg['shortcut']
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
                 self._experiments[idx]['Remote'][msg['name']]['valueOff'] = msg['valueOff']
@@ -1447,13 +1441,9 @@ class MainGui(QMainWindow):
                 widget.minSlider = msg['minSlider']
                 widget.maxSlider = msg['maxSlider']
                 widget.stepSlider = msg['stepSlider']
-                shortcut = QShortcut(widget)
-                shortcut.setKey(msg['shortcutPlus'])
-                shortcut.activated.connect(lambda: widget.setValue(widget.value() + int(widget.stepSlider)))
+                widget.shortcutPlus.setKey(msg['shortcutPlus'])
                 self._experiments[idx]['Remote'][msg['name']]['shortcutPlus'] = msg['shortcutPlus']
-                shortcut = QShortcut(widget)
-                shortcut.setKey(msg['shortcutMinus'])
-                shortcut.activated.connect(lambda: widget.setValue(widget.value() - int(widget.stepSlider)))
+                widget.shortcutMinus.setKey(msg['shortcutMinus'])
                 self._experiments[idx]['Remote'][msg['name']]['shortcutMinus'] = msg['shortcutMinus']
                 self._experiments[idx]['Remote'][msg['name']]['minSlider'] = msg['minSlider']
                 self._experiments[idx]['Remote'][msg['name']]['maxSlider'] = msg['maxSlider']
@@ -1493,10 +1483,6 @@ class MainGui(QMainWindow):
             widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
-            shortcut = QShortcut(widget)
-            shortcut.setKey(msg['shortcut'])
-            shortcut.setAutoRepeat(False)
-            shortcut.activated.connect(lambda: widget.animateClick())
             if changed:
                 self._experiments[idx]['Remote'][msg['name']]['shortcut'] = msg['shortcut']
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
@@ -1509,10 +1495,6 @@ class MainGui(QMainWindow):
             widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
-            shortcut = QShortcut(widget)
-            shortcut.setKey(msg['shortcut'])
-            shortcut.setAutoRepeat(False)
-            shortcut.activated.connect(lambda: widget.animateClick())
             if changed:
                 self._experiments[idx]['Remote'][msg['name']]['shortcut'] = msg['shortcut']
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
@@ -1535,12 +1517,6 @@ class MainGui(QMainWindow):
             widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
-            shortcut = QShortcut(widget)
-            shortcut.setKey(msg['shortcutPlus'])
-            shortcut.activated.connect(lambda: widget.setValue(widget.value() + int(widget.stepSlider)))
-            shortcut = QShortcut(widget)
-            shortcut.setKey(msg['shortcutMinus'])
-            shortcut.activated.connect(lambda: widget.setValue(widget.value() - int(widget.stepSlider)))
             if changed:
                 self._experiments[idx]['Remote'][msg['name']]['shortcutPlus'] = msg['shortcutPlus']
                 self._experiments[idx]['Remote'][msg['name']]['shortcutMinus'] = msg['shortcutMinus']
