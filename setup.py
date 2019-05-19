@@ -18,8 +18,8 @@ test_requirements = [
 setup(
     name="pywisp",
     version="1.0",
-    description="Weird visualisation of test bench prototypes",
-    long_description="Weird visualisation of test bench prototypes",
+    description="Python based Weird visualisation for test bench prototypes",
+    long_description="Python based Weird visualisation for test bench prototypes",
     classifiers=[
         "Natural Language :: English",
         "Programming Language :: Python :: 3.5",

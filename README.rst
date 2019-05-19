@@ -1,8 +1,8 @@
-=====================================================
-PyWisp - Weird visualisation of test bench prototypes
-=====================================================
+===================================================================
+PyWisp - Python based Weird visualisation for test bench prototypes
+===================================================================
 
-PyWisp stands for *Weird visualisation of test bench prototypes*.
+PyWisp stands for *Python based Weird visualisation for test bench prototypes*.
 
 PyWisp is targeted at students and researchers working in control engineering. It helps
 to implement and run a communication and visualization for a test bench. Based on PyMoskito GUI
