@@ -545,7 +545,10 @@ class RemoteWidgetEdit(QDialog):
         msg = dialog._getData()
 
         if msg['widgetType'] == "Slider":
-            msg['startValue'] = exp[msg['module']][msg['parameter']]
+            if msg['parameter'] in exp[msg['module']]:
+                msg['startValue'] = exp[msg['module']][msg['parameter']]
+            else:
+                msg['startValue'] = 0
 
         return msg, result == QDialog.Accepted
 
@@ -629,7 +632,7 @@ class MovableWidget(object):
         self.mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        if event.buttons() == Qt.RightButton:
+        if event.button() == Qt.RightButton:
             if self._mousePressPos is not None:
                 moved = event.globalPos() - self._mousePressPos
                 if moved.manhattanLength() > 0:
