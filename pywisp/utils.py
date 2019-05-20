@@ -842,13 +842,11 @@ class MovableJoystick(QWidget, MovableWidget):
         paint = QPainter()
         paint.begin(self)
         paint.setRenderHint(QPainter.Antialiasing)
-        paint.setBrush(Qt.white)
+        paint.setBrush(Qt.lightGray)
         paint.drawRect(event.rect())
         radius = 20
         actualCenter = QPoint(self.currentX, self.currentY)
         center = QPoint(self.centerX, self.centerY)
-        paint.setBrush(Qt.lightGray)
-        paint.drawEllipse(center, self.height()/2, self.height()/2)
         paint.setBrush(Qt.black)
         paint.drawEllipse(actualCenter, radius, radius)
         paint.drawText(1, 15, self.widgetName);
