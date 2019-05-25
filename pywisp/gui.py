@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
-import time
 from copy import deepcopy
 
 import pkg_resources
 import serial.tools.list_ports
+import time
 import yaml
 
 try:
@@ -260,9 +260,6 @@ class MainGui(QMainWindow):
 
         # options
         self.optMenu = self.menuBar().addMenu('&Options')
-        self.actIntPoints = QAction("&Interpolation points", self)
-        self.actIntPoints.triggered.connect(self.setIntPoints)
-        self.optMenu.addAction(self.actIntPoints)
         self.actTimerTime = QAction("&Timer time", self)
         self.optMenu.addAction(self.actTimerTime)
         self.actTimerTime.triggered.connect(self.setTimerTime)
@@ -331,7 +328,6 @@ class MainGui(QMainWindow):
         self.toolbarExp.addAction(self.actStopExperiment)
 
         self._currentTimerTime = 10
-        self._currentInterpolationPoints = 10
 
         self._currentExpListItem = None
         self._currentLastMeasItem = None
@@ -473,20 +469,6 @@ class MainGui(QMainWindow):
             self._logger.debug("Add '{}' to experiment list".format(exp["Name"]))
             self.experimentList.addItem(exp["Name"])
 
-    def setIntPoints(self):
-        """
-        Sets the amount of interpolation points in settings with a dialog.
-        """
-        self._settings.beginGroup('plot')
-        intPoints, ok = DataIntDialog.getData(title="Interpolation Points", min=0, max=1000000,
-                                              current=self._settings.value("interpolation_points"))
-
-        if ok:
-            self._settings.setValue("interpolation_points", int(intPoints))
-            self._logger.info("Set interpolation points to {}".format(intPoints))
-
-        self._settings.endGroup()
-
     def setTimerTime(self):
         """
         Sets the timer time in settings with a dialog.
@@ -524,7 +506,6 @@ class MainGui(QMainWindow):
         self._addSetting("view", "show_coordinates", "True")
 
         # plot management
-        self._addSetting("plot", "interpolation_points", 10000)
         self._addSetting("plot", "timer_time", 10000)
 
         # log management
@@ -826,9 +807,17 @@ class MainGui(QMainWindow):
                                                         unit='s', title='Size', parent=self)
         qActionMovingWindowSize.dataEmit.connect(lambda data, _chart=chart: self.setMovingWindowWidth(data, _chart))
 
+        qActionInterpolationPoints = ContextLineEditAction(min=0, max=10000, current=chart.getInterpolataionPoints(),
+                                                           unit='s', title='Size', parent=self)
+        qActionInterpolationPoints.dataEmit.connect(lambda data, _chart=chart: self.setInterpolationPoints(data,
+                                                                                                           _chart))
+
         qMenuMovingWindow = QMenu('Moving Window', self)
         qMenuMovingWindow.addAction(qActionMovingWindowEnable)
         qMenuMovingWindow.addAction(qActionMovingWindowSize)
+
+        qMenuInterpolation = QMenu('Interpolation Points', self)
+        qMenuInterpolation.addAction(qActionInterpolationPoints)
 
         widget.scene().contextMenu = [qActionSep1,
                                       QAction("Auto Range All", self),
@@ -836,6 +825,7 @@ class MainGui(QMainWindow):
                                       QAction("Export as ...", self),
                                       qActionSep3,
                                       qMenuMovingWindow,
+                                      qMenuInterpolation,
                                       ]
 
         def _export_wrapper(export_func):
@@ -858,11 +848,19 @@ class MainGui(QMainWindow):
         else:
             self.area.addDock(dock, "bottom", self.animationDock)
 
+    def setInterpolationPoints(self, data, chart):
+        """
+        Sets the interpolation points in settings with a dialog.
+        """
+        chart.setInterpolationPoints(int(data))
+
     def setMovingWindowWidth(self, data, chart):
         """
-        Sets the moving step in settings with a dialog.
+        Sets the moving window width and autorange.
         """
         chart.setMovingWindowWidth(int(data))
+        chart.autoRange()
+        chart.enableAutoRange()
 
     def enableMovingWindow(self, state, chart):
         chart.setEnableMovingWindow(state)
@@ -943,7 +941,6 @@ class MainGui(QMainWindow):
         self._currentExperimentName = self._experiments[self._currentExperimentIndex]["Name"]
 
         self._settings.beginGroup('plot')
-        self._currentInterpolationPoints = self._settings.value("interpolation_points")
         self._currentTimerTime = self._settings.value("timer_time")
         self._settings.endGroup()
 
@@ -971,7 +968,6 @@ class MainGui(QMainWindow):
             return
 
         for chart in self.plotCharts:
-            chart.setInterpolationPoints(self._currentInterpolationPoints)
             chart.updatePlot()
 
         data = {}

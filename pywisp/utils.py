@@ -141,6 +141,9 @@ class PlotChart(object):
     def getMovingWindowWidth(self):
         return self.movingWindowWidth
 
+    def getInterpolataionPoints(self):
+        return self.interpolationPoints
+
     def updatePlot(self):
         """
         Updates all curves of the plot with the actual data in the buffers
