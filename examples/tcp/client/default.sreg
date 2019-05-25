@@ -40,3 +40,9 @@
 
   Visu:
     MplExampleVisualizer:
+
+  Config:
+    TimerTime: 100
+    InterpolationPoints: 0
+    MovingWindowSize: 60
+    MovingWindowEnable: False

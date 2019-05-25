@@ -103,15 +103,15 @@ class PlotChart(object):
     Object containing the plot widgets and the associated plot curves
     """
 
-    def __init__(self, title, settings):
+    def __init__(self, title, settings, interpolationPoints, movingWindowEnable, movingWindowWidth):
         self.title = title
         self.dataPoints = dict()
         self.plotWidget = None
         self.plotCurves = []
-        self.interpolationPoints = 100
+        self.interpolationPoints = interpolationPoints
         self.settings = settings
-        self.movingWindowEnable = False
-        self.movingWindowWidth = 60
+        self.movingWindowEnable = movingWindowEnable
+        self.movingWindowWidth = movingWindowWidth
 
     def addPlotCurve(self, name, data):
         """

@@ -42,6 +42,12 @@ class MainGui(QMainWindow):
             pkg_resources.require("PyWisp")[0].version)
         QCoreApplication.setApplicationName(globals()["__package__"])
 
+        # general config parameters
+        self.configTimerTime = 100
+        self.configInterpolationPoints = 100
+        self.configMovingWindowEnable = False
+        self.configMovingWindowSize = 10
+
         # Create and display the splash screen
         self.splashScreenIcon = QPixmap(get_resource("icon.svg"))
         self.splashScreen = QSplashScreen(self, self.splashScreenIcon, Qt.WindowStaysOnTopHint)
@@ -327,8 +333,6 @@ class MainGui(QMainWindow):
         self.toolbarExp.addAction(self.actStartExperiment)
         self.toolbarExp.addAction(self.actStopExperiment)
 
-        self._currentTimerTime = 10
-
         self._currentExpListItem = None
         self._currentLastMeasItem = None
         self._currentDataPointBuffers = None
@@ -474,11 +478,11 @@ class MainGui(QMainWindow):
         Sets the timer time in settings with a dialog.
         """
         self._settings.beginGroup('plot')
-        timerTime, ok = DataIntDialog.getData(title="Timer Time", min=2, max=10000,
-                                              current=self._settings.value("timer_time"))
+        timerTime, ok = DataIntDialog.getData(title="Timer Time", min=2, max=10000, unit='ms',
+                                              current=self.configTimerTime)
 
         if ok:
-            self._settings.setValue("timer_time", int(timerTime))
+            self.configTimerTime = timerTime
             self._logger.info("Set timer time to {}".format(timerTime))
 
         self._settings.endGroup()
@@ -504,9 +508,6 @@ class MainGui(QMainWindow):
 
         # view management
         self._addSetting("view", "show_coordinates", "True")
-
-        # plot management
-        self._addSetting("plot", "timer_time", 10000)
 
         # log management
         self._addSetting("log_colors", "CRITICAL", "#DC143C")
@@ -758,7 +759,11 @@ class MainGui(QMainWindow):
 
         # create plot widget
         widget = PlotWidget()
-        chart = PlotChart(title, self._settings)
+        chart = PlotChart(title,
+                          self._settings,
+                          self.configInterpolationPoints,
+                          self.configMovingWindowEnable,
+                          self.configMovingWindowSize)
         chart.plotWidget = widget
         widget.showGrid(True, True)
         widget.getPlotItem().getAxis("bottom").setLabel(text="Time", units="s")
@@ -801,6 +806,7 @@ class MainGui(QMainWindow):
         qActionSep3.setSeparator(True)
 
         qActionMovingWindowEnable = QAction('Enable', self, checkable=True)
+        qActionMovingWindowEnable.setChecked(self.configMovingWindowEnable)
         qActionMovingWindowEnable.triggered.connect(lambda state, _chart=chart: self.enableMovingWindow(state, _chart))
 
         qActionMovingWindowSize = ContextLineEditAction(min=0, max=10000, current=chart.getMovingWindowWidth(),
@@ -941,7 +947,6 @@ class MainGui(QMainWindow):
         self._currentExperimentName = self._experiments[self._currentExperimentIndex]["Name"]
 
         self._settings.beginGroup('plot')
-        self._currentTimerTime = self._settings.value("timer_time")
         self._settings.endGroup()
 
         if self._currentExperimentIndex is None:
@@ -984,7 +989,7 @@ class MainGui(QMainWindow):
             if connInstance:
                 connInstance.doRead = True
 
-        self.timer.start(int(self._currentTimerTime))
+        self.timer.start(int(self.configTimerTime))
         self.exp.runExperiment()
 
     @pyqtSlot()
@@ -1069,9 +1074,17 @@ class MainGui(QMainWindow):
         if success:
             self.configureRemote(idx)
             self.configureVisualizer(idx)
+            self.configureConfig(idx)
             self.targetViewChanged()
 
         return success
+
+    def configureConfig(self, idx):
+        if 'Config' in self._experiments[idx]:
+            self.configTimerTime = self._experiments[idx]['Config']['TimerTime']
+            self.configInterpolationPoints = self._experiments[idx]['Config']['InterpolationPoints']
+            self.configMovingWindowSize = self._experiments[idx]['Config']['MovingWindowSize']
+            self.configMovingWindowEnable = self._experiments[idx]['Config']['MovingWindowEnable']
 
     def configureRemote(self, idx):
         self.remoteWidgetLayout.clearAll()
@@ -1164,6 +1177,7 @@ class MainGui(QMainWindow):
         if success:
             self.configureRemote(idx)
             self.configureVisualizer(idx)
+            self.configureConfig(idx)
 
             if self.isConnected:
                 # check if experiment runs

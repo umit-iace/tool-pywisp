@@ -251,6 +251,8 @@ class ExperimentInteractor(QObject):
                 self.targetModel.setName(value)
                 continue
 
+            if key == 'Config':
+                continue
             if key == 'Remote':
                 continue
             if key == 'Visu':
@@ -277,6 +279,8 @@ class ExperimentInteractor(QObject):
             if moduleName == 'Name':
                 continue
 
+            if moduleName == 'Config':
+                continue
             if moduleName == 'Remote':
                 continue
             if moduleName == 'Visu':
@@ -312,6 +316,8 @@ class ExperimentInteractor(QObject):
             if moduleName == 'Name':
                 continue
 
+            if moduleName == 'Config':
+                continue
             if moduleName == 'Remote':
                 continue
             if moduleName == 'Visu':
