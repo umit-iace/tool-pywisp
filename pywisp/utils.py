@@ -150,7 +150,7 @@ class PlotChart(object):
         """
         if self.plotWidget:
             startPlotRange = 0
-            if self.movingWindowEnable and self.plotCurves is not None:
+            if self.movingWindowEnable and self.plotCurves is not None and self.plotCurves:
                 timeLen = len(self.dataPoints[self.plotCurves[0].name()].time)
                 if timeLen > 0:
                     startPlotRange = bisect_left(self.dataPoints[self.plotCurves[0].name()].time,
