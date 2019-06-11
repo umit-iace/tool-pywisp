@@ -811,16 +811,16 @@ class MainGui(QMainWindow):
 
         qActionMovingWindowSize = ContextLineEditAction(min=0, max=10000, current=chart.getMovingWindowWidth(),
                                                         unit='s', title='Size', parent=self)
-        qActionMovingWindowSize.dataEmit.connect(lambda data, _chart=chart: self.setMovingWindowWidth(data, _chart))
+        qActionMovingWindowSize.dataEmit.connect(lambda data, _chart=chart, _widget=widget: self.setMovingWindowWidth(data, _chart, _widget))
 
         qActionInterpolationPoints = ContextLineEditAction(min=0, max=10000, current=chart.getInterpolataionPoints(),
-                                                           unit='s', title='Size', parent=self)
+                                                           unit='', title='Size', parent=self)
         qActionInterpolationPoints.dataEmit.connect(lambda data, _chart=chart: self.setInterpolationPoints(data,
                                                                                                            _chart))
 
         qMenuMovingWindow = QMenu('Moving Window', self)
-        qMenuMovingWindow.addAction(qActionMovingWindowEnable)
         qMenuMovingWindow.addAction(qActionMovingWindowSize)
+        qMenuMovingWindow.addAction(qActionMovingWindowEnable)
 
         qMenuInterpolation = QMenu('Interpolation Points', self)
         qMenuInterpolation.addAction(qActionInterpolationPoints)
@@ -860,13 +860,13 @@ class MainGui(QMainWindow):
         """
         chart.setInterpolationPoints(int(data))
 
-    def setMovingWindowWidth(self, data, chart):
+    def setMovingWindowWidth(self, data, chart, widget):
         """
         Sets the moving window width and autorange.
         """
         chart.setMovingWindowWidth(int(data))
-        chart.autoRange()
-        chart.enableAutoRange()
+        widget.autoRange()
+        widget.enableAutoRange()
 
     def enableMovingWindow(self, state, chart):
         chart.setEnableMovingWindow(state)
@@ -882,9 +882,9 @@ class MainGui(QMainWindow):
             if not plot.title in openDocks:
                 self.plotCharts.pop(indx)
 
-    def setAutoRange(self, chart):
-        chart.autoRange()
-        chart.enableAutoRange()
+    def setAutoRange(self, widget):
+        widget.autoRange()
+        widget.enableAutoRange()
 
     def exportPlotItem(self, plotItem):
         dataPoints = dict()
