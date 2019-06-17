@@ -150,15 +150,15 @@ class PlotChart(object):
         """
         if self.plotWidget:
             startPlotRange = 0
-            if self.movingWindowEnable and self.plotCurves is not None and self.plotCurves:
-                timeLen = len(self.dataPoints[self.plotCurves[0].name()].time)
-                if timeLen > 0:
-                    startPlotRange = bisect_left(self.dataPoints[self.plotCurves[0].name()].time,
-                                                 self.dataPoints[self.plotCurves[0].name()].time[-1]
-                                                 - self.movingWindowWidth)
-                if startPlotRange < 0 or startPlotRange > timeLen:
-                    startPlotRange = 0
             for indx, curve in enumerate(self.plotCurves):
+                if self.movingWindowEnable:
+                    timeLen = len(self.dataPoints[curve.name()].time)
+                    if timeLen > 0:
+                        startPlotRange = bisect_left(self.dataPoints[curve.name()].time,
+                                                     self.dataPoints[curve.name()].time[-1]
+                                                     - self.movingWindowWidth)
+                    if startPlotRange < 0 or startPlotRange > timeLen:
+                        startPlotRange = 0
                 datax = self.dataPoints[curve.name()].time[startPlotRange:]
                 datay = self.dataPoints[curve.name()].values[startPlotRange:]
                 if datax:
