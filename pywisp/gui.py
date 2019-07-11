@@ -338,8 +338,7 @@ class MainGui(QMainWindow):
         self._currentDataPointBuffers = None
         self.plotCharts = []
 
-        if not self.loadExpFromFile(fileName):
-            return
+        loadExpFromFileSuccess = self.loadExpFromFile(fileName)
 
         self.standardDockState = self.area.saveState()
 
@@ -353,13 +352,13 @@ class MainGui(QMainWindow):
 
         self._updateExperimentsList()
 
-        self._applyFirstExperiment()
+        if loadExpFromFileSuccess:
+            self._applyFirstExperiment()
+            self.selectedExp = True
 
         # close splash screen
         self.splashScreen.finish(self)
 
-        # if success
-        self.selectedExp = True
 
     def visualizerChanged(self, idx):
         self.animationLayout.removeWidget(self.visualizer.qWidget)
@@ -1044,11 +1043,13 @@ class MainGui(QMainWindow):
                 self._logger.error('Config file {} does not exists!'.format(fileName))
                 success = False
 
-        self._logger.info("Load config file: {0}".format(fileName))
-        with open(fileName.encode(), "r") as f:
-            self._experiments = yaml.load(f, Loader=Loader)
+        if success:
+            self._logger.info("Load config file: {0}".format(fileName))
 
-        self._logger.info("Loading {} experiments".format(len(self._experiments)))
+            with open(fileName.encode(), "r") as f:
+                self._experiments = yaml.load(f, Loader=Loader)
+
+            self._logger.info("Loading {} experiments".format(len(self._experiments)))
 
         return success
 
