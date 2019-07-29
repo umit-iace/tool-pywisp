@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, Q
     QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction, QShortcut
 from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
+from pyqtspinner.spinner import WaitingSpinner
 
 __all__ = ["get_resource"]
 
@@ -780,7 +781,7 @@ class ShortcutCreator(QLineEdit):
                 event.key() == Qt.Key_CapsLock or \
                 event.key() == Qt.Key_Space or \
                 event.key() == Qt.Key_Tab:
-                self.setText('')
+            self.setText('')
         else:
             self.KeySequence = QKeySequence(event.key()).toString()
             self.setText(self.KeySequence)
@@ -836,3 +837,40 @@ class ContextLineEditAction(QWidgetAction):
 
     def onChange(self):
         self.dataEmit.emit(self.data.text())
+
+
+class SpinnerDialog(QDialog):
+    abortProcess = pyqtSignal()
+
+    def __init__(self, **kwargs):
+        parent = kwargs.get('parent', None)
+        super(SpinnerDialog, self).__init__(parent)
+
+        self.verticalLayout = QVBoxLayout()
+        self.spinnerWidget = QWidget()
+
+        self.spinnerLayout = QVBoxLayout()
+        self.spinnerWidget.setLayout(self.spinnerLayout)
+
+        self.spinner = WaitingSpinner(self, roundness=50.0, opacity=0.0, fade=75.0, radius=15.0,
+                                      lines=20, line_length=20.0, line_width=5.0, speed=1.0,
+                                      color=(0, 0, 0))
+        self.spinner.start()
+        self.spinnerLayout.addWidget(self.spinner)
+
+        self.abortButton = QPushButton("Abort")
+        self.abortButton.clicked.connect(lambda: self.abortProcess.emit())
+
+        self.verticalLayout.addWidget(self.spinnerWidget)
+        self.verticalLayout.addWidget(self.abortButton)
+
+        self.setLayout(self.verticalLayout)
+
+        self.setModal(True)
+        resPath = get_resource("icon.svg")
+        self.icon = QIcon(resPath)
+        self.setWindowIcon(self.icon)
+
+    def closeDialog(self):
+        self.spinner.stop()
+        self.close()
