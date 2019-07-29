@@ -855,7 +855,6 @@ class SpinnerDialog(QDialog):
         self.spinner = WaitingSpinner(self, roundness=50.0, opacity=0.0, fade=75.0, radius=15.0,
                                       lines=20, line_length=20.0, line_width=5.0, speed=1.0,
                                       color=(0, 0, 0))
-        self.spinner.start()
         self.spinnerLayout.addWidget(self.spinner)
 
         self.abortButton = QPushButton("Abort")
@@ -870,6 +869,9 @@ class SpinnerDialog(QDialog):
         resPath = get_resource("icon.svg")
         self.icon = QIcon(resPath)
         self.setWindowIcon(self.icon)
+        self.setWindowTitle("Please wait...")
+        self.setMinimumWidth(200)
+        self.spinner.start()
 
     def closeDialog(self):
         self.spinner.stop()
