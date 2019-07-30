@@ -23,7 +23,8 @@ from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
     DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, PinnedDock, \
-    ContextLineEditAction
+    ContextLineEditAction, SpinnerDialog
+from threading import Thread
 
 
 class MainGui(QMainWindow):
@@ -359,6 +360,8 @@ class MainGui(QMainWindow):
         # close splash screen
         self.splashScreen.finish(self)
 
+        self.spinner = SpinnerDialog()
+        self.exp.endSpinner.connect(self.spinner.closeDialog)
 
     def visualizerChanged(self, idx):
         self.animationLayout.removeWidget(self.visualizer.qWidget)
@@ -989,7 +992,10 @@ class MainGui(QMainWindow):
                 connInstance.doRead = True
 
         self.timer.start(int(self.configTimerTime))
-        self.exp.runExperiment()
+
+        t = Thread(target=self.exp.runExperiment)
+        t.start()
+        self.spinner.start()
 
     @pyqtSlot()
     def stopExperiment(self):
@@ -1005,7 +1011,10 @@ class MainGui(QMainWindow):
         self.experimentList.repaint()
 
         self.timer.stop()
-        self.exp.stopExperiment()
+
+        t = Thread(target=self.exp.stopExperiment)
+        t.start()
+        self.spinner.start()
 
         time.sleep(1)
 

@@ -871,7 +871,10 @@ class SpinnerDialog(QDialog):
         self.setWindowIcon(self.icon)
         self.setWindowTitle("Please wait...")
         self.setMinimumWidth(200)
+
+    def start(self):
         self.spinner.start()
+        super(SpinnerDialog, self).exec_()
 
     def closeDialog(self):
         self.spinner.stop()
