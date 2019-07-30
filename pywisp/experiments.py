@@ -7,6 +7,8 @@ from PyQt5.QtCore import Qt, QSize, pyqtSignal, QObject
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QItemDelegate, QTreeView
 
+from .utils import SpinnerDialog
+
 from .registry import *
 
 
@@ -374,6 +376,11 @@ class ExperimentInteractor(QObject):
         Sends all start parameters of all modules that are registered in the target model to start an experiment and
         adds and frame with id 1 and payload 1 as general start command.
         """
+        # das selbe wie hier auch in sendParameterExperiment()
+        dialog = SpinnerDialog()
+        dialog.show()  # wahrscheinlich nötig in extra thread oder mit subprocess/multiprocess todo
+        # dialog.abortProcess.connect(lambda: return)
+
         data = []
         self.runningExperiment = True
         for row in range(self.targetModel.rowCount()):
@@ -417,6 +424,8 @@ class ExperimentInteractor(QObject):
                      'msg': payload})
         for _data in data:
             self.sendData.emit(_data)
+
+        dialog.closeDialog()
 
     def sendParameterExperiment(self):
         """

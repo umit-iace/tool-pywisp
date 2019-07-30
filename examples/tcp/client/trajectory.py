@@ -4,6 +4,7 @@ from collections import OrderedDict
 import struct
 from connection import ConnTestTCP
 from pywisp.experimentModules import ExperimentModule
+import time
 
 
 class RampTrajectory(ExperimentModule):
@@ -28,6 +29,7 @@ class RampTrajectory(ExperimentModule):
         pass
 
     def getParams(self, data):
+        time.sleep(5)
         payload = struct.pack('>dLdL',
                               float(data[0]),
                               int(float(data[1]) * 1000),
