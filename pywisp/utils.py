@@ -861,7 +861,7 @@ class SpinnerDialog(QDialog):
         self.abortButton.clicked.connect(lambda: self.abortProcess.emit())
 
         self.verticalLayout.addWidget(self.spinnerWidget)
-        self.verticalLayout.addWidget(self.abortButton)
+        # self.verticalLayout.addWidget(self.abortButton)
 
         self.setLayout(self.verticalLayout)
 
