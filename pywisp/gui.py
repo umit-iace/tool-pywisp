@@ -1025,7 +1025,9 @@ class MainGui(QMainWindow):
         """
         if self._currentExperimentIndex == self.experimentList.row(
                 self._currentExpListItem) and "~current~" in self._currentLastMeasItem.text():
-            self.exp.sendParameterExperiment()
+            t = Thread(target=self.exp.sendParameterExperiment)
+            t.start()
+            self.spinner.start()
         else:
             self._logger.warning("Selected Experiment '{}' doesn't match current running Experiment '{}'!".format(
                 self._currentExperimentName,
