@@ -31,8 +31,6 @@ class MainGui(QMainWindow):
     """
     Main class for the GUI
     """
-    runExp = pyqtSignal()
-    stopExp = pyqtSignal()
 
     def __init__(self, fileName=None, parent=None):
         super(MainGui, self).__init__(parent)
@@ -345,8 +343,6 @@ class MainGui(QMainWindow):
 
         self.exp = ExperimentInteractor(self.targetView, self)
         self.exp.sendData.connect(self.writeToConnection)
-        self.runExp.connect(self.exp.runExperiment)
-        self.stopExp.connect(self.exp.stopExperiment)
         self.exp.expFinished.connect(self.saveLastMeas)
 
         self.visualizer = None
