@@ -847,11 +847,13 @@ class SpinnerDialog(QDialog):
         super(SpinnerDialog, self).__init__(parent)
 
         self.verticalLayout = QVBoxLayout()
-        self.spinnerWidget = QWidget()
 
+        self.infoLabel = QLabel("Please wait...")
+        self.infoLabel.setAlignment(Qt.AlignCenter)
+
+        self.spinnerWidget = QWidget()
         self.spinnerLayout = QVBoxLayout()
         self.spinnerWidget.setLayout(self.spinnerLayout)
-
         self.spinner = WaitingSpinner(self, roundness=50.0, opacity=0.0, fade=75.0, radius=15.0,
                                       lines=20, line_length=20.0, line_width=5.0, speed=1.0,
                                       color=(0, 0, 0))
@@ -860,6 +862,7 @@ class SpinnerDialog(QDialog):
         self.abortButton = QPushButton("Abort")
         self.abortButton.clicked.connect(lambda: self.abortProcess.emit())
 
+        self.verticalLayout.addWidget(self.infoLabel)
         self.verticalLayout.addWidget(self.spinnerWidget)
         # self.verticalLayout.addWidget(self.abortButton)
 
@@ -869,7 +872,7 @@ class SpinnerDialog(QDialog):
         resPath = get_resource("icon.svg")
         self.icon = QIcon(resPath)
         self.setWindowIcon(self.icon)
-        self.setWindowTitle("Please wait...")
+        self.setWindowFlag(Qt.FramelessWindowHint)
         self.setMinimumWidth(200)
 
     def start(self):

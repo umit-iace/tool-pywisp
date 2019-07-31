@@ -356,7 +356,7 @@ class MainGui(QMainWindow):
         # close splash screen
         self.splashScreen.finish(self)
 
-        self.spinner = SpinnerDialog()
+        self.spinner = SpinnerDialog(parent=self)
         self.exp.endSpinner.connect(self.spinner.closeDialog)
 
     def visualizerChanged(self, idx):
