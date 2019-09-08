@@ -71,7 +71,7 @@ class MplExampleVisualizer(MplVisualizer):
         self.Value4 = makeValue(0.9, mid, 'below', 'V$_{4}$', 'right')
         self.ValueTraj = makeValue(mid, top, None, 'V$_{Traj}$', 'above')
 
-        self.canvas.draw()
+        self.canvas.draw_idle()
 
     def update(self, dataPoints):
         dps = {'TrajOutput': [self.ValueTraj, '1'],
@@ -86,4 +86,4 @@ class MplExampleVisualizer(MplVisualizer):
                 formatStr = "%." + value[1] + "f"
                 value[0].set_text(formatStr % dataPoints[key].values[-1])
 
-        self.canvas.draw()
+        self.canvas.draw_idle()

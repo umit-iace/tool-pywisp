@@ -66,7 +66,7 @@ class MplTwoPendulumVisualizer(MplVisualizer):
         self.axes.add_patch(self.pendulum2)
         self.axes.add_patch(self.pendulum2Shaft)
 
-        self.canvas.draw()
+        self.canvas.draw_idle()
 
     def update(self, dataPoints):
         x = phi1 = phi2 = 0
@@ -101,4 +101,4 @@ class MplTwoPendulumVisualizer(MplVisualizer):
         self.pendulum2.set_transform(t_phi2)
         self.pendulum2Shaft.set_center(x2)
 
-        self.canvas.draw()
+        self.canvas.draw_idle()
