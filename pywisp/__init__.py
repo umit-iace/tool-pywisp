@@ -23,7 +23,7 @@ __email__ = 'jens.wurm@umit.at'
 __version__ = '1.0'
 
 # configure logging
-with open(get_resource("logging.yaml", ""), "r") as f:
+with open(getResource("logging.yaml", ""), "r") as f:
     log_conf = yaml.load(f, Loader=Loader)
 
 logging.config.dictConfig(log_conf)

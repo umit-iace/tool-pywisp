@@ -15,10 +15,10 @@ from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, Q
 from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
 
-__all__ = ["get_resource"]
+__all__ = ["getResource"]
 
 
-def get_resource(resName, resType="icons"):
+def getResource(resName, resType="icons"):
     """
     Build absolute path to specified resource within the package
     :param resName: name of the ressource
@@ -284,7 +284,7 @@ class DataIntDialog(QDialog):
         buttons.rejected.connect(self.reject)
         mainLayout.addWidget(buttons)
 
-        resPath = get_resource("icon.svg")
+        resPath = getResource("icon.svg")
         self.icon = QIcon(resPath)
         self.setWindowIcon(self.icon)
 
@@ -341,7 +341,7 @@ class DataTcpIpDialog(QDialog):
         buttons.rejected.connect(self.reject)
         mainLayout.addWidget(buttons)
 
-        resPath = get_resource("icon.svg")
+        resPath = getResource("icon.svg")
         self.icon = QIcon(resPath)
         self.setWindowIcon(self.icon)
 
@@ -445,7 +445,7 @@ class RemoteWidgetEdit(QDialog):
         mainLayout.addWidget(buttons)
 
         self.setWindowTitle("Add Remote Widget ...")
-        resPath = get_resource("icon.svg")
+        resPath = getResource("icon.svg")
         self.icon = QIcon(resPath)
         self.setWindowIcon(self.icon)
         self.setFixedSize(self.sizeHint())

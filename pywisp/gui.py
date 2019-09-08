@@ -21,7 +21,7 @@ from pyqtgraph.dockarea import *
 from .connection import SerialConnection, TcpConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
-from .utils import get_resource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
+from .utils import getResource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
     DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, PinnedDock, \
     ContextLineEditAction
 
@@ -49,7 +49,7 @@ class MainGui(QMainWindow):
         self.configMovingWindowSize = 10
 
         # Create and display the splash screen
-        self.splashScreenIcon = QPixmap(get_resource("icon.svg"))
+        self.splashScreenIcon = QPixmap(getResource("icon.svg"))
         self.splashScreen = QSplashScreen(self, self.splashScreenIcon, Qt.WindowStaysOnTopHint)
         self.splashScreen.setEnabled(False)
         self.splashScreen.show()
@@ -72,7 +72,7 @@ class MainGui(QMainWindow):
 
         # window properties
         iconSize = QSize(25, 25)
-        resPath = get_resource("icon.svg")
+        resPath = getResource("icon.svg")
         self.icon = QIcon(resPath)
         self.setWindowIcon(self.icon)
         self.resize(1000, 700)
@@ -133,14 +133,14 @@ class MainGui(QMainWindow):
         self.actStartExperiment = QAction(self)
         self.actStartExperiment.setDisabled(True)
         self.actStartExperiment.setText("&Start experiment")
-        self.actStartExperiment.setIcon(QIcon(get_resource("play.png")))
+        self.actStartExperiment.setIcon(QIcon(getResource("play.png")))
         self.actStartExperiment.setShortcut(QKeySequence("F5"))
         self.actStartExperiment.triggered.connect(self.startExperiment)
 
         self.actStopExperiment = QAction(self)
         self.actStopExperiment.setText("&Stop experiment")
         self.actStopExperiment.setDisabled(True)
-        self.actStopExperiment.setIcon(QIcon(get_resource("stop.png")))
+        self.actStopExperiment.setIcon(QIcon(getResource("stop.png")))
         self.actStopExperiment.setShortcut(QKeySequence("F6"))
         self.actStopExperiment.triggered.connect(self.stopExperiment)
 
@@ -300,14 +300,14 @@ class MainGui(QMainWindow):
 
         self.expMenu.addSeparator()
         self.actConnect = QAction('&Connect')
-        self.actConnect.setIcon(QIcon(get_resource("connected.png")))
+        self.actConnect.setIcon(QIcon(getResource("connected.png")))
         self.actConnect.setShortcut(QKeySequence("F9"))
         self.expMenu.addAction(self.actConnect)
         self.actConnect.triggered.connect(self.connect)
 
         self.actDisconnect = QAction('&Disconnect')
         self.actDisconnect.setEnabled(False)
-        self.actDisconnect.setIcon(QIcon(get_resource("disconnected.png")))
+        self.actDisconnect.setIcon(QIcon(getResource("disconnected.png")))
         self.actDisconnect.setShortcut(QKeySequence("F10"))
         self.actSendParameter = QAction('&Send parameter')
         self.actSendParameter.setEnabled(False)
