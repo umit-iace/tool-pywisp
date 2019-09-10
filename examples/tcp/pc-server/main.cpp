@@ -11,26 +11,17 @@
 
 //----------------------------------------------------------------------
 
-const unsigned long lDt = 500;          ///< Sampling step [ms]
+const unsigned long lDt = 50;          ///< Sampling step [ms]
 //----------------------------------------------------------------------
 
 /**
- * @brief Method that calculates a trajectory value and writes the return value in _trajData->dOutput
+ * @brief Method that calculates the trajectory value and writes the return value in _trajData->dOutput
  * @param _benchData pointer to test rig data struct
  * @param _trajData pointer to trajectory struct
  */
 void fTrajectory(struct Transport::benchData *_benchData, struct Transport::trajData *_trajData) {
-    if (_benchData->lTime < _trajData->lStartTime) {
-        _trajData->dOutput = _trajData->dStartValue;
-    } else {
-        if (_benchData->lTime < _trajData->lEndTime) {
-            double dM = (_trajData->dEndValue - _trajData->dStartValue) / (_trajData->lEndTime - _trajData->lStartTime);
-            double dN = _trajData->dEndValue - dM * _trajData->lEndTime;
-            _trajData->dOutput = dM * _benchData->lTime + dN;
-        } else {
-            _trajData->dOutput = _trajData->dEndValue;
-        }
-    }
+    _trajData->dRampOutput = _trajData->rampTraj.compute(_benchData->lTime);
+    _trajData->dSeriesOutput = _trajData->seriesTraj.compute(_benchData->lTime);
 }
 //----------------------------------------------------------------------
 

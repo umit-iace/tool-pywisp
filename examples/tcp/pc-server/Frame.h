@@ -145,6 +145,18 @@ public:
     };
 
     /**
+     * Return an unsigned int value from payload
+     * @param cValue value with unpacked data
+     */
+    void unPack(unsigned int &iValue) {
+        iValue = ((uint32_t) (data.payload[cCursor + 0]) << 8) |
+                 (uint32_t) (data.payload[cCursor + 1]);
+
+        cCursor += 2;
+
+    };
+
+    /**
      * Return a bool value from payload
      * @param bValue value with unpacked data
      */

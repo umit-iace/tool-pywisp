@@ -5,6 +5,7 @@
 #define TRANSPORT_H
 
 #include "Frame.h"
+#include "Trajectory.h"
 #include "Utils.h"
 
 //----------------------------------------------------------------------
@@ -49,12 +50,11 @@ public:
      * @brief struct of trajectory data
      */
     struct trajData {
-        double dStartValue = 0.0;          ///< start value of the trajectory
-        unsigned long lStartTime = 0;      ///< start time of the trajectory
-        double dEndValue = 0.0;            ///< end value of the trajectory
-        unsigned long lEndTime = 0;        ///< end time of the trajectory
-        double dOutput = 85.0;             ///< output value of the trajectory
-    } _trajData;
+        RampTrajectory rampTraj = RampTrajectory();         ///< ramp trajectory object
+        SeriesTrajectory seriesTraj = SeriesTrajectory();   ///< series trajectory object
+        double dRampOutput = 0.0;                           ///< output value of the ramp trajectory
+        double dSeriesOutput = 0.0;                         ///< output value of the series trajectory
+    } _trajData;                                            ///< instance of heater trajectory data
 
 private:
     bool bActivateExperiment = false;
@@ -67,7 +67,11 @@ private:
 
     void unpackTrajRampData(Frame frame);
 
-};
+    void unpackTrajSeriesData(Frame frame);
 
+    bool bInComingSeriesData = false;
+    unsigned int iInComingSeriesCounter = 0;
+
+};
 
 #endif //TRANSPORT_H

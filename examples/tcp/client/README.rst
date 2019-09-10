@@ -45,3 +45,13 @@ For the communication the following frames are used:
       - StartValue, StartTime, EndValue, EndTime
       - zum Server
       - RampTrajectory (Trajectory)
+    * - 14
+      - 1x uint, 1x double*
+      - series length, series
+      - zum Server
+      - SeriesTrajectory (Trajectory)
+    * - 15
+      - unsigned long + 1x double
+      - Zeit + Traj. Ausgang
+      - vom Server
+      - SeriesTrajectory (Trajectory)

@@ -14,10 +14,15 @@ void Transport::sendData() {
     benchFrame.pack(this->_benchData.cValue4);
     this->outputQueue.push(benchFrame);
 
-    Frame trajFrame(11);
-    trajFrame.pack(this->_benchData.lTime);
-    trajFrame.pack(this->_trajData.dOutput);
-    this->outputQueue.push(trajFrame);
+    Frame trajRampFrame(11);
+    trajRampFrame.pack(this->_benchData.lTime);
+    trajRampFrame.pack(this->_trajData.dRampOutput);
+    this->outputQueue.push(trajRampFrame);
+
+    Frame trajSeriesFrame(14);
+    trajSeriesFrame.pack(this->_benchData.lTime);
+    trajSeriesFrame.pack(this->_trajData.dSeriesOutput);
+    this->outputQueue.push(trajSeriesFrame);
 }
 //----------------------------------------------------------------------
 
@@ -33,6 +38,9 @@ void Transport::handleFrames() {
                 break;
             case 13:
                 unpackTrajRampData(frame);
+                break;
+            case 14:
+                unpackTrajSeriesData(frame);
                 break;
             default:;
         }
@@ -61,9 +69,52 @@ void Transport::unpackBenchData(Frame frame) {
 //----------------------------------------------------------------------
 
 void Transport::unpackTrajRampData(Frame frame) {
-    frame.unPack(this->_trajData.dStartValue);
-    frame.unPack(this->_trajData.lStartTime);
-    frame.unPack(this->_trajData.dEndValue);
-    frame.unPack(this->_trajData.lEndTime);
+    double dStartValue = 0;
+    unsigned long lStartTime = 0;
+    double dEndValue = 0;
+    unsigned long lEndTime = 0;
+    frame.unPack(dStartValue);
+    frame.unPack(lStartTime);
+    frame.unPack(dEndValue);
+    frame.unPack(lEndTime);
+    _trajData.rampTraj.setTimesValues(lStartTime, lEndTime, dStartValue, dEndValue);
+
+}
+//----------------------------------------------------------------------
+
+void Transport::unpackTrajSeriesData(Frame frame) {
+    unsigned int iSize = 0;
+    double dValue = 0.0;
+
+    if (!this->bInComingSeriesData) {
+        this->bInComingSeriesData = true;
+        this->iInComingSeriesCounter = 0;
+        frame.unPack(iSize);
+        this->_trajData.seriesTraj.setSize(iSize);
+        for (unsigned int i = 0; i < 20 - 1; i++) {
+            frame.unPack(dValue);
+            if (this->iInComingSeriesCounter < this->_trajData.seriesTraj.getSize() / 2) {
+                this->_trajData.seriesTraj.setTime(dValue, this->iInComingSeriesCounter);
+            } else {
+                this->_trajData.seriesTraj.setValue(dValue, this->iInComingSeriesCounter);
+            }
+            this->iInComingSeriesCounter++;
+        }
+    } else {
+        if (this->iInComingSeriesCounter == this->_trajData.seriesTraj.getSize()) {
+            this->bInComingSeriesData = false;
+        } else {
+            for (unsigned int i = 0; i < 20 - 1; i++) {
+                frame.unPack(dValue);
+                if (this->iInComingSeriesCounter < this->_trajData.seriesTraj.getSize() / 2) {
+                    this->_trajData.seriesTraj.setTime(dValue, this->iInComingSeriesCounter);
+                } else {
+                    this->_trajData.seriesTraj.setValue(dValue, this->iInComingSeriesCounter);
+                }
+                this->iInComingSeriesCounter++;
+            }
+
+        }
+    }
 }
 //----------------------------------------------------------------------

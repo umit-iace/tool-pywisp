@@ -7,6 +7,11 @@
    StartValue: 28.0
    EndTime: 70
    EndValue: 5.0
+  SeriesTrajectory:
+   StartTime: 5
+   StartValue: 28.0
+   EndTime: 70
+   EndValue: 5.0
 
   Test:
     Value1: 11.2

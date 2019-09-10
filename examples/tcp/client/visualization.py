@@ -74,7 +74,7 @@ class MplExampleVisualizer(MplVisualizer):
         self.canvas.draw_idle()
 
     def update(self, dataPoints):
-        dps = {'TrajOutput': [self.ValueTraj, '1'],
+        dps = {'TrajOutputRamp': [self.ValueTraj, '1'],
                'Value1': [self.Value1, '1'],
                'Value2': [self.Value2, '1'],
                'Value3': [self.Value3, '1'],

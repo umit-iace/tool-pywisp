@@ -2,6 +2,7 @@
 import copy as cp
 import logging
 import os
+import struct
 from bisect import bisect_left
 
 import matplotlib.gridspec as gridspec
@@ -28,6 +29,33 @@ def getResource(resName, resType="icons"):
     own_path = os.path.dirname(__file__)
     resource_path = os.path.abspath(os.path.join(own_path, "resources", resType))
     return os.path.join(resource_path, resName)
+
+
+def packArrayToFrame(id, data, frameLen, dataLenFloat, dataLenInt):
+    """
+    TODO struct parameters entsprechend dataLenFloat and dataLenInt angeben
+    :param id:
+    :param data:
+    :param frameLen:
+    :param dataLenFloat:
+    :param dataLenInt:
+    :return:
+    """
+    completeData = len(data) * dataLenFloat + 1 * dataLenInt
+    N = np.ceil(completeData / frameLen)
+    frameLenFloat = frameLen // dataLenFloat
+    dataPoints = []
+    for i in range(int(N)):
+        if i > 0:
+            outList = [float(data[i * frameLenFloat + j - 1]) for j in range(frameLenFloat) if i * frameLenFloat + j - 1 < len(data)]
+            payload = struct.pack('>%sf' % len(outList), *outList)
+        else:
+            outList = [len(data)]
+            outList += [float(data[i * frameLenFloat + j - 1]) for j in range(frameLenFloat - 1)]
+            payload = struct.pack('>H%sd' % (len(outList) - 1), *outList)
+        dataPoints += [{'id': id,
+                        'msg': payload}]
+    return dataPoints
 
 
 class PlainTextLogger(logging.Handler):
@@ -780,7 +808,7 @@ class ShortcutCreator(QLineEdit):
                 event.key() == Qt.Key_CapsLock or \
                 event.key() == Qt.Key_Space or \
                 event.key() == Qt.Key_Tab:
-                self.setText('')
+            self.setText('')
         else:
             self.KeySequence = QKeySequence(event.key()).toString()
             self.setText(self.KeySequence)
