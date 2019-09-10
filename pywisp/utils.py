@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, Q
 from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
 
-__all__ = ["getResource"]
+__all__ = ["getResource", "packArrayToFrame"]
 
 
 def getResource(resName, resType="icons"):
@@ -31,9 +31,30 @@ def getResource(resName, resType="icons"):
     return os.path.join(resource_path, resName)
 
 
+def getFormatedStructString(dataLenFloat, dataLenInt, lenFloat):
+    if dataLenFloat == 4:
+        floatStr = 'f'
+    elif dataLenFloat == 8:
+        floatStr = 'd'
+    else:
+        floatStr = 'f'
+
+    if dataLenInt == 1:
+        intStr = 'B'
+    elif dataLenInt == 2:
+        intStr = 'H'
+    elif dataLenInt == 4:
+        intStr = 'I'
+    else:
+        intStr = ''
+
+    fmtStr = '>{}{}{}'.format(intStr, lenFloat, floatStr)
+
+    return fmtStr
+
+
 def packArrayToFrame(id, data, frameLen, dataLenFloat, dataLenInt):
     """
-    TODO struct parameters entsprechend dataLenFloat and dataLenInt angeben
     :param id:
     :param data:
     :param frameLen:
@@ -48,11 +69,13 @@ def packArrayToFrame(id, data, frameLen, dataLenFloat, dataLenInt):
     for i in range(int(N)):
         if i > 0:
             outList = [float(data[i * frameLenFloat + j - 1]) for j in range(frameLenFloat) if i * frameLenFloat + j - 1 < len(data)]
-            payload = struct.pack('>%sf' % len(outList), *outList)
+            fmtStr = getFormatedStructString(dataLenFloat, 0, len(outList))
+            payload = struct.pack(fmtStr, *outList)
         else:
             outList = [len(data)]
             outList += [float(data[i * frameLenFloat + j - 1]) for j in range(frameLenFloat - 1)]
-            payload = struct.pack('>H%sd' % (len(outList) - 1), *outList)
+            fmtStr = getFormatedStructString(dataLenFloat, dataLenInt, len(outList) - 1)
+            payload = struct.pack(fmtStr, *outList)
         dataPoints += [{'id': id,
                         'msg': payload}]
     return dataPoints
