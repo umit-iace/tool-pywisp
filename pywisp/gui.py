@@ -235,7 +235,7 @@ class MainGui(QMainWindow):
         # init logger for logging box
         self.textLogger = PlainTextLogger(self._settings,
                                           logging.INFO)
-        self.textLogger.set_target_cb(self.logBox)
+        self.textLogger.setTargetCb(self.logBox)
         logging.getLogger().addHandler(self.textLogger)
         self._logger.info('Laboratory visualization')
 

@@ -7,6 +7,7 @@
    StartValue: 28.0
    EndTime: 70
    EndValue: 5.0
+
   SeriesTrajectory:
    StartTime: 5
    StartValue: 28.0
@@ -47,7 +48,7 @@
     MplExampleVisualizer:
 
   Config:
-    TimerTime: 100
+    TimerTime: 10
     InterpolationPoints: 0
-    MovingWindowSize: 60
-    MovingWindowEnable: False
+    MovingWindowSize: 5
+    MovingWindowEnable: True

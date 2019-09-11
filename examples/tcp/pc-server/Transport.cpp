@@ -19,7 +19,7 @@ void Transport::sendData() {
     trajRampFrame.pack(this->_trajData.dRampOutput);
     this->outputQueue.push(trajRampFrame);
 
-    Frame trajSeriesFrame(14);
+    Frame trajSeriesFrame(15);
     trajSeriesFrame.pack(this->_benchData.lTime);
     trajSeriesFrame.pack(this->_trajData.dSeriesOutput);
     this->outputQueue.push(trajSeriesFrame);
@@ -91,29 +91,31 @@ void Transport::unpackTrajSeriesData(Frame frame) {
         this->iInComingSeriesCounter = 0;
         frame.unPack(iSize);
         this->_trajData.seriesTraj.setSize(iSize);
-        for (unsigned int i = 0; i < 20 - 1; i++) {
+        // TODO 10 ersetzen
+        for (unsigned int i = 0; i < 10 - 1; i++) {
             frame.unPack(dValue);
-            if (this->iInComingSeriesCounter < this->_trajData.seriesTraj.getSize() / 2) {
+            if (this->iInComingSeriesCounter < this->_trajData.seriesTraj.getSize()) {
                 this->_trajData.seriesTraj.setTime(dValue, this->iInComingSeriesCounter);
             } else {
-                this->_trajData.seriesTraj.setValue(dValue, this->iInComingSeriesCounter);
+                this->_trajData.seriesTraj.setValue(dValue, this->iInComingSeriesCounter -
+                                                            this->_trajData.seriesTraj.getSize());
             }
             this->iInComingSeriesCounter++;
         }
     } else {
-        if (this->iInComingSeriesCounter == this->_trajData.seriesTraj.getSize()) {
-            this->bInComingSeriesData = false;
-        } else {
-            for (unsigned int i = 0; i < 20 - 1; i++) {
-                frame.unPack(dValue);
-                if (this->iInComingSeriesCounter < this->_trajData.seriesTraj.getSize() / 2) {
-                    this->_trajData.seriesTraj.setTime(dValue, this->iInComingSeriesCounter);
-                } else {
-                    this->_trajData.seriesTraj.setValue(dValue, this->iInComingSeriesCounter);
-                }
-                this->iInComingSeriesCounter++;
+        for (unsigned int i = 0; i < 10; i++) {
+            frame.unPack(dValue);
+            if (this->iInComingSeriesCounter < this->_trajData.seriesTraj.getSize()) {
+                this->_trajData.seriesTraj.setTime(dValue, this->iInComingSeriesCounter);
+            } else {
+                this->_trajData.seriesTraj.setValue(dValue, this->iInComingSeriesCounter -
+                                                            this->_trajData.seriesTraj.getSize());
             }
-
+            this->iInComingSeriesCounter++;
+            if (this->iInComingSeriesCounter >= this->_trajData.seriesTraj.getCompleteSize()) {
+                this->bInComingSeriesData = false;
+                break;
+            }
         }
     }
 }

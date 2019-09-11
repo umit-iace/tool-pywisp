@@ -73,7 +73,7 @@ def packArrayToFrame(id, data, frameLen, dataLenFloat, dataLenInt):
             payload = struct.pack(fmtStr, *outList)
         else:
             outList = [len(data)]
-            outList += [float(data[i * frameLenFloat + j - 1]) for j in range(frameLenFloat - 1)]
+            outList += [float(data[i * frameLenFloat + j]) for j in range(frameLenFloat - 1)]
             fmtStr = getFormatedStructString(dataLenFloat, dataLenInt, len(outList) - 1)
             payload = struct.pack(fmtStr, *outList)
         dataPoints += [{'id': id,
@@ -98,7 +98,7 @@ class PlainTextLogger(logging.Handler):
 
         self.cb = None
 
-    def set_target_cb(self, cb):
+    def setTargetCb(self, cb):
         self.cb = cb
 
     def emit(self, record):

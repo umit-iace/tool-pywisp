@@ -47,7 +47,7 @@ class RampTrajectory(ExperimentModule):
         if fid == self.ids[0]:
             data = struct.unpack('>Ld', frame.payload[:12])
             dataPoints['Time'] = data[0]
-            dataPoints['DataPoints'] = {'TrajOutput': data[1]}
+            dataPoints['DataPoints'] = {'TrajOutputRamp': data[1]}
         else:
             dataPoints = None
 
@@ -82,27 +82,31 @@ class SeriesTrajectory(ExperimentModule):
     def getParams(self, data):
         if self.oldData != data:
             self._logger.info('Calc trajectory...')
-            t = np.linspace(data[1], data[3], 101)
+            startTime = data[1] * 1000
+            endTime = data[3] * 1000
+            startValue = data[0]
+            endValue = data[2]
+            t = np.linspace(startTime, endTime, 101)
             trajData = []
             trajData.extend(t)
             dataPoint = None
             for _t in t:
-                if _t <= data[1]:
+                if _t <= startTime:
                     trajData.append(data[0])
-                elif _t >= data[3]:
+                elif _t >= endTime:
                     trajData.append(data[2])
                 else:
-                    T = data[3] - data[1]
-                    m = (data[2] - data[0]) / T
-                    n = (data[0] * data[3] - data[2] * data[0]) / T
+                    T = endTime - startTime
+                    m = (endValue - startValue) / T
+                    n = (startValue * endTime - endValue * startTime) / T
                     trajData.append(m * _t + n)
 
             self._logger.info('Send trajectory...')
 
             if dataPoint is None:
-                dataPoint = packArrayToFrame(self.ids[1], np.array(trajData), self.frameLength, 4, 2)
+                dataPoint = packArrayToFrame(self.ids[1], np.array(trajData), self.frameLength, 8, 2)
             else:
-                dataPoint += packArrayToFrame(self.ids[1], np.array(trajData), self.frameLength, 4, 2)
+                dataPoint += packArrayToFrame(self.ids[1], np.array(trajData), self.frameLength, 8, 2)
 
             return dataPoint
 
@@ -112,7 +116,7 @@ class SeriesTrajectory(ExperimentModule):
         if fid == self.ids[0]:
             data = struct.unpack('>Ld', frame.payload[:12])
             dataPoints['Time'] = data[0]
-            dataPoints['DataPoints'] = {'TrajOutput': data[1]}
+            dataPoints['DataPoints'] = {'TrajOutputSeries': data[1]}
         else:
             dataPoints = None
 

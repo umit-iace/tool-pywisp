@@ -100,7 +100,7 @@ public:
     };
 
     void setTime(double dTime, unsigned int iPosition) {
-        this->lTimes[iPosition] = (unsigned long) (dTime * 1000);
+        this->lTimes[iPosition] = (unsigned long) dTime;
     }
 
     void setValue(const double dValue, unsigned int iPosition) {
@@ -119,6 +119,10 @@ public:
 
     unsigned int getSize() {
         return this->iSeriesSize;
+    }
+
+    unsigned int getCompleteSize() {
+        return this->iSeriesSize * 2;
     }
 };
 
