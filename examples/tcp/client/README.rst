@@ -46,8 +46,8 @@ For the communication the following frames are used:
       - zum Server
       - RampTrajectory (Trajectory)
     * - 14
-      - 1x uint, 1x double*
-      - series length, series
+      - 1x uint, 2x double*
+      - series length, time and data series
       - zum Server
       - SeriesTrajectory (Trajectory)
     * - 15

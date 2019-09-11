@@ -32,6 +32,15 @@ def getResource(resName, resType="icons"):
 
 
 def getFormatedStructString(dataLenFloat, dataLenInt, lenFloat):
+    """
+    Returns a format string for the struct package by given float and integer length and
+    count of floats.
+
+    :param dataLenFloat: length of float datatype
+    :param dataLenInt: length of integer datatype
+    :param lenFloat: length of float data
+    :return:
+    """
     if dataLenFloat == 4:
         floatStr = 'f'
     elif dataLenFloat == 8:
@@ -55,12 +64,14 @@ def getFormatedStructString(dataLenFloat, dataLenInt, lenFloat):
 
 def packArrayToFrame(id, data, frameLen, dataLenFloat, dataLenInt):
     """
-    :param id:
-    :param data:
-    :param frameLen:
-    :param dataLenFloat:
-    :param dataLenInt:
-    :return:
+    Packs data to an array of dataPoints with given identifier.
+
+    :param id: identifier of frame
+    :param data: data of frame
+    :param frameLen: maximal data size of frame
+    :param dataLenFloat: length of float datatype
+    :param dataLenInt: length of integer datatype
+    :return: array of dataPoints (id + payload)
     """
     completeData = len(data) * dataLenFloat + 1 * dataLenInt
     N = np.ceil(completeData / frameLen)
@@ -83,7 +94,7 @@ def packArrayToFrame(id, data, frameLen, dataLenFloat, dataLenInt):
 
 class PlainTextLogger(logging.Handler):
     """
-    Logging handler that formats log data for line display
+    Logging handler, that formats log data for line display.
     """
 
     def __init__(self, settings, level=logging.NOTSET):

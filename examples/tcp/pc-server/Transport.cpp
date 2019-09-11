@@ -91,8 +91,8 @@ void Transport::unpackTrajSeriesData(Frame frame) {
         this->iInComingSeriesCounter = 0;
         frame.unPack(iSize);
         this->_trajData.seriesTraj.setSize(iSize);
-        // TODO 10 ersetzen
-        for (unsigned int i = 0; i < 10 - 1; i++) {
+
+        for (unsigned int i = 0; i < FRAME_LEN_DOUBLE - 1; i++) {
             frame.unPack(dValue);
             if (this->iInComingSeriesCounter < this->_trajData.seriesTraj.getSize()) {
                 this->_trajData.seriesTraj.setTime(dValue, this->iInComingSeriesCounter);
@@ -103,7 +103,7 @@ void Transport::unpackTrajSeriesData(Frame frame) {
             this->iInComingSeriesCounter++;
         }
     } else {
-        for (unsigned int i = 0; i < 10; i++) {
+        for (unsigned int i = 0; i < FRAME_LEN_DOUBLE; i++) {
             frame.unPack(dValue);
             if (this->iInComingSeriesCounter < this->_trajData.seriesTraj.getSize()) {
                 this->_trajData.seriesTraj.setTime(dValue, this->iInComingSeriesCounter);

@@ -14,8 +14,9 @@
 
 //----------------------------------------------------------------------
 
-#define MAX_PAYLOAD (80)            ///< maximal data size of frame
-#define PORT (50007)                ///< tcp port of server
+#define MAX_PAYLOAD (80)                                    ///< maximal data size of frame
+#define FRAME_LEN_DOUBLE (MAX_PAYLOAD / sizeof(double))     ///< maximale count of data in frame of type double
+#define PORT (50007)                                        ///< tcp port of server
 //----------------------------------------------------------------------
 
 /**
