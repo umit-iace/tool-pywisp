@@ -15,11 +15,16 @@ class Visualizer(metaclass=ABCMeta):
     """
     Base Class for animation
     """
+
     def __init__(self):
         pass
 
     @abstractmethod
-    def update(self, x):
+    def update(self, dataPoints):
+        """
+        Abstract method to update the canvas with new measurement values.
+        :param dataPoints: All the measured data points
+        """
         pass
 
 

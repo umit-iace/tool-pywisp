@@ -70,6 +70,8 @@ Visualizer
 
 It is possible to have different visualizers registered. They can be selected in GUI at runtime. Currently only
 visualizers based on matplotlib are available. For the implementation the base class
-:class:`~pywisp.visualization.MplVisualizer` must be derived and the method `update` should be implemented.
+:class:`~pywisp.visualization.MplVisualizer` must be derived and the method
+:func:`~pywisp.visualization.MplVisualizer.update` should be implemented. It is recommented to use
+:py:`self.canvas.draw_idle()` to update the canvas.
 
 For detailed information see the example section.
