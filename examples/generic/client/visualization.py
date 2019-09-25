@@ -102,3 +102,4 @@ class MplTwoPendulumVisualizer(MplVisualizer):
         self.pendulum2Shaft.set_center(x2)
 
         self.canvas.draw_idle()
+        self.saveIfChecked()

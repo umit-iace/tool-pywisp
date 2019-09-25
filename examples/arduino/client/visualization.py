@@ -87,3 +87,4 @@ class MplExampleVisualizer(MplVisualizer):
                 value[0].set_text(formatStr % dataPoints[key].values[-1])
 
         self.canvas.draw_idle()
+        self.saveIfChecked()

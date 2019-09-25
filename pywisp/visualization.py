@@ -61,7 +61,7 @@ class MplVisualizer(Visualizer):
         if self.qActSaveAnimation.isChecked():
             self.timeStamp = time.ctime().replace(' ', '_') + '_'
             self.timeStamps.append(self.timeStamp)
-            self.picturePath = self.createDir('animation_pictures')
+            self.picturePath = self.createDir('animationPictures')
 
     def execCanvasMenu(self, pos):
         self.canvasMenu.exec_(self.canvas.mapToGlobal(pos))
