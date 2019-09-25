@@ -35,8 +35,8 @@ Connection
 ----------
 
 It is necessary to implement the used connection types, where the class name specify the name used in the GUI and the
-default settings. The settings can be changed in the GUI directly. All implementations mus derived from `py:MplVisualizer`.
-Currently two connection types are available and can implemented exemplary:
+default settings. The settings can be changed in the GUI directly. All implementations mus derived from
+:class:`~pywisp.visualization.MplVisualizer`. Currently two connection types are available and can implemented exemplary:
 
 - Serial connection:
 
@@ -69,7 +69,7 @@ Visualizer
 ----------
 
 It is possible to have different visualizers registered. They can be selected in GUI at runtime. Currently only
-visualizers based on matplotlib are available. For the implementation the base class `py:MplVisualizer` must be
-derived and the method `update` should be implemented.
+visualizers based on matplotlib are available. For the implementation the base class
+:class:`~pywisp.visualization.MplVisualizer` must be derived and the method `update` should be implemented.
 
 For detailed information see the example section.

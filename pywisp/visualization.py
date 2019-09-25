@@ -56,6 +56,10 @@ class MplVisualizer(Visualizer):
         self.timeStamps = list()
 
     def saveAnimation(self):
+        """
+        Resets all animation counters and creates the animation directory and sets first time stamp, if animation is
+        started.
+        """
         self.frameCounter = 0
         self.fileNameCounter = 0
         if self.qActSaveAnimation.isChecked():
@@ -64,11 +68,15 @@ class MplVisualizer(Visualizer):
             self.picturePath = self.createDir('animationPictures')
 
     def execCanvasMenu(self, pos):
+        """
+        Shows the context menu at position
+        :param pos: local position of right click
+        """
         self.canvasMenu.exec_(self.canvas.mapToGlobal(pos))
 
     def saveIfChecked(self):
         """
-        Must be called after self.draw_idle() in implementation
+        Must be called after self.draw_idle() in implementation.
         :return:
         """
         if self.qActSaveAnimation.isChecked():
@@ -78,6 +86,11 @@ class MplVisualizer(Visualizer):
             self.frameCounter += 1
 
     def createDir(self, dirName):
+        """
+        Checks if directory exists and create the directory if not.
+        :param dirName: directory name
+        :return: path of directory
+        """
         path = os.getcwd() + os.path.sep + dirName
         if not os.path.exists(path) or not os.path.isdir(path):
             os.mkdir(path)

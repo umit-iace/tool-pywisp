@@ -19,3 +19,4 @@ access any PyWisp module, or use this contents:
     min
     registry
     utils
+    visualization
