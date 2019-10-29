@@ -73,7 +73,14 @@ class SerialConnection(Connection, QtCore.QThread):
         Endless loop of the thread
         """
         while True and self.isConnected:
-            frames = self.min.poll()
+            try:
+                frames = self.min.poll()
+            except:
+                self._logger.error('run: No Connection')
+                self.isConnected = False
+                self.min = None
+                return
+
             if frames and self.doRead:
                 self.readData(frames)
             else:
@@ -107,14 +114,15 @@ class SerialConnection(Connection, QtCore.QThread):
         time.sleep(1)
         self.isConnected = False
         self._reset()
-        self.min.close()
-        del self.min
+        if self.min:
+            self.min.close()
+            del self.min
 
     def clear(self):
         self._reset(False)
 
     def _reset(self, reset=True):
-        if reset:
+        if reset and self.min is not None:
             if self.withTransport:
                 self.min.transport_reset()
             else:
@@ -134,10 +142,11 @@ class SerialConnection(Connection, QtCore.QThread):
         Writes the given data frame to the min queue
         :param data: dictionary that includes the min id and payload
         """
-        if self.withTransport:
-            self.min.queue_frame(min_id=data['id'], payload=data['msg'])
-        else:
-            self.min.send_frame(min_id=data['id'], payload=data['msg'])
+        if self.min:
+            if self.withTransport:
+                self.min.queue_frame(min_id=data['id'], payload=data['msg'])
+            else:
+                self.min.send_frame(min_id=data['id'], payload=data['msg'])
 
 
 class TcpConnection(Connection, QtCore.QThread):
