@@ -100,7 +100,7 @@ class SerialConnection(Connection, QtCore.QThread):
             return False
         else:
             try:
-                self.min = MINSerial(self.port, self.baud, self.withTransport)
+                self.min = MINSerial(self.port, self.baud, withTransport=self.withTransport)
             except Exception as e:
                 self._logger.error('{0}'.format(e))
                 return False
