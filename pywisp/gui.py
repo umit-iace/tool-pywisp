@@ -1577,7 +1577,7 @@ class MainGui(QMainWindow):
         :param value: the actual value of the widget
         """
         self.remoteSliderUpdate(widget, value)
-        self.remoteSendParamter(widget.module, widget.parameter, widget.valueOn)
+        self.remoteSendParamter(widget.module, widget.parameter, widget.value())
 
     def remoteSliderUpdate(self, widget, value, sliderMoved=True):
         """
@@ -1586,16 +1586,17 @@ class MainGui(QMainWindow):
         :param value: the actual value of the widget
         :param sliderMoved: False if gets called from another widget
         """
+        curValue = widget.value()
         if not sliderMoved:
             for wid in self.remoteWidgetLayout.list:
                 if isinstance(wid, MovableSlider):
                     if wid.module == widget.module and wid.parameter == widget.parameter:
-                        wid.setValue(int(float(value)))
+                        wid.setValue(float(value))
                         wid.valueOn = value
-                        wid.label.setText(wid.widgetName + ': ' + str(value))
+                        wid.label.setText(wid.widgetName + ': ' + "{:.3f}".format(curValue))
         else:
             widget.valueOn = value
-            widget.label.setText(widget.widgetName + ': ' + str(widget.valueOn))
+            widget.label.setText(widget.widgetName + ': ' + "{:.3f}".format(curValue))
 
     def remoteSendParamter(self, module, parameter, value):
         exp = deepcopy(self.exp.getExperiment())

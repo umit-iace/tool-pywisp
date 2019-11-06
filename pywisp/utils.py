@@ -747,10 +747,72 @@ class MovablePushButton(QPushButton, MovableWidget):
         self.setText(self.widgetName + '\n' + self.valueOn)
 
 
-class MovableSlider(QSlider, MovableWidget):
+class DoubleSlider(QSlider):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        super().setMinimum(0)
+        super().setMaximum(1)
+
+        self._minValue = 0.0
+        self._maxValue = 1.0
+
+        self._stepSize = 1
+        self._invStepSize = 1
+
+    @property
+    def _valueRange(self):
+        vRange = self._maxValue - self._minValue
+        self._invStepSize = vRange / self._stepSize
+
+        return vRange
+
+    def value(self):
+        curValue = float(super().value())
+        return curValue / self._invStepSize * self._valueRange + self._minValue
+
+    def setValue(self, value):
+        super().setValue(int((value - self._minValue) / self._valueRange * self._invStepSize))
+
+    def setMinimum(self, value):
+        if value > self._maxValue:
+            raise ValueError("Minimum limit cannot be higher than maximum")
+
+        self._minValue = value
+        super().setMinimum(int((self._minValue - self._minValue) / self._valueRange * self._invStepSize))
+        super().setMaximum(int((self._maxValue - self._minValue) / self._valueRange * self._invStepSize))
+
+    def setMaximum(self, value):
+        if value < self._minValue:
+            raise ValueError("Minimum limit cannot be higher than maximum")
+
+        self._maxValue = value
+        super().setMinimum(int((self._minValue - self._minValue) / self._valueRange * self._invStepSize))
+        super().setMaximum(int((self._maxValue - self._minValue) / self._valueRange * self._invStepSize))
+
+    def setTickInterval(self, p_int):
+        self._stepSize = p_int
+
+        vRange = self._maxValue - self._minValue
+        self._invStepSize = vRange / self._stepSize
+
+        super().setMinimum(int((self._minValue - self._minValue) / self._valueRange * self._invStepSize))
+        super().setMaximum(int((self._maxValue - self._minValue) / self._valueRange * self._invStepSize))
+
+        super().setTickInterval(1)
+
+    def minimum(self):
+        return self._minValue
+
+    def maximum(self):
+        return self._maxValue
+
+
+class MovableSlider(DoubleSlider, MovableWidget):
     def __init__(self, name, minSlider, maxSlider, stepSlider, label, shortcutPlusKey, shortcutMinusKey, startValue
                  , **kwargs):
-        QSlider.__init__(self, Qt.Horizontal, name=name)
+        DoubleSlider.__init__(self, Qt.Horizontal, name=name)
         MovableWidget.__init__(self, name, label, **kwargs)
         self.minSlider = minSlider
         self.maxSlider = maxSlider
@@ -759,10 +821,10 @@ class MovableSlider(QSlider, MovableWidget):
 
         self.shortcutPlus = QShortcut(self)
         self.shortcutPlus.setKey(shortcutPlusKey)
-        self.shortcutPlus.activated.connect(lambda: self.setValue(self.value() + int(self.stepSlider)))
+        self.shortcutPlus.activated.connect(lambda: self.setValue(self.value() + float(self.stepSlider)))
         self.shortcutMinus = QShortcut(self)
         self.shortcutMinus.setKey(shortcutMinusKey)
-        self.shortcutMinus.activated.connect(lambda: self.setValue(self.value() - int(self.stepSlider)))
+        self.shortcutMinus.activated.connect(lambda: self.setValue(self.value() - float(self.stepSlider)))
 
         self.startValue = startValue
         self.setTracking(False)
@@ -785,13 +847,13 @@ class MovableSlider(QSlider, MovableWidget):
         return data
 
     def updateData(self):
-        self.setValue(int(self.startValue))
+        self.setValue(float(self.startValue))
         self.label.setText(self.widgetName + ': ' + str(self.startValue))
-        self.setMinimum(int(self.minSlider))
-        self.setMaximum(int(self.maxSlider))
-        self.setTickInterval(int(self.stepSlider))
-        self.setPageStep(int(self.stepSlider))
-        self.setSingleStep(int(self.stepSlider))
+        self.setMinimum(float(self.minSlider))
+        self.setMaximum(float(self.maxSlider))
+        self.setTickInterval(float(self.stepSlider))
+        self.setPageStep(float(self.stepSlider))
+        self.setSingleStep(float(self.stepSlider))
 
 
 class MovableSwitch(QPushButton, MovableWidget):
