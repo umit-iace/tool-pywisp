@@ -79,7 +79,8 @@ def packArrayToFrame(id, data, frameLen, dataLenFloat, dataLenInt):
     dataPoints = []
     for i in range(int(N)):
         if i > 0:
-            outList = [float(data[i * frameLenFloat + j - 1]) for j in range(frameLenFloat) if i * frameLenFloat + j - 1 < len(data)]
+            outList = [float(data[i * frameLenFloat + j - 1]) for j in range(frameLenFloat) if
+                       i * frameLenFloat + j - 1 < len(data)]
             fmtStr = getFormatedStructString(dataLenFloat, 0, len(outList))
             payload = struct.pack(fmtStr, *outList)
         else:
@@ -762,16 +763,9 @@ class DoubleSlider(QSlider):
         self._invStepSize = 1
 
     @property
-    def _valueRange(self):
-        vRange = self._maxValue - self._minValue
-        self._invStepSize = vRange / self._stepSize
-
-        return vRange
-
-    @property
     def value(self):
         curValue = float(super().value())
-        return curValue * self._stepSizet + self._minValue
+        return curValue * self._stepSize + self._minValue
 
     def setValue(self, value):
         super().setValue(int((value - self._minValue) / self._stepSize))
@@ -795,11 +789,8 @@ class DoubleSlider(QSlider):
     def setTickInterval(self, p_int):
         self._stepSize = p_int
 
-        vRange = self._maxValue - self._minValue
-        self._invStepSize = vRange / self._stepSize
-
         super().setMinimum(0)
-        super().setMaximum(int(self._invStepSize))
+        super().setMaximum(int((self._maxValue - self._minValue) / self._stepSize))
 
         super().setTickInterval(1)
 
@@ -813,8 +804,8 @@ class DoubleSlider(QSlider):
 class MovableSlider(DoubleSlider, MovableWidget):
     def __init__(self, name, minSlider, maxSlider, stepSlider, label, shortcutPlusKey, shortcutMinusKey, startValue
                  , **kwargs):
-        DoubleSlider.__init__(self, Qt.Horizontal, name=name)
         MovableWidget.__init__(self, name, label, **kwargs)
+        DoubleSlider.__init__(self, Qt.Horizontal, name=name)
         self.minSlider = minSlider
         self.maxSlider = maxSlider
         self.stepSlider = stepSlider
