@@ -661,11 +661,9 @@ class FreeLayout(QLayout):
 
 
 class MovableWidget(object):
-    def __init__(self, name, label=None, **kwargs):
+    def __init__(self, name, label=None):
         self.widgetName = name
         self.label = label
-        self.module = cp.copy(kwargs.get('module', None))
-        self.parameter = cp.copy(kwargs.get('parameter', None))
         self._mousePressPos = None
         self._mouseMovePos = None
 
@@ -721,9 +719,12 @@ class MovableWidget(object):
 
 class MovablePushButton(QPushButton, MovableWidget):
     def __init__(self, name, valueOn, shortcutKey, **kwargs):
-        MovableWidget.__init__(self, name, **kwargs)
+        MovableWidget.__init__(self, name)
         QPushButton.__init__(self, name=name)
         self.valueOn = valueOn
+
+        self.parameter = kwargs.get('parameter', None)
+        self.module = kwargs.get('module', None)
 
         self.shortcut = QShortcut(self)
         self.shortcut.setKey(shortcutKey)
@@ -807,8 +808,12 @@ class DoubleSlider(QSlider):
 class MovableSlider(DoubleSlider, MovableWidget):
     def __init__(self, name, minSlider, maxSlider, stepSlider, label, shortcutPlusKey, shortcutMinusKey, startValue
                  , **kwargs):
-        MovableWidget.__init__(self, name, label, **kwargs)
+        MovableWidget.__init__(self, name, label)
         DoubleSlider.__init__(self, Qt.Horizontal, name=name)
+
+        self.parameter = kwargs.get('parameter', None)
+        self.module = kwargs.get('module', None)
+
         self.minSlider = minSlider
         self.maxSlider = maxSlider
         self.stepSlider = stepSlider
@@ -853,8 +858,12 @@ class MovableSlider(DoubleSlider, MovableWidget):
 
 class MovableSwitch(QPushButton, MovableWidget):
     def __init__(self, name, valueOn, valueOff, shortcutKey, **kwargs):
-        MovableWidget.__init__(self, name, **kwargs)
+        MovableWidget.__init__(self, name)
         QPushButton.__init__(self, name=name)
+
+        self.parameter = kwargs.get('parameter', None)
+        self.module = kwargs.get('module', None)
+
         self.valueOn = valueOn
         self.valueOff = valueOff
 
