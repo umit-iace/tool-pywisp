@@ -847,13 +847,13 @@ class MovableSlider(DoubleSlider, MovableWidget):
         return data
 
     def updateData(self):
-        self.setValue(float(self.startValue))
-        self.label.setText(self.widgetName + ': ' + str(self.startValue))
         self.setMinimum(float(self.minSlider))
         self.setMaximum(float(self.maxSlider))
         self.setTickInterval(float(self.stepSlider))
         self.setPageStep(1)
         self.setSingleStep(1)
+        self.setValue(float(self.startValue))
+        self.label.setText(self.widgetName + ': ' + str(self.startValue))
 
 
 class MovableSwitch(QPushButton, MovableWidget):
