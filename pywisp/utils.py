@@ -768,6 +768,7 @@ class DoubleSlider(QSlider):
 
         return vRange
 
+    @property
     def value(self):
         curValue = float(super().value())
         return curValue / self._invStepSize * self._valueRange + self._minValue
@@ -780,7 +781,7 @@ class DoubleSlider(QSlider):
             raise ValueError("Minimum limit cannot be higher than maximum")
 
         self._minValue = value
-        super().setMinimum(int((self._minValue - self._minValue) / self._valueRange * self._invStepSize))
+        super().setMinimum(0)
         super().setMaximum(int((self._maxValue - self._minValue) / self._valueRange * self._invStepSize))
 
     def setMaximum(self, value):
@@ -788,7 +789,7 @@ class DoubleSlider(QSlider):
             raise ValueError("Minimum limit cannot be higher than maximum")
 
         self._maxValue = value
-        super().setMinimum(int((self._minValue - self._minValue) / self._valueRange * self._invStepSize))
+        super().setMinimum(0)
         super().setMaximum(int((self._maxValue - self._minValue) / self._valueRange * self._invStepSize))
 
     def setTickInterval(self, p_int):
@@ -797,7 +798,7 @@ class DoubleSlider(QSlider):
         vRange = self._maxValue - self._minValue
         self._invStepSize = vRange / self._stepSize
 
-        super().setMinimum(int((self._minValue - self._minValue) / self._valueRange * self._invStepSize))
+        super().setMinimum(0)
         super().setMaximum(int((self._maxValue - self._minValue) / self._valueRange * self._invStepSize))
 
         super().setTickInterval(1)
@@ -821,10 +822,10 @@ class MovableSlider(DoubleSlider, MovableWidget):
 
         self.shortcutPlus = QShortcut(self)
         self.shortcutPlus.setKey(shortcutPlusKey)
-        self.shortcutPlus.activated.connect(lambda: self.setValue(self.value() + float(self.stepSlider)))
+        self.shortcutPlus.activated.connect(lambda: self.setValue(self.value + float(self.stepSlider)))
         self.shortcutMinus = QShortcut(self)
         self.shortcutMinus.setKey(shortcutMinusKey)
-        self.shortcutMinus.activated.connect(lambda: self.setValue(self.value() - float(self.stepSlider)))
+        self.shortcutMinus.activated.connect(lambda: self.setValue(self.value - float(self.stepSlider)))
 
         self.startValue = startValue
         self.setTracking(False)
