@@ -765,7 +765,10 @@ class DoubleSlider(QSlider):
     @property
     def value(self):
         curValue = float(super().value())
-        return curValue * self._stepSize + self._minValue
+        return self.calcValue(curValue)
+
+    def calcValue(self, value):
+        return value * self._stepSize + self._minValue
 
     def setValue(self, value):
         super().setValue(int((value - self._minValue) / self._stepSize))
@@ -844,8 +847,8 @@ class MovableSlider(DoubleSlider, MovableWidget):
         self.setMinimum(float(self.minSlider))
         self.setMaximum(float(self.maxSlider))
         self.setTickInterval(float(self.stepSlider))
-        self.setPageStep(float(self.stepSlider))
-        self.setSingleStep(float(self.stepSlider))
+        self.setPageStep(1)
+        self.setSingleStep(1)
 
 
 class MovableSwitch(QPushButton, MovableWidget):
