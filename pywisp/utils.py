@@ -771,10 +771,10 @@ class DoubleSlider(QSlider):
     @property
     def value(self):
         curValue = float(super().value())
-        return curValue / self._invStepSize * self._valueRange + self._minValue
+        return curValue * self._stepSizet + self._minValue
 
     def setValue(self, value):
-        super().setValue(int((value - self._minValue) / self._valueRange * self._invStepSize))
+        super().setValue(int((value - self._minValue) / self._stepSize))
 
     def setMinimum(self, value):
         if value > self._maxValue:
@@ -782,7 +782,7 @@ class DoubleSlider(QSlider):
 
         self._minValue = value
         super().setMinimum(0)
-        super().setMaximum(int((self._maxValue - self._minValue) / self._valueRange * self._invStepSize))
+        super().setMaximum(int((self._maxValue - self._minValue) / self._stepSize))
 
     def setMaximum(self, value):
         if value < self._minValue:
@@ -790,7 +790,7 @@ class DoubleSlider(QSlider):
 
         self._maxValue = value
         super().setMinimum(0)
-        super().setMaximum(int((self._maxValue - self._minValue) / self._valueRange * self._invStepSize))
+        super().setMaximum(int((self._maxValue - self._minValue) / self._stepSize))
 
     def setTickInterval(self, p_int):
         self._stepSize = p_int
@@ -799,7 +799,7 @@ class DoubleSlider(QSlider):
         self._invStepSize = vRange / self._stepSize
 
         super().setMinimum(0)
-        super().setMaximum(int((self._maxValue - self._minValue) / self._valueRange * self._invStepSize))
+        super().setMaximum(int(self._invStepSize))
 
         super().setTickInterval(1)
 
