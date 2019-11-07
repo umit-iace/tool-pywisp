@@ -1592,7 +1592,7 @@ class MainGui(QMainWindow):
                     if wid.module == widget.module and wid.parameter == widget.parameter:
                         wid.setValue(float(value))
                         wid.valueOn = value
-                        wid.label.setText(wid.widgetName + ': ' + "{:.3f}".format(widget.value))
+                        wid.label.setText(wid.widgetName + ': ' + "{:.3f}".format(wid.value))
         else:
             widget.valueOn = value
             widget.label.setText(widget.widgetName + ': ' + "{:.3f}".format(widget.value))

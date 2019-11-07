@@ -721,8 +721,8 @@ class MovableWidget(object):
 
 class MovablePushButton(QPushButton, MovableWidget):
     def __init__(self, name, valueOn, shortcutKey, **kwargs):
-        QPushButton.__init__(self, name=name)
         MovableWidget.__init__(self, name, **kwargs)
+        QPushButton.__init__(self, name=name)
         self.valueOn = valueOn
 
         self.shortcut = QShortcut(self)
@@ -850,8 +850,8 @@ class MovableSlider(DoubleSlider, MovableWidget):
 
 class MovableSwitch(QPushButton, MovableWidget):
     def __init__(self, name, valueOn, valueOff, shortcutKey, **kwargs):
-        QPushButton.__init__(self, name=name)
         MovableWidget.__init__(self, name, **kwargs)
+        QPushButton.__init__(self, name=name)
         self.valueOn = valueOn
         self.valueOff = valueOff
 
