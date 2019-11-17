@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
+import time
 from copy import deepcopy
 
 import pkg_resources
 import serial.tools.list_ports
-import time
 import yaml
 
 try:
@@ -358,7 +358,6 @@ class MainGui(QMainWindow):
 
         # close splash screen
         self.splashScreen.finish(self)
-
 
     def visualizerChanged(self, idx):
         self.animationLayout.removeWidget(self.visualizer.qWidget)
@@ -810,12 +809,14 @@ class MainGui(QMainWindow):
 
         qActionMovingWindowSize = ContextLineEditAction(min=0, max=10000, current=chart.getMovingWindowWidth(),
                                                         unit='s', title='Size', parent=self)
-        qActionMovingWindowSize.dataEmit.connect(lambda data, _chart=chart, _widget=widget: self.setMovingWindowWidth(data, _chart, _widget))
+        qActionMovingWindowSize.dataEmit.connect(lambda data,
+                                                        _chart=chart,
+                                                        _widget=widget: self.setMovingWindowWidth(data, _chart, _widget))
 
         qActionInterpolationPoints = ContextLineEditAction(min=0, max=10000, current=chart.getInterpolataionPoints(),
                                                            unit='', title='Size', parent=self)
-        qActionInterpolationPoints.dataEmit.connect(lambda data, _chart=chart: self.setInterpolationPoints(data,
-                                                                                                           _chart))
+        qActionInterpolationPoints.dataEmit.connect(lambda data,
+                                                           _chart=chart: self.setInterpolationPoints(data, _chart))
 
         qMenuMovingWindow = QMenu('Moving Window', self)
         qMenuMovingWindow.addAction(qActionMovingWindowSize)
@@ -1018,8 +1019,8 @@ class MainGui(QMainWindow):
         """
         Sends all parameters of the current experiment with `ExperimentInteractor` function `sendParameterExperiment`
         """
-        if self._currentExperimentIndex == self.experimentList.row(
-                self._currentExpListItem) and "~current~" in self._currentLastMeasItem.text():
+        if self._currentExperimentIndex == self.experimentList.row(self._currentExpListItem) and \
+                "~current~" in self._currentLastMeasItem.text():
             self.exp.sendParameterExperiment()
         else:
             self._logger.warning("Selected Experiment '{}' doesn't match current running Experiment '{}'!".format(
@@ -1577,7 +1578,7 @@ class MainGui(QMainWindow):
         :param value: the actual value of the widget
         """
         self.remoteSliderUpdate(widget, value)
-        self.remoteSendParamter(widget.module, widget.parameter, widget.valueOn)
+        self.remoteSendParamter(widget.module, widget.parameter, widget.value)
 
     def remoteSliderUpdate(self, widget, value, sliderMoved=True):
         """
@@ -1590,12 +1591,16 @@ class MainGui(QMainWindow):
             for wid in self.remoteWidgetLayout.list:
                 if isinstance(wid, MovableSlider):
                     if wid.module == widget.module and wid.parameter == widget.parameter:
-                        wid.setValue(int(float(value)))
+                        wid.setValue(float(value))
                         wid.valueOn = value
-                        wid.label.setText(wid.widgetName + ': ' + str(value))
+                        wid.label.setText(wid.widgetName + ': ' + "{:.3f}".format(wid.value))
         else:
             widget.valueOn = value
-            widget.label.setText(widget.widgetName + ': ' + str(widget.valueOn))
+
+            if isinstance(widget, MovableSlider):
+                value = widget.calcValue(value)
+
+            widget.label.setText(widget.widgetName + ': ' + "{:.3f}".format(value))
 
     def remoteSendParamter(self, module, parameter, value):
         exp = deepcopy(self.exp.getExperiment())

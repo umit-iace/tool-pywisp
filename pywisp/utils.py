@@ -79,7 +79,8 @@ def packArrayToFrame(id, data, frameLen, dataLenFloat, dataLenInt):
     dataPoints = []
     for i in range(int(N)):
         if i > 0:
-            outList = [float(data[i * frameLenFloat + j - 1]) for j in range(frameLenFloat) if i * frameLenFloat + j - 1 < len(data)]
+            outList = [float(data[i * frameLenFloat + j - 1]) for j in range(frameLenFloat) if
+                       i * frameLenFloat + j - 1 < len(data)]
             fmtStr = getFormatedStructString(dataLenFloat, 0, len(outList))
             payload = struct.pack(fmtStr, *outList)
         else:
@@ -660,11 +661,9 @@ class FreeLayout(QLayout):
 
 
 class MovableWidget(object):
-    def __init__(self, name, label=None, **kwargs):
+    def __init__(self, name, label=None):
         self.widgetName = name
         self.label = label
-        self.module = cp.copy(kwargs.get('module', None))
-        self.parameter = cp.copy(kwargs.get('parameter', None))
         self._mousePressPos = None
         self._mouseMovePos = None
 
@@ -720,9 +719,12 @@ class MovableWidget(object):
 
 class MovablePushButton(QPushButton, MovableWidget):
     def __init__(self, name, valueOn, shortcutKey, **kwargs):
+        MovableWidget.__init__(self, name)
         QPushButton.__init__(self, name=name)
-        MovableWidget.__init__(self, name, **kwargs)
         self.valueOn = valueOn
+
+        self.parameter = kwargs.get('parameter', None)
+        self.module = kwargs.get('module', None)
 
         self.shortcut = QShortcut(self)
         self.shortcut.setKey(shortcutKey)
@@ -747,11 +749,71 @@ class MovablePushButton(QPushButton, MovableWidget):
         self.setText(self.widgetName + '\n' + self.valueOn)
 
 
-class MovableSlider(QSlider, MovableWidget):
+class DoubleSlider(QSlider):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        super().setMinimum(0)
+        super().setMaximum(1)
+
+        self._minValue = 0.0
+        self._maxValue = 1.0
+
+        self._stepSize = 1
+        self._invStepSize = 1
+
+    @property
+    def value(self):
+        curValue = float(super().value())
+        return self.calcValue(curValue)
+
+    def calcValue(self, value):
+        return value * self._stepSize + self._minValue
+
+    def setValue(self, value):
+        super().setValue(int((value - self._minValue) / self._stepSize))
+
+    def setMinimum(self, value):
+        if value > self._maxValue:
+            raise ValueError("Minimum limit cannot be higher than maximum")
+
+        self._minValue = value
+        super().setMinimum(0)
+        super().setMaximum(int((self._maxValue - self._minValue) / self._stepSize))
+
+    def setMaximum(self, value):
+        if value < self._minValue:
+            raise ValueError("Minimum limit cannot be higher than maximum")
+
+        self._maxValue = value
+        super().setMinimum(0)
+        super().setMaximum(int((self._maxValue - self._minValue) / self._stepSize))
+
+    def setTickInterval(self, p_int):
+        self._stepSize = p_int
+
+        super().setMinimum(0)
+        super().setMaximum(int((self._maxValue - self._minValue) / self._stepSize))
+
+        super().setTickInterval(1)
+
+    def minimum(self):
+        return self._minValue
+
+    def maximum(self):
+        return self._maxValue
+
+
+class MovableSlider(DoubleSlider, MovableWidget):
     def __init__(self, name, minSlider, maxSlider, stepSlider, label, shortcutPlusKey, shortcutMinusKey, startValue
                  , **kwargs):
-        QSlider.__init__(self, Qt.Horizontal, name=name)
-        MovableWidget.__init__(self, name, label, **kwargs)
+        MovableWidget.__init__(self, name, label)
+        DoubleSlider.__init__(self, Qt.Horizontal, name=name)
+
+        self.parameter = kwargs.get('parameter', None)
+        self.module = kwargs.get('module', None)
+
         self.minSlider = minSlider
         self.maxSlider = maxSlider
         self.stepSlider = stepSlider
@@ -759,10 +821,10 @@ class MovableSlider(QSlider, MovableWidget):
 
         self.shortcutPlus = QShortcut(self)
         self.shortcutPlus.setKey(shortcutPlusKey)
-        self.shortcutPlus.activated.connect(lambda: self.setValue(self.value() + int(self.stepSlider)))
+        self.shortcutPlus.activated.connect(lambda: self.setValue(self.value + float(self.stepSlider)))
         self.shortcutMinus = QShortcut(self)
         self.shortcutMinus.setKey(shortcutMinusKey)
-        self.shortcutMinus.activated.connect(lambda: self.setValue(self.value() - int(self.stepSlider)))
+        self.shortcutMinus.activated.connect(lambda: self.setValue(self.value - float(self.stepSlider)))
 
         self.startValue = startValue
         self.setTracking(False)
@@ -785,19 +847,23 @@ class MovableSlider(QSlider, MovableWidget):
         return data
 
     def updateData(self):
-        self.setValue(int(self.startValue))
+        self.setMinimum(float(self.minSlider))
+        self.setMaximum(float(self.maxSlider))
+        self.setTickInterval(float(self.stepSlider))
+        self.setPageStep(1)
+        self.setSingleStep(1)
+        self.setValue(float(self.startValue))
         self.label.setText(self.widgetName + ': ' + str(self.startValue))
-        self.setMinimum(int(self.minSlider))
-        self.setMaximum(int(self.maxSlider))
-        self.setTickInterval(int(self.stepSlider))
-        self.setPageStep(int(self.stepSlider))
-        self.setSingleStep(int(self.stepSlider))
 
 
 class MovableSwitch(QPushButton, MovableWidget):
     def __init__(self, name, valueOn, valueOff, shortcutKey, **kwargs):
+        MovableWidget.__init__(self, name)
         QPushButton.__init__(self, name=name)
-        MovableWidget.__init__(self, name, **kwargs)
+
+        self.parameter = kwargs.get('parameter', None)
+        self.module = kwargs.get('module', None)
+
         self.valueOn = valueOn
         self.valueOff = valueOff
 
