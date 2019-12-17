@@ -153,17 +153,17 @@ class TcpConnection(Connection, QtCore.QThread):
     """
     A connection derived Class for a tcp client implemented as a QThread, which connects to a server
     """
-    payloadLen = 80
-
     def __init__(self,
                  ip,
-                 port):
+                 port,
+                 payloadLen=80):
         super(TcpConnection, self).__init__()
         QtCore.QThread.__init__(self)
 
         self.ip = ip
         self.port = port
         self.sock = None
+        self.payloadLen = payloadLen
         self.moveToThread(self)
 
     def disconnect(self):
