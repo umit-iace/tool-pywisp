@@ -410,13 +410,11 @@ class RemoteWidgetEdit(QDialog):
 
         windowLayout = QVBoxLayout()
 
-        self.tabWidget = QTabWidget()
-        self.tabWidget.addTab(mainwidget, "PushButton")
-        windowLayout.addWidget(self.tabWidget)
+        windowLayout.addWidget(mainwidget)
         self.setLayout(windowLayout)
-        #todo second tab
 
         self.nameText = QLineEdit(self.name)
+        self.nameText.setMinimumWidth(200)
         mainLayout.addRow(QLabel("Name"), self.nameText)
         self.nameText.mousePressEvent = lambda event: self.nameText.selectAll()
 
@@ -447,15 +445,12 @@ class RemoteWidgetEdit(QDialog):
         if self.curParameter is not None:
             self.paramList.setCurrentText(self.curParameter)
 
-        mainLayout.addRow(QLabel("Modules:"), self.moduleList)
-        mainLayout.addRow(QLabel("Parameter:"), self.paramList)
+        mainLayout.addRow(QLabel("Modules"), self.moduleList)
+        mainLayout.addRow(QLabel("Parameter"), self.paramList)
 
-        self.settingsWidget = QWidget()
-        self.settingsWidgetLayout = QFormLayout()
-        self.settingsWidget.setLayout(self.settingsWidgetLayout)
-        mainLayout.addRow(self.settingsWidget)
-
-        self.typeListChanged()
+        self.tabWidget = QTabWidget()
+        self.tabWidget.setUsesScrollButtons(False)
+        mainLayout.addRow(self.tabWidget)
 
         # OK and Cancel buttons
         buttons = QDialogButtonBox(
@@ -465,6 +460,8 @@ class RemoteWidgetEdit(QDialog):
         buttons.rejected.connect(self.reject)
         windowLayout.addWidget(buttons)
 
+        self.typeListChanged()
+
         self.setWindowTitle("Add Remote Widget ...")
         resPath = get_resource("icon.svg")
         self.icon = QIcon(resPath)
@@ -472,13 +469,15 @@ class RemoteWidgetEdit(QDialog):
         self.setFixedSize(self.sizeHint())
 
     def typeListChanged(self):
-        for i in reversed(range(self.settingsWidgetLayout.count())):
-            self.settingsWidgetLayout.itemAt(i).widget().deleteLater()
-
         height = QLineEdit().sizeHint().height()
 
         if self.typeList.currentText() == "PushButton":
-            self.tabWidget.setTabText(0, "PushButton")
+            self.settingsWidget = QWidget()
+            self.settingsWidgetLayout = QFormLayout()
+            self.settingsWidget.setLayout(self.settingsWidgetLayout)
+            self.tabWidget.clear()
+            self.tabWidget.addTab(self.settingsWidget, "Settings")
+
             self.valueText = QLineEdit(self.valueOn)
             self.settingsWidgetLayout.addRow(QLabel("Value"), self.valueText)
             self.valueText.setValidator(QDoubleValidator())
@@ -489,14 +488,19 @@ class RemoteWidgetEdit(QDialog):
             dummy = QLabel("")
             dummy.setFixedHeight(height)
             self.settingsWidgetLayout.addRow(None, dummy)
-            dummy2 = QLabel("")
-            dummy2.setFixedHeight(height)
-            self.settingsWidgetLayout.addRow(None, dummy2)
-            dummy3 = QLabel("")
-            dummy3.setFixedHeight(height)
-            self.settingsWidgetLayout.addRow(None, dummy3)
+            dummy = QLabel("")
+            dummy.setFixedHeight(height)
+            self.settingsWidgetLayout.addRow(None, dummy)
+            dummy = QLabel("")
+            dummy.setFixedHeight(height)
+            self.settingsWidgetLayout.addRow(None, dummy)
         elif self.typeList.currentText() == "Switch":
-            self.tabWidget.setTabText(0, "Switch")
+            self.settingsWidget = QWidget()
+            self.settingsWidgetLayout = QFormLayout()
+            self.settingsWidget.setLayout(self.settingsWidgetLayout)
+            self.tabWidget.clear()
+            self.tabWidget.addTab(self.settingsWidget, "Settings")
+
             self.valueOnText = QLineEdit(self.valueOn)
             self.settingsWidgetLayout.addRow(QLabel("Value On"), self.valueOnText)
             self.valueOnText.setValidator(QDoubleValidator())
@@ -507,9 +511,20 @@ class RemoteWidgetEdit(QDialog):
             self.valueOffText.setValidator(QDoubleValidator())
             self.shortcutField = ShortcutCreator()
             self.shortcutField.setText(self.shortcut)
-            self.settingsWidgetLayout.addRow(QLabel("Shortcut:"), self.shortcutField)
+            self.settingsWidgetLayout.addRow(QLabel("Shortcut"), self.shortcutField)
+            dummy = QLabel("")
+            dummy.setFixedHeight(height)
+            self.settingsWidgetLayout.addRow(None, dummy)
+            dummy = QLabel("")
+            dummy.setFixedHeight(height)
+            self.settingsWidgetLayout.addRow(None, dummy)
         elif self.typeList.currentText() == "Slider":
-            self.tabWidget.setTabText(0, "Slider")
+            self.settingsWidget = QWidget()
+            self.settingsWidgetLayout = QFormLayout()
+            self.settingsWidget.setLayout(self.settingsWidgetLayout)
+            self.tabWidget.clear()
+            self.tabWidget.addTab(self.settingsWidget, "Settings")
+
             self.maxSliderText = QLineEdit(str(self.maxSlider))
             self.settingsWidgetLayout.addRow(QLabel("Max"), self.maxSliderText)
             self.maxSliderText.setValidator(QDoubleValidator())
@@ -524,26 +539,58 @@ class RemoteWidgetEdit(QDialog):
             self.stepSliderText.mousePressEvent = lambda event: self.stepSliderText.selectAll()
             self.shortcutFieldPlus = ShortcutCreator()
             self.shortcutFieldPlus.setText(self.shortcutPlus)
-            self.settingsWidgetLayout.addRow(QLabel("Shortcut Plus:"), self.shortcutFieldPlus)
+            self.settingsWidgetLayout.addRow(QLabel("Shortcut Plus"), self.shortcutFieldPlus)
             self.shortcutFieldMinus = ShortcutCreator()
             self.shortcutFieldMinus.setText(self.shortcutMinus)
-            self.settingsWidgetLayout.addRow(QLabel("Shortcut Minus:"), self.shortcutFieldMinus)
+            self.settingsWidgetLayout.addRow(QLabel("Shortcut Minus"), self.shortcutFieldMinus)
         elif self.typeList.currentText() == "Joystick":
-            self.tabWidget.setTabText(0, "Joystick X-Axis")
+
+            self.settingsWidgetX = QWidget()
+            self.settingsWidgetLayoutX = QFormLayout()
+            self.settingsWidgetX.setLayout(self.settingsWidgetLayoutX)
+            self.tabWidget.clear()
+            self.tabWidget.addTab(self.settingsWidgetX, "Settings X-Axis")
+
             self.rangeXMaxText = QLineEdit(self.rangeXMax)
-            self.settingsWidgetLayout.addRow(QLabel("Range Max"), self.rangeXMaxText)
+            self.settingsWidgetLayoutX.addRow(QLabel("Range Max"), self.rangeXMaxText)
             self.rangeXMaxText.setValidator(QIntValidator())
             self.rangeXMaxText.mousePressEvent = lambda event: self.rangeXMaxText.selectAll()
             self.rangeXMinText = QLineEdit(self.rangeXMin)
-            self.settingsWidgetLayout.addRow(QLabel("Range Min"), self.rangeXMinText)
+            self.settingsWidgetLayoutX.addRow(QLabel("Range Min"), self.rangeXMinText)
             self.rangeXMinText.mousePressEvent = lambda event: self.rangeXMinText.selectAll()
             self.rangeXMinText.setValidator(QIntValidator())
             self.shortcutFieldXPlus = ShortcutCreator()
             self.shortcutFieldXPlus.setText(self.shortcutXPlus)
-            self.settingsWidgetLayout.addRow(QLabel("Shortcut Plus:"), self.shortcutFieldXPlus)
+            self.settingsWidgetLayoutX.addRow(QLabel("Shortcut Plus"), self.shortcutFieldXPlus)
             self.shortcutFieldXMinus = ShortcutCreator()
             self.shortcutFieldXMinus.setText(self.shortcutXMinus)
-            self.settingsWidgetLayout.addRow(QLabel("Shortcut Minus:"), self.shortcutFieldXMinus)
+            self.settingsWidgetLayoutX.addRow(QLabel("Shortcut Minus"), self.shortcutFieldXMinus)
+            dummy = QLabel("")
+            dummy.setFixedHeight(height)
+            self.settingsWidgetLayoutX.addRow(None, dummy)
+
+            self.settingsWidgetY = QWidget()
+            self.settingsWidgetLayoutY = QFormLayout()
+            self.settingsWidgetY.setLayout(self.settingsWidgetLayoutY)
+            self.tabWidget.addTab(self.settingsWidgetY, "Settings Y-Axis")
+
+            self.rangeYMaxText = QLineEdit(self.rangeXMax)
+            self.settingsWidgetLayoutY.addRow(QLabel("Range Max"), self.rangeYMaxText)
+            self.rangeYMaxText.setValidator(QIntValidator())
+            self.rangeYMaxText.mousePressEvent = lambda event: self.rangeYMaxText.selectAll()
+            self.rangeYMinText = QLineEdit(self.rangeXMin)
+            self.settingsWidgetLayoutY.addRow(QLabel("Range Min"), self.rangeYMinText)
+            self.rangeYMinText.mousePressEvent = lambda event: self.rangeYMinText.selectAll()
+            self.rangeYMinText.setValidator(QIntValidator())
+            self.shortcutFieldYPlus = ShortcutCreator()
+            self.shortcutFieldYPlus.setText(self.shortcutXPlus)
+            self.settingsWidgetLayoutY.addRow(QLabel("Shortcut Plus"), self.shortcutFieldYPlus)
+            self.shortcutFieldYMinus = ShortcutCreator()
+            self.shortcutFieldYMinus.setText(self.shortcutXMinus)
+            self.settingsWidgetLayoutY.addRow(QLabel("Shortcut Minus"), self.shortcutFieldYMinus)
+            dummy = QLabel("")
+            dummy.setFixedHeight(height)
+            self.settingsWidgetLayoutY.addRow(None, dummy)
 
     def moduleChanged(self):
         self.paramList.clear()
@@ -575,12 +622,12 @@ class RemoteWidgetEdit(QDialog):
         elif self.typeList.currentText() == "Joystick":
             msg['rangeXMax'] = self.rangeXMaxText.text()
             msg['rangeXMin'] = self.rangeXMinText.text()
-            #msg['rangeYMax'] = self.rangeYMaxText.text()
-            #msg['rangeYMin'] = self.rangeYMinText.text()
+            msg['rangeYMax'] = self.rangeYMaxText.text()
+            msg['rangeYMin'] = self.rangeYMinText.text()
             msg['shortcutXPlus'] = self.shortcutFieldXPlus.getKeySequence()
             msg['shortcutXMinus'] = self.shortcutFieldXMinus.getKeySequence()
-            #msg['shortcutYPlus'] = self.shortcutFieldYPlus.getKeySequence()
-            #msg['shortcutYMinus'] = self.shortcutFieldYMinus.getKeySequence()
+            msg['shortcutYPlus'] = self.shortcutFieldYPlus.getKeySequence()
+            msg['shortcutYMinus'] = self.shortcutFieldYMinus.getKeySequence()
 
         return msg
 

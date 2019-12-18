@@ -1103,7 +1103,15 @@ class MainGui(QMainWindow):
                         msg['maxSlider'] = self._experiments[idx]['Remote'][name]['maxSlider']
                         msg['stepSlider'] = self._experiments[idx]['Remote'][name]['stepSlider']
                         msg['startValue'] = self._experiments[idx][msg['module']][msg['parameter']]
-                        #todo joystick
+                    elif msg['widgetType'] == "Joystick":
+                        msg['shortcutXPlus'] = self._experiments[idx]['Remote'][name]['shortcutXPlus']
+                        msg['shortcutXMinus'] = self._experiments[idx]['Remote'][name]['shortcutXMinus']
+                        msg['shortcutYPlus'] = self._experiments[idx]['Remote'][name]['shortcutYPlus']
+                        msg['shortcutYMinus'] = self._experiments[idx]['Remote'][name]['shortcutYMinus']
+                        msg['rangeXMax'] = self._experiments[idx]['Remote'][name]['rangeXMax']
+                        msg['rangeXMin'] = self._experiments[idx]['Remote'][name]['rangeXMin']
+                        msg['rangeYMax'] = self._experiments[idx]['Remote'][name]['rangeYMax']
+                        msg['rangeYMin'] = self._experiments[idx]['Remote'][name]['rangeYMin']
                     else:
                         continue
                     self.remoteAddWidget(msg)
@@ -1451,7 +1459,23 @@ class MainGui(QMainWindow):
                 self._experiments[idx]['Remote'][msg['name']]['minSlider'] = msg['minSlider']
                 self._experiments[idx]['Remote'][msg['name']]['maxSlider'] = msg['maxSlider']
                 self._experiments[idx]['Remote'][msg['name']]['stepSlider'] = msg['stepSlider']
-            #todo joystick
+            elif msg['widgetType'] == "Joystick":
+                widget.rangeXMax = msg['rangeXMax']
+                widget.rangeXMin = msg['rangeXMin']
+                widget.rangeYMax = msg['rangeYMax']
+                widget.rangeYMin = msg['rangeYMin']
+                widget.shortcutXPlus.setKey(msg['shortcutXPlus'])
+                self._experiments[idx]['Remote'][msg['name']]['shortcutXPlus'] = msg['shortcutXPlus']
+                widget.shortcutXMinus.setKey(msg['shortcutXMinus'])
+                self._experiments[idx]['Remote'][msg['name']]['shortcutXMinus'] = msg['shortcutXMinus']
+                widget.shortcutYPlus.setKey(msg['shortcutYPlus'])
+                self._experiments[idx]['Remote'][msg['name']]['shortcutYPlus'] = msg['shortcutYPlus']
+                widget.shortcutYMinus.setKey(msg['shortcutYMinus'])
+                self._experiments[idx]['Remote'][msg['name']]['shortcutYMinus'] = msg['shortcutYMinus']
+                self._experiments[idx]['Remote'][msg['name']]['rangeXMin'] = msg['rangeXMin']
+                self._experiments[idx]['Remote'][msg['name']]['rangeXMax'] = msg['rangeXMax']
+                self._experiments[idx]['Remote'][msg['name']]['rangeYMin'] = msg['rangeYMin']
+                self._experiments[idx]['Remote'][msg['name']]['rangeYMax'] = msg['rangeYMax']
             widget.updateData()
 
     def remoteAddWidget(self, msg=None, **kwargs):
@@ -1528,9 +1552,9 @@ class MainGui(QMainWindow):
                 self._experiments[idx]['Remote'][msg['name']]['maxSlider'] = msg['maxSlider']
                 self._experiments[idx]['Remote'][msg['name']]['stepSlider'] = msg['stepSlider']
         elif msg['widgetType'] == "Joystick":
-            widget = MovableJoystick(msg['name'], msg['rangeXMax'], msg['rangeXMin'], msg['rangeXMax'],
-                                     msg['rangeXMin'], msg['shortcutXPlus'], msg['shortcutXMinus'],
-                                     msg['shortcutXPlus'], msg['shortcutXMinus'], module=msg['module'],
+            widget = MovableJoystick(msg['name'], msg['rangeXMax'], msg['rangeXMin'], msg['rangeYMax'],
+                                     msg['rangeYMin'], msg['shortcutXPlus'], msg['shortcutXMinus'],
+                                     msg['shortcutYPlus'], msg['shortcutYMinus'], module=msg['module'],
                                      parameter=msg['parameter'])
             widget.setFixedHeight(200)
             widget.setFixedWidth(200)
@@ -1541,9 +1565,8 @@ class MainGui(QMainWindow):
             if changed:
                 self._experiments[idx]['Remote'][msg['name']]['shortcutXPlus'] = msg['shortcutXPlus']
                 self._experiments[idx]['Remote'][msg['name']]['shortcutXMinus'] = msg['shortcutXMinus']
-                #self._experiments[idx]['Remote'][msg['name']]['shortcutYPlus'] = msg['shortcutYPlus']
-                #self._experiments[idx]['Remote'][msg['name']]['shortcutYMinus'] = msg['shortcutYMinus']
-                #todo
+                self._experiments[idx]['Remote'][msg['name']]['shortcutYPlus'] = msg['shortcutYPlus']
+                self._experiments[idx]['Remote'][msg['name']]['shortcutYMinus'] = msg['shortcutYMinus']
         else:
             return
         if self.remoteWidget.rect().contains((self.remoteWidgetLayout.count() % 2) * 200,
@@ -1599,8 +1622,9 @@ class MainGui(QMainWindow):
                 Gets called when a user interacts with the pushbutton and sends the specified parameter to the bench
                 :param widget: the widget the user interacted with
         """
-        #todo
         value = widget.valueX
+        self.remoteSendParamter(widget.module, widget.parameter, value)
+        value = widget.valuey
         self.remoteSendParamter(widget.module, widget.parameter, value)
 
     def remoteSendParamter(self, module, parameter, value):
