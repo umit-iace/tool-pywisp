@@ -25,6 +25,30 @@ void Transport::sendData() {
     this->outputQueue.push(trajSeriesFrame);
 }
 //----------------------------------------------------------------------
+void Transport::packArrayToFrame(unsigned char cId, unsigned char *cData, unsigned int iDataSize) {
+    unsigned int iCompleteData = iDataSize * sizeof(unsigned char) + sizeof(unsigned int);
+    unsigned int iCountPackages = iCompleteData / TRANSPORT_MAX_PAYLOAD + 1;
+
+    unsigned int iCounter = 0;
+
+    for (unsigned int i = 0; i < iCountPackages; i++) {
+        if (i > 0) {
+            Frame arrayFrame(cId);
+            for (unsigned int j = 0; j < TRANSPORT_MAX_PAYLOAD; j++) {
+                arrayFrame.pack(cData[iCounter++]);
+            }
+            this->outputQueue.push(arrayFrame);
+        } else {
+            Frame arrayFrame(cId);
+            arrayFrame.pack(iCountPackages);
+            for (unsigned int j = 0; j < TRANSPORT_MAX_PAYLOAD - sizeof(unsigned int); j++) {
+                arrayFrame.pack(cData[iCounter++]);
+            }
+            this->outputQueue.push(arrayFrame);
+        }
+    }
+}
+//----------------------------------------------------------------------
 
 void Transport::handleFrames() {
     while (!inputQueue.empty()) {
