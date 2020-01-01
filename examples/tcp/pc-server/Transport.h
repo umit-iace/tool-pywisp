@@ -69,6 +69,8 @@ private:
 
     void unpackTrajSeriesData(Frame frame);
 
+    void packArrayToFrame(unsigned char cId, unsigned char *cData, unsigned int iDataSize);
+
     bool bInComingSeriesData = false;
     unsigned int iInComingSeriesCounter = 0;
 
