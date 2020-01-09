@@ -1085,18 +1085,22 @@ class MainGui(QMainWindow):
                 for name in self._experiments[idx]['Remote']:
                     msg = dict()
                     msg['name'] = name
-                    msg['module'] = self._experiments[idx]['Remote'][name]['Module']
-                    msg['parameter'] = self._experiments[idx]['Remote'][name]['Parameter']
                     msg['widgetType'] = self._experiments[idx]['Remote'][name]['widgetType']
                     if msg['widgetType'] == "PushButton":
+                        msg['module'] = self._experiments[idx]['Remote'][name]['Module']
+                        msg['parameter'] = self._experiments[idx]['Remote'][name]['Parameter']
                         msg['shortcut'] = self._experiments[idx]['Remote'][name]['shortcut']
                         msg['valueOn'] = str(self._experiments[idx]['Remote'][name]['valueOn'])
                     elif msg['widgetType'] == "Switch":
+                        msg['module'] = self._experiments[idx]['Remote'][name]['Module']
+                        msg['parameter'] = self._experiments[idx]['Remote'][name]['Parameter']
                         msg['shortcut'] = self._experiments[idx]['Remote'][name]['shortcut']
                         msg['valueOn'] = str(self._experiments[idx]['Remote'][name]['valueOn'])
                         msg['valueOff'] = str(
                             self._experiments[idx]['Remote'][name]['valueOff'])
                     elif msg['widgetType'] == "Slider":
+                        msg['module'] = self._experiments[idx]['Remote'][name]['Module']
+                        msg['parameter'] = self._experiments[idx]['Remote'][name]['Parameter']
                         msg['shortcutPlus'] = self._experiments[idx]['Remote'][name]['shortcutPlus']
                         msg['shortcutMinus'] = self._experiments[idx]['Remote'][name]['shortcutMinus']
                         msg['minSlider'] = self._experiments[idx]['Remote'][name]['minSlider']
@@ -1104,6 +1108,10 @@ class MainGui(QMainWindow):
                         msg['stepSlider'] = self._experiments[idx]['Remote'][name]['stepSlider']
                         msg['startValue'] = self._experiments[idx][msg['module']][msg['parameter']]
                     elif msg['widgetType'] == "Joystick":
+                        msg['moduleX'] = self._experiments[idx]['Remote'][name]['ModuleX']
+                        msg['parameterX'] = self._experiments[idx]['Remote'][name]['ParameterX']
+                        msg['moduleY'] = self._experiments[idx]['Remote'][name]['ModuleY']
+                        msg['parameterY'] = self._experiments[idx]['Remote'][name]['ParameterY']
                         msg['shortcutXPlus'] = self._experiments[idx]['Remote'][name]['shortcutXPlus']
                         msg['shortcutXMinus'] = self._experiments[idx]['Remote'][name]['shortcutXMinus']
                         msg['shortcutYPlus'] = self._experiments[idx]['Remote'][name]['shortcutYPlus']
@@ -1429,19 +1437,23 @@ class MainGui(QMainWindow):
             del self._experiments[idx]['Remote'][widget.widgetName]
             self._experiments[idx]['Remote'][msg['name']] = {}
             self._experiments[idx]['Remote'][msg['name']]['widgetType'] = msg['widgetType']
-            self._experiments[idx]['Remote'][msg['name']]['Module'] = msg['module']
-            self._experiments[idx]['Remote'][msg['name']]['Parameter'] = msg['parameter']
 
             widget.widgetName = msg['name']
             widget.widgetType = msg['widgetType']
-            widget.module = msg['module']
-            widget.parameter = msg['parameter']
             if msg['widgetType'] == "PushButton":
+                widget.module = msg['module']
+                widget.parameter = msg['parameter']
+                self._experiments[idx]['Remote'][msg['name']]['Module'] = msg['module']
+                self._experiments[idx]['Remote'][msg['name']]['Parameter'] = msg['parameter']
                 widget.valueOn = msg['valueOn']
                 widget.shortcut.setKey(msg['shortcut'])
                 self._experiments[idx]['Remote'][msg['name']]['shortcut'] = msg['shortcut']
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
             elif msg['widgetType'] == "Switch":
+                widget.module = msg['module']
+                widget.parameter = msg['parameter']
+                self._experiments[idx]['Remote'][msg['name']]['Module'] = msg['module']
+                self._experiments[idx]['Remote'][msg['name']]['Parameter'] = msg['parameter']
                 widget.valueOn = msg['valueOn']
                 widget.valueOff = msg['valueOff']
                 widget.shortcut.setKey(msg['shortcut'])
@@ -1449,6 +1461,10 @@ class MainGui(QMainWindow):
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
                 self._experiments[idx]['Remote'][msg['name']]['valueOff'] = msg['valueOff']
             elif msg['widgetType'] == "Slider":
+                widget.module = msg['module']
+                widget.parameter = msg['parameter']
+                self._experiments[idx]['Remote'][msg['name']]['Module'] = msg['module']
+                self._experiments[idx]['Remote'][msg['name']]['Parameter'] = msg['parameter']
                 widget.minSlider = msg['minSlider']
                 widget.maxSlider = msg['maxSlider']
                 widget.stepSlider = msg['stepSlider']
@@ -1460,6 +1476,14 @@ class MainGui(QMainWindow):
                 self._experiments[idx]['Remote'][msg['name']]['maxSlider'] = msg['maxSlider']
                 self._experiments[idx]['Remote'][msg['name']]['stepSlider'] = msg['stepSlider']
             elif msg['widgetType'] == "Joystick":
+                widget.moduleX = msg['moduleX']
+                widget.parameterX = msg['parameterX']
+                widget.moduleY = msg['moduleY']
+                widget.parameterY = msg['parameterY']
+                self._experiments[idx]['Remote'][msg['name']]['ModuleX'] = msg['moduleX']
+                self._experiments[idx]['Remote'][msg['name']]['ParameterX'] = msg['parameterX']
+                self._experiments[idx]['Remote'][msg['name']]['ModuleY'] = msg['moduleY']
+                self._experiments[idx]['Remote'][msg['name']]['ParameterY'] = msg['parameterY']
                 widget.rangeXMax = msg['rangeXMax']
                 widget.rangeXMin = msg['rangeXMin']
                 widget.rangeYMax = msg['rangeYMax']
@@ -1497,10 +1521,6 @@ class MainGui(QMainWindow):
                     self._experiments[idx]['Remote'] = {}
                 self._experiments[idx]['Remote'][msg['name']] = {}
 
-        if changed:
-            self._experiments[idx]['Remote'][msg['name']]['widgetType'] = msg['widgetType']
-            self._experiments[idx]['Remote'][msg['name']]['Module'] = msg['module']
-            self._experiments[idx]['Remote'][msg['name']]['Parameter'] = msg['parameter']
         sliderLabel = None
         if msg['widgetType'] == "PushButton":
             widget = MovablePushButton(msg['name'], msg['valueOn'], msg['shortcut'], module=msg['module'],
@@ -1512,6 +1532,9 @@ class MainGui(QMainWindow):
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
             if changed:
+                self._experiments[idx]['Remote'][msg['name']]['widgetType'] = msg['widgetType']
+                self._experiments[idx]['Remote'][msg['name']]['Module'] = msg['module']
+                self._experiments[idx]['Remote'][msg['name']]['Parameter'] = msg['parameter']
                 self._experiments[idx]['Remote'][msg['name']]['shortcut'] = msg['shortcut']
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
         elif msg['widgetType'] == "Switch":
@@ -1524,6 +1547,9 @@ class MainGui(QMainWindow):
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
             if changed:
+                self._experiments[idx]['Remote'][msg['name']]['widgetType'] = msg['widgetType']
+                self._experiments[idx]['Remote'][msg['name']]['Module'] = msg['module']
+                self._experiments[idx]['Remote'][msg['name']]['Parameter'] = msg['parameter']
                 self._experiments[idx]['Remote'][msg['name']]['shortcut'] = msg['shortcut']
                 self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
                 self._experiments[idx]['Remote'][msg['name']]['valueOff'] = msg['valueOff']
@@ -1546,6 +1572,9 @@ class MainGui(QMainWindow):
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
             if changed:
+                self._experiments[idx]['Remote'][msg['name']]['widgetType'] = msg['widgetType']
+                self._experiments[idx]['Remote'][msg['name']]['Module'] = msg['module']
+                self._experiments[idx]['Remote'][msg['name']]['Parameter'] = msg['parameter']
                 self._experiments[idx]['Remote'][msg['name']]['shortcutPlus'] = msg['shortcutPlus']
                 self._experiments[idx]['Remote'][msg['name']]['shortcutMinus'] = msg['shortcutMinus']
                 self._experiments[idx]['Remote'][msg['name']]['minSlider'] = msg['minSlider']
@@ -1554,8 +1583,8 @@ class MainGui(QMainWindow):
         elif msg['widgetType'] == "Joystick":
             widget = MovableJoystick(msg['name'], msg['rangeXMax'], msg['rangeXMin'], msg['rangeYMax'],
                                      msg['rangeYMin'], msg['shortcutXPlus'], msg['shortcutXMinus'],
-                                     msg['shortcutYPlus'], msg['shortcutYMinus'], module=msg['module'],
-                                     parameter=msg['parameter'])
+                                     msg['shortcutYPlus'], msg['shortcutYMinus'], moduleX=msg['moduleX'],
+                                     parameterX=msg['parameterX'],moduleY=msg['moduleY'], parameterY=msg['parameterY'])
             widget.setFixedHeight(200)
             widget.setFixedWidth(200)
             widget.valuesChanged.connect(lambda: self.remoteJoystickSendParameter(widget))
@@ -1563,6 +1592,15 @@ class MainGui(QMainWindow):
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
             if changed:
+                self._experiments[idx]['Remote'][msg['name']]['widgetType'] = msg['widgetType']
+                self._experiments[idx]['Remote'][msg['name']]['ModuleX'] = msg['moduleX']
+                self._experiments[idx]['Remote'][msg['name']]['ParameterX'] = msg['parameterX']
+                self._experiments[idx]['Remote'][msg['name']]['ModuleY'] = msg['moduleY']
+                self._experiments[idx]['Remote'][msg['name']]['ParameterY'] = msg['parameterY']
+                self._experiments[idx]['Remote'][msg['name']]['rangeXMin'] = msg['rangeXMin']
+                self._experiments[idx]['Remote'][msg['name']]['rangeXMax'] = msg['rangeXMax']
+                self._experiments[idx]['Remote'][msg['name']]['rangeYMin'] = msg['rangeYMin']
+                self._experiments[idx]['Remote'][msg['name']]['rangeYMax'] = msg['rangeYMax']
                 self._experiments[idx]['Remote'][msg['name']]['shortcutXPlus'] = msg['shortcutXPlus']
                 self._experiments[idx]['Remote'][msg['name']]['shortcutXMinus'] = msg['shortcutXMinus']
                 self._experiments[idx]['Remote'][msg['name']]['shortcutYPlus'] = msg['shortcutYPlus']
@@ -1619,13 +1657,12 @@ class MainGui(QMainWindow):
 
     def remoteJoystickSendParameter(self, widget):
         """
-                Gets called when a user interacts with the pushbutton and sends the specified parameter to the bench
+                Gets called when a user interacts with the Joystick and sends the specified parameter to the bench
                 :param widget: the widget the user interacted with
         """
-        value = widget.valueX
-        self.remoteSendParamter(widget.module, widget.parameter, value)
-        value = widget.valuey
-        self.remoteSendParamter(widget.module, widget.parameter, value)
+
+        self.remoteSendParamter(widget.moduleX, widget.parameterX, widget.valueX)
+        self.remoteSendParamter(widget.moduleY, widget.parameterY, widget.valueY)
 
     def remoteSendParamter(self, module, parameter, value):
         exp = deepcopy(self.exp.getExperiment())
