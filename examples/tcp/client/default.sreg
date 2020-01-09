@@ -18,25 +18,40 @@
     PushExample:
       Module: Test
       Parameter: Value1
+      shortcut: P
       valueOn: '99.99'
       widgetType: PushButton
-      shortcut: P
-    SwitchExample:
-      Module: Test
-      Parameter: Value2
-      valueOff: '11.1'
-      valueOn: '22.2'
-      widgetType: Switch
-      shortcut: O
     SliderExample:
       Module: Test
       Parameter: Value3
       maxSlider: 255
       minSlider: 0
+      shortcutMinus: G
+      shortcutPlus: H
       stepSlider: 1
       widgetType: Slider
-      shortcutPlus: H
-      shortcutMinus: G
+    SwitchExample:
+      Module: Test
+      Parameter: Value2
+      shortcut: O
+      valueOff: '11.1'
+      valueOn: '22.2'
+      widgetType: Switch
+    JoystickExample:
+      ModuleX: Test
+      ModuleY: Test
+      ParameterX: Value3
+      ParameterY: Value4
+      rangeXMax: 10
+      rangeXMin: -10
+      rangeYMax: 5
+      rangeYMin: -5
+      shortcutXMinus: A
+      shortcutXPlus: D
+      shortcutYMinus: S
+      shortcutYPlus: W
+      widgetType: Joystick
+
 
   Visu:
     MplExampleVisualizer:
