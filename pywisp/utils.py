@@ -1000,7 +1000,7 @@ class MovableJoystick(QWidget, MovableWidget):
         paint.begin(self)
         paint.setRenderHint(QPainter.Antialiasing)
         paint.setBrush(Qt.lightGray)
-        paint.drawRect(event.rect())
+        paint.drawRoundedRect(event.rect(), 5, 5)
         radius = 20
         actualCenter = QPoint(self.currentX, self.currentY)
         center = QPoint(self.centerX, self.centerY)
