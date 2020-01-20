@@ -1120,6 +1120,8 @@ class MainGui(QMainWindow):
                         msg['rangeXMin'] = self._experiments[idx]['Remote'][name]['rangeXMin']
                         msg['rangeYMax'] = self._experiments[idx]['Remote'][name]['rangeYMax']
                         msg['rangeYMin'] = self._experiments[idx]['Remote'][name]['rangeYMin']
+                        msg['precisionX'] = self._experiments[idx]['Remote'][name]['precisionX']
+                        msg['precisionY'] = self._experiments[idx]['Remote'][name]['precisionY']
                     else:
                         continue
                     self.remoteAddWidget(msg)
@@ -1488,6 +1490,14 @@ class MainGui(QMainWindow):
                 widget.rangeXMin = msg['rangeXMin']
                 widget.rangeYMax = msg['rangeYMax']
                 widget.rangeYMin = msg['rangeYMin']
+                widget.precisionX = msg['precisionX']
+                widget.precisionY = msg['precisionY']
+                self._experiments[idx]['Remote'][msg['name']]['rangeXMin'] = msg['rangeXMin']
+                self._experiments[idx]['Remote'][msg['name']]['rangeXMax'] = msg['rangeXMax']
+                self._experiments[idx]['Remote'][msg['name']]['rangeYMin'] = msg['rangeYMin']
+                self._experiments[idx]['Remote'][msg['name']]['rangeYMax'] = msg['rangeYMax']
+                self._experiments[idx]['Remote'][msg['name']]['precisionX'] = msg['precisionX']
+                self._experiments[idx]['Remote'][msg['name']]['precisionY'] = msg['precisionY']
                 widget.shortcutXPlus.setKey(msg['shortcutXPlus'])
                 self._experiments[idx]['Remote'][msg['name']]['shortcutXPlus'] = msg['shortcutXPlus']
                 widget.shortcutXMinus.setKey(msg['shortcutXMinus'])
@@ -1496,10 +1506,6 @@ class MainGui(QMainWindow):
                 self._experiments[idx]['Remote'][msg['name']]['shortcutYPlus'] = msg['shortcutYPlus']
                 widget.shortcutYMinus.setKey(msg['shortcutYMinus'])
                 self._experiments[idx]['Remote'][msg['name']]['shortcutYMinus'] = msg['shortcutYMinus']
-                self._experiments[idx]['Remote'][msg['name']]['rangeXMin'] = msg['rangeXMin']
-                self._experiments[idx]['Remote'][msg['name']]['rangeXMax'] = msg['rangeXMax']
-                self._experiments[idx]['Remote'][msg['name']]['rangeYMin'] = msg['rangeYMin']
-                self._experiments[idx]['Remote'][msg['name']]['rangeYMax'] = msg['rangeYMax']
             widget.updateData()
 
     def remoteAddWidget(self, msg=None, **kwargs):
@@ -1583,8 +1589,9 @@ class MainGui(QMainWindow):
         elif msg['widgetType'] == "Joystick":
             widget = MovableJoystick(msg['name'], msg['rangeXMax'], msg['rangeXMin'], msg['rangeYMax'],
                                      msg['rangeYMin'], msg['shortcutXPlus'], msg['shortcutXMinus'],
-                                     msg['shortcutYPlus'], msg['shortcutYMinus'], moduleX=msg['moduleX'],
-                                     parameterX=msg['parameterX'],moduleY=msg['moduleY'], parameterY=msg['parameterY'])
+                                     msg['shortcutYPlus'], msg['shortcutYMinus'], msg['precisionX'], msg['precisionY'],
+                                     moduleX=msg['moduleX'], parameterX=msg['parameterX'], moduleY=msg['moduleY'],
+                                     parameterY=msg['parameterY'])
             widget.setFixedHeight(200)
             widget.setFixedWidth(200)
             widget.valuesChanged.connect(lambda: self.remoteJoystickSendParameter(widget))
@@ -1601,6 +1608,8 @@ class MainGui(QMainWindow):
                 self._experiments[idx]['Remote'][msg['name']]['rangeXMax'] = msg['rangeXMax']
                 self._experiments[idx]['Remote'][msg['name']]['rangeYMin'] = msg['rangeYMin']
                 self._experiments[idx]['Remote'][msg['name']]['rangeYMax'] = msg['rangeYMax']
+                self._experiments[idx]['Remote'][msg['name']]['precisionX'] = msg['precisionX']
+                self._experiments[idx]['Remote'][msg['name']]['precisionY'] = msg['precisionY']
                 self._experiments[idx]['Remote'][msg['name']]['shortcutXPlus'] = msg['shortcutXPlus']
                 self._experiments[idx]['Remote'][msg['name']]['shortcutXMinus'] = msg['shortcutXMinus']
                 self._experiments[idx]['Remote'][msg['name']]['shortcutYPlus'] = msg['shortcutYPlus']

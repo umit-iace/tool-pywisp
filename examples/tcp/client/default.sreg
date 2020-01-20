@@ -46,6 +46,8 @@
       rangeXMin: -10
       rangeYMax: 5
       rangeYMin: -5
+      precisionX: 2
+      precisionY: 2
       shortcutXMinus: A
       shortcutXPlus: D
       shortcutYMinus: S

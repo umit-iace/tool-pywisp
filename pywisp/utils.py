@@ -374,10 +374,12 @@ class RemoteWidgetEdit(QDialog):
         self.shortcutMinus = str(kwargs.get('shortcutMinus', ""))
         self.rangeXMax = str(kwargs.get('rangeXMax', 1))
         self.rangeXMin = str(kwargs.get('rangeXMin', -1))
+        self.precisionX = str(kwargs.get('precisionX', 0))
         self.shortcutXPlus = str(kwargs.get('shortcutXPlus', ""))
         self.shortcutXMinus = str(kwargs.get('shortcutXMinus', ""))
         self.rangeYMax = str(kwargs.get('rangeYMax', 1))
         self.rangeYMin = str(kwargs.get('rangeYMin', -1))
+        self.precisionY = str(kwargs.get('precisionY', 0))
         self.shortcutYPlus = str(kwargs.get('shortcutYPlus', ""))
         self.shortcutYMinus = str(kwargs.get('shortcutYMinus', ""))
 
@@ -402,10 +404,12 @@ class RemoteWidgetEdit(QDialog):
         self.shortcutFieldMinus = None
         self.rangeXMaxText = None
         self.rangeXMinText = None
+        self.precisionXText = None
         self.shortcutFieldXPlus = None
         self.shortcutFieldXMinus = None
         self.rangeYMaxText = None
         self.rangeYMinText = None
+        self.precisionYText = None
         self.shortcutFieldYPlus = None
         self.shortcutFieldYMinus = None
 
@@ -611,21 +615,22 @@ class RemoteWidgetEdit(QDialog):
 
             self.rangeXMaxText = QLineEdit(self.rangeXMax)
             self.settingsWidgetLayoutX.addRow(QLabel("Range Max"), self.rangeXMaxText)
-            self.rangeXMaxText.setValidator(QIntValidator())
+            self.rangeXMaxText.setValidator(QDoubleValidator())
             self.rangeXMaxText.mousePressEvent = lambda event: self.rangeXMaxText.selectAll()
             self.rangeXMinText = QLineEdit(self.rangeXMin)
             self.settingsWidgetLayoutX.addRow(QLabel("Range Min"), self.rangeXMinText)
             self.rangeXMinText.mousePressEvent = lambda event: self.rangeXMinText.selectAll()
-            self.rangeXMinText.setValidator(QIntValidator())
+            self.rangeXMinText.setValidator(QDoubleValidator())
+            self.precisionXText = QLineEdit(self.precisionX)
+            self.settingsWidgetLayoutX.addRow(QLabel("Precision"), self.precisionXText)
+            self.precisionXText.mousePressEvent = lambda event: self.precisionXText.selectAll()
+            self.precisionXText.setValidator(QIntValidator(0, 5))
             self.shortcutFieldXPlus = ShortcutCreator()
             self.shortcutFieldXPlus.setText(self.shortcutXPlus)
             self.settingsWidgetLayoutX.addRow(QLabel("Shortcut Plus"), self.shortcutFieldXPlus)
             self.shortcutFieldXMinus = ShortcutCreator()
             self.shortcutFieldXMinus.setText(self.shortcutXMinus)
             self.settingsWidgetLayoutX.addRow(QLabel("Shortcut Minus"), self.shortcutFieldXMinus)
-            dummy = QLabel("")
-            dummy.setFixedHeight(height)
-            self.settingsWidgetLayoutX.addRow(None, dummy)
 
             self.settingsWidgetY = QWidget()
             self.settingsWidgetLayoutY = QFormLayout()
@@ -653,21 +658,22 @@ class RemoteWidgetEdit(QDialog):
 
             self.rangeYMaxText = QLineEdit(self.rangeYMax)
             self.settingsWidgetLayoutY.addRow(QLabel("Range Max"), self.rangeYMaxText)
-            self.rangeYMaxText.setValidator(QIntValidator())
+            self.rangeYMaxText.setValidator(QDoubleValidator())
             self.rangeYMaxText.mousePressEvent = lambda event: self.rangeYMaxText.selectAll()
             self.rangeYMinText = QLineEdit(self.rangeYMin)
             self.settingsWidgetLayoutY.addRow(QLabel("Range Min"), self.rangeYMinText)
             self.rangeYMinText.mousePressEvent = lambda event: self.rangeYMinText.selectAll()
-            self.rangeYMinText.setValidator(QIntValidator())
+            self.rangeYMinText.setValidator(QDoubleValidator())
+            self.precisionYText = QLineEdit(self.precisionY)
+            self.settingsWidgetLayoutY.addRow(QLabel("Precision"), self.precisionYText)
+            self.precisionYText.mousePressEvent = lambda event: self.precisionYText.selectAll()
+            self.precisionYText.setValidator(QIntValidator(0, 5))
             self.shortcutFieldYPlus = ShortcutCreator()
             self.shortcutFieldYPlus.setText(self.shortcutYPlus)
             self.settingsWidgetLayoutY.addRow(QLabel("Shortcut Plus"), self.shortcutFieldYPlus)
             self.shortcutFieldYMinus = ShortcutCreator()
             self.shortcutFieldYMinus.setText(self.shortcutYMinus)
             self.settingsWidgetLayoutY.addRow(QLabel("Shortcut Minus"), self.shortcutFieldYMinus)
-            dummy = QLabel("")
-            dummy.setFixedHeight(height)
-            self.settingsWidgetLayoutY.addRow(None, dummy)
 
     def moduleChanged(self, moduleList, paramList, modules):
         paramList.clear()
@@ -709,6 +715,8 @@ class RemoteWidgetEdit(QDialog):
             msg['rangeXMin'] = self.rangeXMinText.text()
             msg['rangeYMax'] = self.rangeYMaxText.text()
             msg['rangeYMin'] = self.rangeYMinText.text()
+            msg['precisionX'] = self.precisionXText.text()
+            msg['precisionY'] = self.precisionYText.text()
             msg['shortcutXPlus'] = self.shortcutFieldXPlus.getKeySequence()
             msg['shortcutXMinus'] = self.shortcutFieldXMinus.getKeySequence()
             msg['shortcutYPlus'] = self.shortcutFieldYPlus.getKeySequence()
@@ -947,7 +955,7 @@ class MovableSwitch(QPushButton, MovableWidget):
 class MovableJoystick(QWidget, MovableWidget):
     valuesChanged = pyqtSignal()
     def __init__(self, name, rangeXMax, rangeXMin, rangeYMax, rangeYMin, shortcutXPlusKey, shortcutXMinusKey,
-                 shortcutYPlusKey, shortcutYMinusKey, **kwargs):
+                 shortcutYPlusKey, shortcutYMinusKey, precisionX, precisionY, **kwargs):
         QWidget.__init__(self, name=name)
         MovableWidget.__init__(self, name, **kwargs)
         self.currentX = 100
@@ -955,12 +963,16 @@ class MovableJoystick(QWidget, MovableWidget):
         self.centerX = 100
         self.centerY = 100
 
-        self.rangeXMin = rangeXMin
-        self.rangeXMax = rangeXMax
-        self.rangeYMin = rangeYMin
-        self.rangeYMax = rangeYMax
-        self.valueX = int(1/2*(int(self.rangeXMax)-int(self.rangeXMin)+1))+int(self.rangeXMin)
-        self.valueY = -(int(1/2*(int(self.rangeYMax)-int(self.rangeYMin)+1))+int(self.rangeYMin))
+        self.precisionX = int(precisionX)
+        self.precisionY = int(precisionY)
+
+        self.rangeXMin = float(rangeXMin)
+        self.rangeXMax = float(rangeXMax)
+        self.rangeYMin = float(rangeYMin)
+        self.rangeYMax = float(rangeYMax)
+
+        self.valueX = (self.rangeXMax-self.rangeXMin)/2+self.rangeXMin
+        self.valueY = -((self.rangeYMax-self.rangeYMin)/2+self.rangeYMin)
 
         self.moduleX = cp.copy(kwargs.get('moduleX', None))
         self.parameterX = cp.copy(kwargs.get('parameterX', None))
@@ -994,26 +1006,34 @@ class MovableJoystick(QWidget, MovableWidget):
         center = QPoint(self.centerX, self.centerY)
         paint.setBrush(Qt.black)
         paint.drawEllipse(actualCenter, radius, radius)
-        paint.drawText(1, 15, self.widgetName);
-        paint.drawText(1, 195, "["+str(self.valueX)+","+str(self.valueY)+"]");
+        paint.drawText(1, 15, self.widgetName)
+        paint.drawText(1, 195, "["+str(self.valueX)+","+str(self.valueY)+"]")
         paint.setBrush(Qt.red)
         paint.drawEllipse(center, 5, 5)
         paint.end()
 
     def moveCenter(self, x, y):
-        if x > 2*self.centerX-1:
-            x = 2*self.centerX-1
+        self.rangeXMin = float(self.rangeXMin)
+        self.rangeXMax = float(self.rangeXMax)
+        self.rangeYMin = float(self.rangeYMin)
+        self.rangeYMax = float(self.rangeYMax)
+        self.precisionX = int(self.precisionX)
+        self.precisionY = int(self.precisionY)
+
+        if x > 2*self.centerX:
+            x = 2*self.centerX
         if x < 0:
             x = 0
-        if y > 2*self.centerY-1:
-            y = 2*self.centerY-1
+        if y > 2*self.centerY:
+            y = 2*self.centerY
         if y < 0:
             y = 0
 
         self.currentX = x
         self.currentY = y
-        self.valueX = int(x/(self.centerX*2)*(int(self.rangeXMax)-int(self.rangeXMin)+1))+int(self.rangeXMin)
-        self.valueY = -int((y/(self.centerY*2)*(int(self.rangeYMax)-int(self.rangeYMin)+1))+int(self.rangeYMin))
+        self.valueX = np.around(x/(self.centerX*2) * (self.rangeXMax-self.rangeXMin)+self.rangeXMin, self.precisionX)
+        self.valueY = -np.around(y/(self.centerY*2) * (self.rangeYMax-self.rangeYMin)+self.rangeYMin, self.precisionY)
+
         self.repaint()
         self.valuesChanged.emit()
 
@@ -1066,6 +1086,8 @@ class MovableJoystick(QWidget, MovableWidget):
         data['rangeYMin'] = self.rangeYMin
         data['rangeXMax'] = self.rangeXMax
         data['rangeYMax'] = self.rangeYMax
+        data['precisionX'] = self.precisionX
+        data['precisionY'] = self.precisionY
         data['shortcutXPlus'] = self.shortcutXPlus.key().toString()
         data['shortcutYPlus'] = self.shortcutYPlus.key().toString()
         data['shortcutXMinus'] = self.shortcutXMinus.key().toString()
