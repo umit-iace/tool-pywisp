@@ -374,15 +374,22 @@ class RemoteWidgetEdit(QDialog):
         self.shortcutMinus = str(kwargs.get('shortcutMinus', ""))
         self.rangeXMax = str(kwargs.get('rangeXMax', 1))
         self.rangeXMin = str(kwargs.get('rangeXMin', -1))
+        self.precisionX = str(kwargs.get('precisionX', 0))
         self.shortcutXPlus = str(kwargs.get('shortcutXPlus', ""))
         self.shortcutXMinus = str(kwargs.get('shortcutXMinus', ""))
         self.rangeYMax = str(kwargs.get('rangeYMax', 1))
         self.rangeYMin = str(kwargs.get('rangeYMin', -1))
+        self.precisionY = str(kwargs.get('precisionY', 0))
         self.shortcutYPlus = str(kwargs.get('shortcutYPlus', ""))
         self.shortcutYMinus = str(kwargs.get('shortcutYMinus', ""))
 
         self.curModule = kwargs.get('module', None)
         self.curParameter = kwargs.get('parameter', None)
+
+        self.curModuleX = kwargs.get('moduleX', None)
+        self.curParameterX = kwargs.get('parameterX', None)
+        self.curModuleY = kwargs.get('moduleY', None)
+        self.curParameterY = kwargs.get('parameterY', None)
 
         self.editWidget = editWidget
 
@@ -397,10 +404,12 @@ class RemoteWidgetEdit(QDialog):
         self.shortcutFieldMinus = None
         self.rangeXMaxText = None
         self.rangeXMinText = None
+        self.precisionXText = None
         self.shortcutFieldXPlus = None
         self.shortcutFieldXMinus = None
         self.rangeYMaxText = None
         self.rangeYMinText = None
+        self.precisionYText = None
         self.shortcutFieldYPlus = None
         self.shortcutFieldYMinus = None
 
@@ -410,52 +419,24 @@ class RemoteWidgetEdit(QDialog):
 
         windowLayout = QVBoxLayout()
 
-        self.tabWidget = QTabWidget()
-        self.tabWidget.addTab(mainwidget, "PushButton")
-        windowLayout.addWidget(self.tabWidget)
+        windowLayout.addWidget(mainwidget)
         self.setLayout(windowLayout)
-        #todo second tab
 
         self.nameText = QLineEdit(self.name)
+        self.nameText.setMinimumWidth(200)
         mainLayout.addRow(QLabel("Name"), self.nameText)
         self.nameText.mousePressEvent = lambda event: self.nameText.selectAll()
 
         self.typeList = QComboBox()
         self.typeList.addItems(["PushButton", "Switch", "Slider", "Joystick"])
         self.typeList.setCurrentText(self.widgetType)
-        self.typeList.currentIndexChanged.connect(self.typeListChanged)
+        self.typeList.currentIndexChanged.connect(lambda: self.typeListChanged(kwargs.get('exp', None)))
         self.typeList.setEnabled(not self.editWidget)
         mainLayout.addRow(QLabel("Widget type"), self.typeList)
 
-        self.moduleList = QComboBox()
-        self.paramList = QComboBox()
-        self.modules = dict()
-        exp = kwargs.get('exp', None)
-        for key, value in exp.items():
-            self.modules[key] = [k for k, v in value.items()]
-
-            self.moduleList.addItem(key)
-
-        self.moduleList.currentIndexChanged.connect(self.moduleChanged)
-        if self.curModule is None:
-            self.moduleList.setCurrentIndex(0)
-            self.moduleChanged()
-        else:
-            self.moduleList.setCurrentText(self.curModule)
-            self.moduleChanged()
-
-        if self.curParameter is not None:
-            self.paramList.setCurrentText(self.curParameter)
-
-        mainLayout.addRow(QLabel("Modules:"), self.moduleList)
-        mainLayout.addRow(QLabel("Parameter:"), self.paramList)
-
-        self.settingsWidget = QWidget()
-        self.settingsWidgetLayout = QFormLayout()
-        self.settingsWidget.setLayout(self.settingsWidgetLayout)
-        mainLayout.addRow(self.settingsWidget)
-
-        self.typeListChanged()
+        self.tabWidget = QTabWidget()
+        self.tabWidget.setUsesScrollButtons(False)
+        mainLayout.addRow(self.tabWidget)
 
         # OK and Cancel buttons
         buttons = QDialogButtonBox(
@@ -465,20 +446,43 @@ class RemoteWidgetEdit(QDialog):
         buttons.rejected.connect(self.reject)
         windowLayout.addWidget(buttons)
 
+        self.typeListChanged(kwargs.get('exp', None))
+
         self.setWindowTitle("Add Remote Widget ...")
         resPath = get_resource("icon.svg")
         self.icon = QIcon(resPath)
         self.setWindowIcon(self.icon)
         self.setFixedSize(self.sizeHint())
 
-    def typeListChanged(self):
-        for i in reversed(range(self.settingsWidgetLayout.count())):
-            self.settingsWidgetLayout.itemAt(i).widget().deleteLater()
-
+    def typeListChanged(self, exp):
         height = QLineEdit().sizeHint().height()
 
         if self.typeList.currentText() == "PushButton":
-            self.tabWidget.setTabText(0, "PushButton")
+            self.settingsWidget = QWidget()
+            self.settingsWidgetLayout = QFormLayout()
+            self.settingsWidget.setLayout(self.settingsWidgetLayout)
+            self.tabWidget.clear()
+            self.tabWidget.addTab(self.settingsWidget, "Settings")
+
+            self.moduleList = QComboBox()
+            self.paramList = QComboBox()
+            self.modules = dict()
+            for key, value in exp.items():
+                self.modules[key] = [k for k, v in value.items()]
+
+                self.moduleList.addItem(key)
+            self.moduleList.currentIndexChanged.connect(lambda: self.moduleChanged(self.moduleList, self.paramList, self.modules))
+            if self.curModule is None:
+                self.moduleList.setCurrentIndex(0)
+                self.moduleChanged(self.moduleList, self.paramList, self.modules)
+            else:
+                self.moduleList.setCurrentText(self.curModule)
+                self.moduleChanged(self.moduleList, self.paramList, self.modules)
+            if self.curParameter is not None:
+                self.paramList.setCurrentText(self.curParameter)
+            self.settingsWidgetLayout.addRow(QLabel("Modules"), self.moduleList)
+            self.settingsWidgetLayout.addRow(QLabel("Parameter"), self.paramList)
+
             self.valueText = QLineEdit(self.valueOn)
             self.settingsWidgetLayout.addRow(QLabel("Value"), self.valueText)
             self.valueText.setValidator(QDoubleValidator())
@@ -489,14 +493,38 @@ class RemoteWidgetEdit(QDialog):
             dummy = QLabel("")
             dummy.setFixedHeight(height)
             self.settingsWidgetLayout.addRow(None, dummy)
-            dummy2 = QLabel("")
-            dummy2.setFixedHeight(height)
-            self.settingsWidgetLayout.addRow(None, dummy2)
-            dummy3 = QLabel("")
-            dummy3.setFixedHeight(height)
-            self.settingsWidgetLayout.addRow(None, dummy3)
+            dummy = QLabel("")
+            dummy.setFixedHeight(height)
+            self.settingsWidgetLayout.addRow(None, dummy)
+            dummy = QLabel("")
+            dummy.setFixedHeight(height)
+            self.settingsWidgetLayout.addRow(None, dummy)
         elif self.typeList.currentText() == "Switch":
-            self.tabWidget.setTabText(0, "Switch")
+            self.settingsWidget = QWidget()
+            self.settingsWidgetLayout = QFormLayout()
+            self.settingsWidget.setLayout(self.settingsWidgetLayout)
+            self.tabWidget.clear()
+            self.tabWidget.addTab(self.settingsWidget, "Settings")
+
+            self.moduleList = QComboBox()
+            self.paramList = QComboBox()
+            self.modules = dict()
+            for key, value in exp.items():
+                self.modules[key] = [k for k, v in value.items()]
+
+                self.moduleList.addItem(key)
+            self.moduleList.currentIndexChanged.connect(lambda: self.moduleChanged(self.moduleList, self.paramList, self.modules))
+            if self.curModule is None:
+                self.moduleList.setCurrentIndex(0)
+                self.moduleChanged(self.moduleList, self.paramList, self.modules)
+            else:
+                self.moduleList.setCurrentText(self.curModule)
+                self.moduleChanged(self.moduleList, self.paramList, self.modules)
+            if self.curParameter is not None:
+                self.paramList.setCurrentText(self.curParameter)
+            self.settingsWidgetLayout.addRow(QLabel("Modules"), self.moduleList)
+            self.settingsWidgetLayout.addRow(QLabel("Parameter"), self.paramList)
+
             self.valueOnText = QLineEdit(self.valueOn)
             self.settingsWidgetLayout.addRow(QLabel("Value On"), self.valueOnText)
             self.valueOnText.setValidator(QDoubleValidator())
@@ -507,9 +535,39 @@ class RemoteWidgetEdit(QDialog):
             self.valueOffText.setValidator(QDoubleValidator())
             self.shortcutField = ShortcutCreator()
             self.shortcutField.setText(self.shortcut)
-            self.settingsWidgetLayout.addRow(QLabel("Shortcut:"), self.shortcutField)
+            self.settingsWidgetLayout.addRow(QLabel("Shortcut"), self.shortcutField)
+            dummy = QLabel("")
+            dummy.setFixedHeight(height)
+            self.settingsWidgetLayout.addRow(None, dummy)
+            dummy = QLabel("")
+            dummy.setFixedHeight(height)
+            self.settingsWidgetLayout.addRow(None, dummy)
         elif self.typeList.currentText() == "Slider":
-            self.tabWidget.setTabText(0, "Slider")
+            self.settingsWidget = QWidget()
+            self.settingsWidgetLayout = QFormLayout()
+            self.settingsWidget.setLayout(self.settingsWidgetLayout)
+            self.tabWidget.clear()
+            self.tabWidget.addTab(self.settingsWidget, "Settings")
+
+            self.moduleList = QComboBox()
+            self.paramList = QComboBox()
+            self.modules = dict()
+            for key, value in exp.items():
+                self.modules[key] = [k for k, v in value.items()]
+
+                self.moduleList.addItem(key)
+            self.moduleList.currentIndexChanged.connect(lambda: self.moduleChanged(self.moduleList, self.paramList, self.modules))
+            if self.curModule is None:
+                self.moduleList.setCurrentIndex(0)
+                self.moduleChanged(self.moduleList, self.paramList, self.modules)
+            else:
+                self.moduleList.setCurrentText(self.curModule)
+                self.moduleChanged(self.moduleList, self.paramList, self.modules)
+            if self.curParameter is not None:
+                self.paramList.setCurrentText(self.curParameter)
+            self.settingsWidgetLayout.addRow(QLabel("Modules"), self.moduleList)
+            self.settingsWidgetLayout.addRow(QLabel("Parameter"), self.paramList)
+
             self.maxSliderText = QLineEdit(str(self.maxSlider))
             self.settingsWidgetLayout.addRow(QLabel("Max"), self.maxSliderText)
             self.maxSliderText.setValidator(QDoubleValidator())
@@ -524,63 +582,145 @@ class RemoteWidgetEdit(QDialog):
             self.stepSliderText.mousePressEvent = lambda event: self.stepSliderText.selectAll()
             self.shortcutFieldPlus = ShortcutCreator()
             self.shortcutFieldPlus.setText(self.shortcutPlus)
-            self.settingsWidgetLayout.addRow(QLabel("Shortcut Plus:"), self.shortcutFieldPlus)
+            self.settingsWidgetLayout.addRow(QLabel("Shortcut Plus"), self.shortcutFieldPlus)
             self.shortcutFieldMinus = ShortcutCreator()
             self.shortcutFieldMinus.setText(self.shortcutMinus)
-            self.settingsWidgetLayout.addRow(QLabel("Shortcut Minus:"), self.shortcutFieldMinus)
+            self.settingsWidgetLayout.addRow(QLabel("Shortcut Minus"), self.shortcutFieldMinus)
         elif self.typeList.currentText() == "Joystick":
-            self.tabWidget.setTabText(0, "Joystick X-Axis")
+
+            self.settingsWidgetX = QWidget()
+            self.settingsWidgetLayoutX = QFormLayout()
+            self.settingsWidgetX.setLayout(self.settingsWidgetLayoutX)
+            self.tabWidget.clear()
+            self.tabWidget.addTab(self.settingsWidgetX, "Settings X-Axis")
+
+            self.moduleListX = QComboBox()
+            self.paramListX = QComboBox()
+            self.modulesX = dict()
+            for key, value in exp.items():
+                self.modulesX[key] = [k for k, v in value.items()]
+
+                self.moduleListX.addItem(key)
+            self.moduleListX.currentIndexChanged.connect(lambda: self.moduleChanged(self.moduleListX, self.paramListX, self.modulesX))
+            if self.curModuleX is None:
+                self.moduleListX.setCurrentIndex(0)
+                self.moduleChanged(self.moduleListX, self.paramListX, self.modulesX)
+            else:
+                self.moduleListX.setCurrentText(self.curModuleX)
+                self.moduleChanged(self.moduleListX, self.paramListX, self.modulesX)
+            if self.curParameterX is not None:
+                self.paramListX.setCurrentText(self.curParameterX)
+            self.settingsWidgetLayoutX.addRow(QLabel("Modules"), self.moduleListX)
+            self.settingsWidgetLayoutX.addRow(QLabel("Parameter"), self.paramListX)
+
             self.rangeXMaxText = QLineEdit(self.rangeXMax)
-            self.settingsWidgetLayout.addRow(QLabel("Range Max"), self.rangeXMaxText)
-            self.rangeXMaxText.setValidator(QIntValidator())
+            self.settingsWidgetLayoutX.addRow(QLabel("Range Max"), self.rangeXMaxText)
+            self.rangeXMaxText.setValidator(QDoubleValidator())
             self.rangeXMaxText.mousePressEvent = lambda event: self.rangeXMaxText.selectAll()
             self.rangeXMinText = QLineEdit(self.rangeXMin)
-            self.settingsWidgetLayout.addRow(QLabel("Range Min"), self.rangeXMinText)
+            self.settingsWidgetLayoutX.addRow(QLabel("Range Min"), self.rangeXMinText)
             self.rangeXMinText.mousePressEvent = lambda event: self.rangeXMinText.selectAll()
-            self.rangeXMinText.setValidator(QIntValidator())
+            self.rangeXMinText.setValidator(QDoubleValidator())
+            self.precisionXText = QLineEdit(self.precisionX)
+            self.settingsWidgetLayoutX.addRow(QLabel("Precision"), self.precisionXText)
+            self.precisionXText.mousePressEvent = lambda event: self.precisionXText.selectAll()
+            self.precisionXText.setValidator(QIntValidator(0, 5))
             self.shortcutFieldXPlus = ShortcutCreator()
             self.shortcutFieldXPlus.setText(self.shortcutXPlus)
-            self.settingsWidgetLayout.addRow(QLabel("Shortcut Plus:"), self.shortcutFieldXPlus)
+            self.settingsWidgetLayoutX.addRow(QLabel("Shortcut Plus"), self.shortcutFieldXPlus)
             self.shortcutFieldXMinus = ShortcutCreator()
             self.shortcutFieldXMinus.setText(self.shortcutXMinus)
-            self.settingsWidgetLayout.addRow(QLabel("Shortcut Minus:"), self.shortcutFieldXMinus)
+            self.settingsWidgetLayoutX.addRow(QLabel("Shortcut Minus"), self.shortcutFieldXMinus)
 
-    def moduleChanged(self):
-        self.paramList.clear()
-        module = self.moduleList.currentText()
+            self.settingsWidgetY = QWidget()
+            self.settingsWidgetLayoutY = QFormLayout()
+            self.settingsWidgetY.setLayout(self.settingsWidgetLayoutY)
+            self.tabWidget.addTab(self.settingsWidgetY, "Settings Y-Axis")
 
-        for p in self.modules[module]:
-            self.paramList.addItem(p)
+            self.moduleListY = QComboBox()
+            self.paramListY = QComboBox()
+            self.modulesY = dict()
+            for key, value in exp.items():
+                self.modulesY[key] = [k for k, v in value.items()]
+
+                self.moduleListY.addItem(key)
+            self.moduleListY.currentIndexChanged.connect(lambda: self.moduleChanged(self.moduleListY, self.paramListY, self.modulesY))
+            if self.curModuleY is None:
+                self.moduleListY.setCurrentIndex(0)
+                self.moduleChanged(self.moduleListY, self.paramListY, self.modulesY)
+            else:
+                self.moduleListY.setCurrentText(self.curModuleY)
+                self.moduleChanged(self.moduleListY, self.paramListY, self.modulesY)
+            if self.curParameterY is not None:
+                self.paramListY.setCurrentText(self.curParameterY)
+            self.settingsWidgetLayoutY.addRow(QLabel("Modules"), self.moduleListY)
+            self.settingsWidgetLayoutY.addRow(QLabel("Parameter"), self.paramListY)
+
+            self.rangeYMaxText = QLineEdit(self.rangeYMax)
+            self.settingsWidgetLayoutY.addRow(QLabel("Range Max"), self.rangeYMaxText)
+            self.rangeYMaxText.setValidator(QDoubleValidator())
+            self.rangeYMaxText.mousePressEvent = lambda event: self.rangeYMaxText.selectAll()
+            self.rangeYMinText = QLineEdit(self.rangeYMin)
+            self.settingsWidgetLayoutY.addRow(QLabel("Range Min"), self.rangeYMinText)
+            self.rangeYMinText.mousePressEvent = lambda event: self.rangeYMinText.selectAll()
+            self.rangeYMinText.setValidator(QDoubleValidator())
+            self.precisionYText = QLineEdit(self.precisionY)
+            self.settingsWidgetLayoutY.addRow(QLabel("Precision"), self.precisionYText)
+            self.precisionYText.mousePressEvent = lambda event: self.precisionYText.selectAll()
+            self.precisionYText.setValidator(QIntValidator(0, 5))
+            self.shortcutFieldYPlus = ShortcutCreator()
+            self.shortcutFieldYPlus.setText(self.shortcutYPlus)
+            self.settingsWidgetLayoutY.addRow(QLabel("Shortcut Plus"), self.shortcutFieldYPlus)
+            self.shortcutFieldYMinus = ShortcutCreator()
+            self.shortcutFieldYMinus.setText(self.shortcutYMinus)
+            self.settingsWidgetLayoutY.addRow(QLabel("Shortcut Minus"), self.shortcutFieldYMinus)
+
+    def moduleChanged(self, moduleList, paramList, modules):
+        paramList.clear()
+        module = moduleList.currentText()
+
+        for p in modules[module]:
+            paramList.addItem(p)
 
     def _getData(self):
         msg = dict()
         msg['name'] = self.nameText.text()
         msg['widgetType'] = self.typeList.currentText()
-        msg['module'] = self.moduleList.currentText()
-        msg['parameter'] = self.paramList.currentText()
 
         if self.typeList.currentText() == "PushButton":
+            msg['module'] = self.moduleList.currentText()
+            msg['parameter'] = self.paramList.currentText()
             msg['valueOn'] = self.valueText.text()
             msg['shortcut'] = self.shortcutField.getKeySequence()
         elif self.typeList.currentText() == "Switch":
+            msg['module'] = self.moduleList.currentText()
+            msg['parameter'] = self.paramList.currentText()
             msg['valueOn'] = self.valueOnText.text()
             msg['valueOff'] = self.valueOffText.text()
             msg['shortcut'] = self.shortcutField.getKeySequence()
         elif self.typeList.currentText() == "Slider":
+            msg['module'] = self.moduleList.currentText()
+            msg['parameter'] = self.paramList.currentText()
             msg['minSlider'] = self.minSliderText.text()
             msg['maxSlider'] = self.maxSliderText.text()
             msg['stepSlider'] = self.stepSliderText.text()
             msg['shortcutPlus'] = self.shortcutFieldPlus.getKeySequence()
             msg['shortcutMinus'] = self.shortcutFieldMinus.getKeySequence()
         elif self.typeList.currentText() == "Joystick":
+            msg['moduleX'] = self.moduleListX.currentText()
+            msg['parameterX'] = self.paramListX.currentText()
+            msg['moduleY'] = self.moduleListY.currentText()
+            msg['parameterY'] = self.paramListY.currentText()
             msg['rangeXMax'] = self.rangeXMaxText.text()
             msg['rangeXMin'] = self.rangeXMinText.text()
-            #msg['rangeYMax'] = self.rangeYMaxText.text()
-            #msg['rangeYMin'] = self.rangeYMinText.text()
+            msg['rangeYMax'] = self.rangeYMaxText.text()
+            msg['rangeYMin'] = self.rangeYMinText.text()
+            msg['precisionX'] = self.precisionXText.text()
+            msg['precisionY'] = self.precisionYText.text()
             msg['shortcutXPlus'] = self.shortcutFieldXPlus.getKeySequence()
             msg['shortcutXMinus'] = self.shortcutFieldXMinus.getKeySequence()
-            #msg['shortcutYPlus'] = self.shortcutFieldYPlus.getKeySequence()
-            #msg['shortcutYMinus'] = self.shortcutFieldYMinus.getKeySequence()
+            msg['shortcutYPlus'] = self.shortcutFieldYPlus.getKeySequence()
+            msg['shortcutYMinus'] = self.shortcutFieldYMinus.getKeySequence()
 
         return msg
 
@@ -641,8 +781,7 @@ class MovableWidget(object):
     def __init__(self, name, label=None, **kwargs):
         self.widgetName = name
         self.label = label
-        self.module = cp.copy(kwargs.get('module', None))
-        self.parameter = cp.copy(kwargs.get('parameter', None))
+
         self._mousePressPos = None
         self._mouseMovePos = None
 
@@ -700,6 +839,9 @@ class MovablePushButton(QPushButton, MovableWidget):
         MovableWidget.__init__(self, name, **kwargs)
         self.valueOn = valueOn
 
+        self.module = cp.copy(kwargs.get('module', None))
+        self.parameter = cp.copy(kwargs.get('parameter', None))
+
         self.shortcut = QShortcut(self)
         self.shortcut.setKey(shortcutKey)
         self.shortcut.setAutoRepeat(False)
@@ -732,6 +874,9 @@ class MovableSlider(QSlider, MovableWidget):
         self.maxSlider = maxSlider
         self.stepSlider = stepSlider
         self.label = label
+
+        self.module = cp.copy(kwargs.get('module', None))
+        self.parameter = cp.copy(kwargs.get('parameter', None))
 
         self.shortcutPlus = QShortcut(self)
         self.shortcutPlus.setKey(shortcutPlusKey)
@@ -777,6 +922,9 @@ class MovableSwitch(QPushButton, MovableWidget):
         self.valueOn = valueOn
         self.valueOff = valueOff
 
+        self.module = cp.copy(kwargs.get('module', None))
+        self.parameter = cp.copy(kwargs.get('parameter', None))
+
         self.shortcut = QShortcut(self)
         self.shortcut.setKey(shortcutKey)
         self.shortcut.setAutoRepeat(False)
@@ -807,7 +955,7 @@ class MovableSwitch(QPushButton, MovableWidget):
 class MovableJoystick(QWidget, MovableWidget):
     valuesChanged = pyqtSignal()
     def __init__(self, name, rangeXMax, rangeXMin, rangeYMax, rangeYMin, shortcutXPlusKey, shortcutXMinusKey,
-                 shortcutYPlusKey, shortcutYMinusKey, **kwargs):
+                 shortcutYPlusKey, shortcutYMinusKey, precisionX, precisionY, **kwargs):
         QWidget.__init__(self, name=name)
         MovableWidget.__init__(self, name, **kwargs)
         self.currentX = 100
@@ -815,26 +963,35 @@ class MovableJoystick(QWidget, MovableWidget):
         self.centerX = 100
         self.centerY = 100
 
-        self.rangeXMin = rangeXMin
-        self.rangeXMax = rangeXMax
-        self.rangeYMin = rangeYMin
-        self.rangeYMax = rangeYMax
-        self.valueX = int(1/2*(int(self.rangeXMax)-int(self.rangeXMin)+1))+int(self.rangeXMin)
-        self.valueY = int(1/2*(int(self.rangeYMax)-int(self.rangeYMin)+1))+int(self.rangeYMin)
+        self.precisionX = int(precisionX)
+        self.precisionY = int(precisionY)
+
+        self.rangeXMin = float(rangeXMin)
+        self.rangeXMax = float(rangeXMax)
+        self.rangeYMin = float(rangeYMin)
+        self.rangeYMax = float(rangeYMax)
+
+        self.valueX = (self.rangeXMax-self.rangeXMin)/2+self.rangeXMin
+        self.valueY = -((self.rangeYMax-self.rangeYMin)/2+self.rangeYMin)
+
+        self.moduleX = cp.copy(kwargs.get('moduleX', None))
+        self.parameterX = cp.copy(kwargs.get('parameterX', None))
+        self.moduleY = cp.copy(kwargs.get('moduleY', None))
+        self.parameterY = cp.copy(kwargs.get('parameterY', None))
 
         self.shortcutXPlus = QShortcut(self)
         self.shortcutXPlus.setKey(shortcutXPlusKey)
-        self.shortcutXPlus.activated.connect(lambda: self.moveCenter(200, self.currentY))
+        self.shortcutXPlus.activated.connect(lambda: self.moveCenter(self.currentX+5, self.currentY))
         self.shortcutXMinus = QShortcut(self)
         self.shortcutXMinus.setKey(shortcutXMinusKey)
-        self.shortcutXMinus.activated.connect(lambda: self.moveCenter(0, self.currentY))
+        self.shortcutXMinus.activated.connect(lambda: self.moveCenter(self.currentX-5, self.currentY))
 
         self.shortcutYPlus = QShortcut(self)
         self.shortcutYPlus.setKey(shortcutYPlusKey)
-        self.shortcutYPlus.activated.connect(lambda: self.moveCenter(self.currentX, 200))
+        self.shortcutYPlus.activated.connect(lambda: self.moveCenter(self.currentX, self.currentY-5))
         self.shortcutYMinus = QShortcut(self)
         self.shortcutYMinus.setKey(shortcutYMinusKey)
-        self.shortcutYMinus.activated.connect(lambda: self.moveCenter(self.currentX, 0))
+        self.shortcutYMinus.activated.connect(lambda: self.moveCenter(self.currentX, self.currentY+5))
 
         self.updateData()
 
@@ -843,23 +1000,40 @@ class MovableJoystick(QWidget, MovableWidget):
         paint.begin(self)
         paint.setRenderHint(QPainter.Antialiasing)
         paint.setBrush(Qt.lightGray)
-        paint.drawRect(event.rect())
+        paint.drawRoundedRect(event.rect(), 5, 5)
         radius = 20
         actualCenter = QPoint(self.currentX, self.currentY)
         center = QPoint(self.centerX, self.centerY)
         paint.setBrush(Qt.black)
         paint.drawEllipse(actualCenter, radius, radius)
-        paint.drawText(1, 15, self.widgetName);
-        paint.drawText(1, 195, "["+str(self.valueX)+","+str(self.valueY)+"]");
+        paint.drawText(1, 15, self.widgetName)
+        paint.drawText(1, 195, "["+str(self.valueX)+","+str(self.valueY)+"]")
         paint.setBrush(Qt.red)
         paint.drawEllipse(center, 5, 5)
         paint.end()
 
     def moveCenter(self, x, y):
+        self.rangeXMin = float(self.rangeXMin)
+        self.rangeXMax = float(self.rangeXMax)
+        self.rangeYMin = float(self.rangeYMin)
+        self.rangeYMax = float(self.rangeYMax)
+        self.precisionX = int(self.precisionX)
+        self.precisionY = int(self.precisionY)
+
+        if x > 2*self.centerX:
+            x = 2*self.centerX
+        if x < 0:
+            x = 0
+        if y > 2*self.centerY:
+            y = 2*self.centerY
+        if y < 0:
+            y = 0
+
         self.currentX = x
         self.currentY = y
-        self.valueX = int(x/(self.centerX*2)*(int(self.rangeXMax)-int(self.rangeXMin)+1))+int(self.rangeXMin)
-        self.valueY = int(y/(self.centerY*2)*(int(self.rangeYMax)-int(self.rangeYMin)+1))+int(self.rangeYMin)
+        self.valueX = np.around(x/(self.centerX*2) * (self.rangeXMax-self.rangeXMin)+self.rangeXMin, self.precisionX)
+        self.valueY = -np.around(y/(self.centerY*2) * (self.rangeYMax-self.rangeYMin)+self.rangeYMin, self.precisionY)
+
         self.repaint()
         self.valuesChanged.emit()
 
@@ -898,6 +1072,31 @@ class MovableJoystick(QWidget, MovableWidget):
                 event.ignore()
                 return
             self.contextMenu.exec_(self.mapToGlobal(event.pos()))
+
+    def getData(self):
+        data = dict()
+
+        data['widgetType'] = 'Joystick'
+        data['name'] = self.widgetName
+        data['moduleX'] = self.moduleX
+        data['parameterX'] = self.parameterX
+        data['moduleY'] = self.moduleY
+        data['parameterY'] = self.parameterY
+        data['rangeXMin'] = self.rangeXMin
+        data['rangeYMin'] = self.rangeYMin
+        data['rangeXMax'] = self.rangeXMax
+        data['rangeYMax'] = self.rangeYMax
+        data['precisionX'] = self.precisionX
+        data['precisionY'] = self.precisionY
+        data['shortcutXPlus'] = self.shortcutXPlus.key().toString()
+        data['shortcutYPlus'] = self.shortcutYPlus.key().toString()
+        data['shortcutXMinus'] = self.shortcutXMinus.key().toString()
+        data['shortcutYMinus'] = self.shortcutYMinus.key().toString()
+
+        return data
+
+    def updateData(self):
+        self.moveCenter(self.centerX, self.centerY)
 
 
 class ShortcutCreator(QLineEdit):
