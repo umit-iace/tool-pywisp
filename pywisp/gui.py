@@ -59,6 +59,7 @@ class MainGui(QMainWindow):
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.updateDataPlots)
+        self.lastHeartbeat = 0
 
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -1310,6 +1311,17 @@ class MainGui(QMainWindow):
 
         for chart in self.plotCharts:
             chart.updatePlot()
+
+        # keepalive heartbeat
+        KEEPALIVETIMEOUT = 400  # ms
+        hbData = {'id': 1,
+                  'msg': bytes([2])}
+        now = time.time_ns() / 10**6
+        if now > self.lastHeartbeat + KEEPALIVETIMEOUT:
+            self.writeToConnection(hbData)
+            self.lastHeartbeat = now
+
+
 
     def loadStandardDockState(self):
         """
