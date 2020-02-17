@@ -44,6 +44,7 @@ class MainGui(QMainWindow):
 
         # general config parameters
         self.configTimerTime = 100
+        self.configHeartbeatTime = 250
         self.configInterpolationPoints = 100
         self.configMovingWindowEnable = False
         self.configMovingWindowSize = 10
@@ -1085,6 +1086,7 @@ class MainGui(QMainWindow):
     def configureConfig(self, idx):
         if 'Config' in self._experiments[idx]:
             self.configTimerTime = self._experiments[idx]['Config']['TimerTime']
+            self.configHeartbeatTime = self._experiments[idx]['Config']['Heartbeat']
             self.configInterpolationPoints = self._experiments[idx]['Config']['InterpolationPoints']
             self.configMovingWindowSize = self._experiments[idx]['Config']['MovingWindowSize']
             self.configMovingWindowEnable = self._experiments[idx]['Config']['MovingWindowEnable']
@@ -1313,11 +1315,10 @@ class MainGui(QMainWindow):
             chart.updatePlot()
 
         # keepalive heartbeat
-        KEEPALIVETIMEOUT = 400  # ms
         hbData = {'id': 1,
                   'msg': bytes([2])}
         now = time.time_ns() / 10**6
-        if now > self.lastHeartbeat + KEEPALIVETIMEOUT:
+        if now > self.lastHeartbeat + self.configHeartbeatTime:
             self.writeToConnection(hbData)
             self.lastHeartbeat = now
 
