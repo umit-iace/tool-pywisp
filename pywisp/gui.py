@@ -44,6 +44,7 @@ class MainGui(QMainWindow):
 
         # general config parameters
         self.configTimerTime = 100
+        self.configHeartbeatTime = 250
         self.configInterpolationPoints = 100
         self.configMovingWindowEnable = False
         self.configMovingWindowSize = 10
@@ -59,6 +60,8 @@ class MainGui(QMainWindow):
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.updateDataPlots)
+        self.heartbeatTimer = QTimer()
+        self.heartbeatTimer.timeout.connect(self.heartbeat)
 
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -990,6 +993,7 @@ class MainGui(QMainWindow):
                 connInstance.doRead = True
 
         self.timer.start(int(self.configTimerTime))
+        self.heartbeatTimer.start(int(self.configHeartbeatTime))
         self.exp.runExperiment()
 
     @pyqtSlot()
@@ -1006,6 +1010,7 @@ class MainGui(QMainWindow):
         self.experimentList.repaint()
 
         self.timer.stop()
+        self.heartbeatTimer.stop()
         self.exp.stopExperiment()
 
         time.sleep(1)
@@ -1084,6 +1089,7 @@ class MainGui(QMainWindow):
     def configureConfig(self, idx):
         if 'Config' in self._experiments[idx]:
             self.configTimerTime = self._experiments[idx]['Config']['TimerTime']
+            self.configHeartbeatTime = self._experiments[idx]['Config']['Heartbeat']
             self.configInterpolationPoints = self._experiments[idx]['Config']['InterpolationPoints']
             self.configMovingWindowSize = self._experiments[idx]['Config']['MovingWindowSize']
             self.configMovingWindowEnable = self._experiments[idx]['Config']['MovingWindowEnable']
@@ -1310,6 +1316,10 @@ class MainGui(QMainWindow):
 
         for chart in self.plotCharts:
             chart.updatePlot()
+
+    def heartbeat(self):
+        self.writeToConnection({'id': 1,
+                                'msg': bytes([1<<1])})
 
     def loadStandardDockState(self):
         """
