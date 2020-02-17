@@ -50,6 +50,14 @@ public:
     bool runExp() { return this->bActivateExperiment; }
 
     /**
+     * @brief reset transport layer, whole rig
+     */
+    void reset() {
+        this->bActivateExperiment = 0;
+        this->_benchData.lTime = 0;
+    }
+
+    /**
      * Handles incoming data frames.
      * @param id frame identifier
      * @param payload frame data as pointer
@@ -86,6 +94,7 @@ public:
 
 private:
     bool bActivateExperiment = false;
+    unsigned long keepaliveTime = 0;
     unsigned char cCursor = 0;
     uint8_t *payload;
     uint8_t payloadSize;

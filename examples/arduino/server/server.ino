@@ -10,6 +10,7 @@
 
 // System parameter
 const unsigned long lDt = 1000;    ///< Sampling step [ms]
+const unsigend long lKeepalive = 500;   ///< keepalive time [ms]
 //----------------------------------------------------------------------
 
 // Communication
@@ -47,6 +48,11 @@ void fContLoop() {
         fTrajectory(&transport._benchData, &transport._trajData);
 
         transport.sendData();
+
+        // handle keepalive signal
+        if (transport._benchData.lTime > transport.keepaliveTime + lKeepalive) {
+            transport.reset();
+        }
     }
 }
 //----------------------------------------------------------------------

@@ -45,9 +45,16 @@ void Transport::handleFrame(uint8_t id, uint8_t *payload, uint8_t payloadLen) {
 //----------------------------------------------------------------------
 
 void Transport::unpackExp(uint8_t *payload) {
+    uint8_t iData = 0;
     startFrame(payload);
-    unPack(this->bActivateExperiment);
-    this->_benchData.lTime = 0;
+    unPack(iData);
+    if (iData & 2) {
+        this->keepaliveTime = this->_benchData.lTime;
+    } else {
+        this->bActivateExperiment);
+        this->_benchData.lTime = 0;
+    }
+
 }
 //----------------------------------------------------------------------
 
