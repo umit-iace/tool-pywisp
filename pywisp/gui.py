@@ -60,7 +60,8 @@ class MainGui(QMainWindow):
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.updateDataPlots)
-        self.lastHeartbeat = 0
+        self.heartbeatTimer = QTimer()
+        self.heartbeatTimer.timeout.connect(self.heartbeat)
 
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -992,6 +993,7 @@ class MainGui(QMainWindow):
                 connInstance.doRead = True
 
         self.timer.start(int(self.configTimerTime))
+        self.heartbeatTimer.start(int(self.configHeartbeatTime))
         self.exp.runExperiment()
 
     @pyqtSlot()
@@ -1008,6 +1010,7 @@ class MainGui(QMainWindow):
         self.experimentList.repaint()
 
         self.timer.stop()
+        self.heartbeatTimer.stop()
         self.exp.stopExperiment()
 
         time.sleep(1)
@@ -1314,15 +1317,9 @@ class MainGui(QMainWindow):
         for chart in self.plotCharts:
             chart.updatePlot()
 
-        # keepalive heartbeat
-        hbData = {'id': 1,
-                  'msg': bytes([2])}
-        now = time.time_ns() / 10**6
-        if now > self.lastHeartbeat + self.configHeartbeatTime:
-            self.writeToConnection(hbData)
-            self.lastHeartbeat = now
-
-
+    def heartbeat(self):
+        self.writeToConnection({'id': 1,
+                                'msg': bytes([1<<1])})
 
     def loadStandardDockState(self):
         """
