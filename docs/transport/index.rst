@@ -1,12 +1,13 @@
 Transport Layer
 ===============
 
-To handle all communication interfaces at B&R, Raspberry Pi, Arduino, ... on the same way a middle layer is implemented
-called `Transport-Layer`. Additionally to this for the handling of data a frame based approach is used, that use the
-implementation of the `MIN-Protocol` called `MIN-Frame`.
+To handle all communication interfaces for B&R, Raspberry Pi, Arduino, ... on the same way a middle layer is implemented
+called `Transport-Layer`. Additionally to this for the data handling the frame based protocol
+`MIN-Protocol <https://github.com/min-protocol/min>`_ is used.
 
-Currently only on serial used devices, like Arduino, the `MIN-Protocol` itself is used. On devices where a `TCP`-based
-approach is used, no special protocol is implemented.
+Currently only for wired serial connected devices, like Arduino or STMs, the `MIN-Protocol` itself is used.
+On devices where a `TCP`-based approach or a wifi serial connection is used, only the frame handling by `MIN` is
+applied.
 
 Transport Class
 ---------------
@@ -30,4 +31,4 @@ Each `MIN-Frame` data has the structure:
     * - unique identifier, packed as one byte
       - data, packed as byte array
 
-The byte array length differs at each device. On `Arduino UNO` the limits is at 50 bytes, because of the intern memory.
+The byte array length differs at each device. On `Arduino UNO` the limit is at 50 bytes, because of the intern memory.
