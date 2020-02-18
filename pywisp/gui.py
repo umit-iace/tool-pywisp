@@ -993,7 +993,8 @@ class MainGui(QMainWindow):
                 connInstance.doRead = True
 
         self.timer.start(int(self.configTimerTime))
-        self.heartbeatTimer.start(int(self.configHeartbeatTime))
+        if (self.configHeartbeatTime):
+            self.heartbeatTimer.start(int(self.configHeartbeatTime))
         self.exp.runExperiment()
 
     @pyqtSlot()
