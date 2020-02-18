@@ -6,3 +6,9 @@
 
   Visu:
     MplTwoPendulumVisualizer:
+
+  Config:
+    TimerTime: 10
+    InterpolationPoints: 0
+    MovingWindowSize: 10
+    MovingWindowEnable: True

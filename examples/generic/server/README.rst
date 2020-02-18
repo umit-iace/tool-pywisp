@@ -10,6 +10,7 @@ Requirements
 For the usage of the Arduino code the following programs are needed:
 
 - Python
+- pip
 
 Additional the packages in the `requirements.txt` in these folder must be installed.
 

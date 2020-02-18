@@ -72,11 +72,11 @@ class MplTwoPendulumVisualizer(MplVisualizer):
         x = phi1 = phi2 = 0
         for name, buffer in dataPoints.items():
             if buffer.values:
-                if name == 'Value1':
+                if name == 'x':
                     x = buffer.values[-1]
-                elif name == 'Value2':
+                elif name == 'phi1':
                     phi1 = -buffer.values[-1]
-                elif name == 'Value3':
+                elif name == 'phi2':
                     phi2 = -buffer.values[-1]
 
         x0 = np.array([x, 0])
