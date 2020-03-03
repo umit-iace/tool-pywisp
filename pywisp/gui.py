@@ -44,7 +44,7 @@ class MainGui(QMainWindow):
 
         # general config parameters
         self.configTimerTime = 100
-        self.configHeartbeatTime = 250
+        self.configHeartbeatTime = 0
         self.configInterpolationPoints = 100
         self.configMovingWindowEnable = False
         self.configMovingWindowSize = 10
