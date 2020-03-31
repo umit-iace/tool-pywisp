@@ -51,7 +51,7 @@ void Transport::unpackExp(uint8_t *payload) {
     if (iData & 2) {
         this->keepaliveTime = this->_benchData.lTime;
     } else {
-        this->bActivateExperiment);
+        this->bActivateExperiment = iData & 1;
         this->_benchData.lTime = 0;
     }
 
