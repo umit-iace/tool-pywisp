@@ -10,7 +10,7 @@
 
 // System parameter
 const unsigned long lDt = 1000;    ///< Sampling step [ms]
-const unsigend long lKeepalive = 500;   ///< keepalive time [ms]
+const unsigned long lKeepalive = 500;   ///< keepalive time [ms]
 //----------------------------------------------------------------------
 
 // Communication
