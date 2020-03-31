@@ -92,9 +92,10 @@ public:
         double dOutput = 85.0;             ///< output value of the trajectory
     } _trajData;
 
+    unsigned long keepaliveTime = 0;
+
 private:
     bool bActivateExperiment = false;
-    unsigned long keepaliveTime = 0;
     unsigned char cCursor = 0;
     uint8_t *payload;
     uint8_t payloadSize;

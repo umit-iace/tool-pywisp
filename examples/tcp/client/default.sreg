@@ -52,3 +52,4 @@
     InterpolationPoints: 0
     MovingWindowSize: 5
     MovingWindowEnable: True
+    Heartbeat: 0

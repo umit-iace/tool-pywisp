@@ -14,5 +14,12 @@
     Value3: 4
     Value4: 1
 
+  Config:
+    TimerTime: 10
+    InterpolationPoints: 0
+    MovingWindowSize: 5
+    MovingWindowEnable: True
+    Heartbeat: 100
+
   Visu:
     MplExampleVisualizer:

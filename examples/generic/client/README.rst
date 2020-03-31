@@ -2,8 +2,10 @@
 Visualization for the Generic example
 =====================================
 
-This `pyWisp` example can be used for the Arduino example.
+This `pyWisp` example can be used for the Generic example.
+The following features contains no additonal features.
 
+* Heartbeat
 .. sphinx-marker
 
 Communication

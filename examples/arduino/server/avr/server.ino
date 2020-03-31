@@ -9,8 +9,8 @@
 //----------------------------------------------------------------------
 
 // System parameter
-const unsigned long lDt = 1000;    ///< Sampling step [ms]
-const unsigned long lKeepalive = 500;   ///< keepalive time [ms]
+const unsigned long lDt = 100;              ///< Sampling step [ms]
+const unsigned long lKeepalive = 500;       ///< keepalive time [ms]
 //----------------------------------------------------------------------
 
 // Communication
@@ -50,7 +50,7 @@ void fContLoop() {
         transport.sendData();
 
         // handle keepalive signal
-        if (transport._benchData.lTime > transport.keepaliveTime + lKeepalive) {
+        if (lKeepalive != 0 && transport._benchData.lTime > transport.keepaliveTime + lKeepalive) {
             transport.reset();
         }
     }

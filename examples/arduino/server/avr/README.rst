@@ -20,6 +20,18 @@ Additionally to this the following repository must be cloned:
 Useage
 ^^^^^^
 
+In the makefile you have to correct the path to your arduino installation
+
+.. code:: bash
+
+    ARDUINO_DIR   	= <your path>
+
+and to the Arduino-Makefile
+
+.. code:: bash
+
+    include <your path>/Arduino.mk
+
 To compile the code:
 
 .. code:: bash

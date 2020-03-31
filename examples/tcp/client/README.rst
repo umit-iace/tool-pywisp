@@ -3,6 +3,9 @@ Visualization for the TCP example
 =================================
 
 This `pyWisp` example can be used for the PC and for the B&R example.
+The following features are included:
+
+* Remote controls
 
 .. sphinx-marker
 

@@ -993,7 +993,7 @@ class MainGui(QMainWindow):
                 connInstance.doRead = True
 
         self.timer.start(int(self.configTimerTime))
-        if (self.configHeartbeatTime):
+        if self.configHeartbeatTime:
             self.heartbeatTimer.start(int(self.configHeartbeatTime))
         self.exp.runExperiment()
 
@@ -1320,7 +1320,7 @@ class MainGui(QMainWindow):
 
     def heartbeat(self):
         self.writeToConnection({'id': 1,
-                                'msg': bytes([1<<1])})
+                                'msg': bytes([1 << 1])})
 
     def loadStandardDockState(self):
         """

@@ -23,4 +23,5 @@ To start the server:
 
     python server.py
 
-For the interaction a gamepad or the keyboard can be used.
+For the interaction a gamepad or the keyboard (left and right key) can be used.
+Focus on terminal window with started :code:`server.py`.

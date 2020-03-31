@@ -9,8 +9,8 @@ MONITOR_PORT	= com4
 include $(USERPROFILE)/Documents/Arduino-Makefile/Arduino.mk
 
 else
-ARDUINO_DIR   	= /Applications/Arduino.app/Contents/Java
+ARDUINO_DIR   	= /usr/share/arduino
 
-include $(HOME)/Documents/development/git/Arduino-Makefile/Arduino.mk
+include $(HOME)/git/Arduino-Makefile/Arduino.mk
 
 endif

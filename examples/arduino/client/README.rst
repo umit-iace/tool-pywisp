@@ -3,6 +3,9 @@ Visualization for the Arduino example
 =====================================
 
 This `pyWisp` example can be used for the Arduino example.
+The following features are included:
+
+* Heartbeat
 
 .. sphinx-marker
 
