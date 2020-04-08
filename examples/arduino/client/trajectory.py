@@ -28,7 +28,7 @@ class RampTrajectory(ExperimentModule):
         pass
 
     def getParams(self, data):
-        payload = struct.pack('>fLfL',
+        payload = struct.pack('>dLdL',
                               float(data[0]),
                               int(float(data[1]) * 1000),
                               float(data[2]),
@@ -42,7 +42,7 @@ class RampTrajectory(ExperimentModule):
         dataPoints = {}
         fid = frame.min_id
         if fid == self.ids[0]:
-            data = struct.unpack('>Lf', frame.payload)
+            data = struct.unpack('>Ld', frame.payload)
             dataPoints['Time'] = data[0]
             dataPoints['DataPoints'] = {'TrajOutput': data[1]}
         else:

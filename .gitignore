@@ -103,4 +103,4 @@ CMakeFiles
 Makefile
 *.cmake
 
-server
+#server

@@ -27,7 +27,7 @@ class Test(ExperimentModule):
         ExperimentModule.__init__(self)
 
     def getParams(self, data):
-        payload = struct.pack('>ffhB',
+        payload = struct.pack('>dfiB',
                               float(data[0]),
                               float(data[1]),
                               int(data[2]),
@@ -41,13 +41,14 @@ class Test(ExperimentModule):
         dataPoints = {}
         fid = frame.min_id
         if fid == self.ids[0]:
-            data = struct.unpack('>LffhB', frame.payload)
+            data = struct.unpack('>LdfiB', frame.payload)
             dataPoints['Time'] = data[0]
             dataPoints['DataPoints'] = {'Value1': data[1],
                                         'Value2': data[2],
                                         'Value3': data[3],
                                         'Value4': data[4],
                                         }
+              
         else:
             dataPoints = None
 
