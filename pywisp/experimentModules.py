@@ -13,6 +13,10 @@ class ExperimentModuleMeta(ABCMeta, pyqtWrapperType):
     pass
 
 
+class ExperimentModuleException(Exception):
+    pass
+
+
 class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
     """
     Smallest unit of the framework.
