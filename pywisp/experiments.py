@@ -125,6 +125,7 @@ class ExperimentInteractor(QObject):
     and the Experiment
     """
     expFinished = pyqtSignal()
+    expStop = pyqtSignal()
     sendData = pyqtSignal(object)
 
     def __init__(self, targetView, parent=None):
@@ -416,6 +417,7 @@ class ExperimentInteractor(QObject):
             self._logger.error(eme)
             self.runningExperiment = False
             self.expFinished.emit()
+            self.expStop.emit()
             return
 
         # start experiment

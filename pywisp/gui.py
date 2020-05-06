@@ -350,6 +350,7 @@ class MainGui(QMainWindow):
         self.runExp.connect(self.exp.runExperiment)
         self.stopExp.connect(self.exp.stopExperiment)
         self.exp.expFinished.connect(self.saveLastMeas)
+        self.exp.expStop.connect(self.stopExperiment)
 
         self.visualizer = None
 
