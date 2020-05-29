@@ -55,7 +55,7 @@ int main(int argc, char const *argv[]) {
         PeriodicScheduler scheduler(std::ref(ioService));
         scheduler.addTask("fContLoop", boost::bind(fContLoop, &transport), lDt);
 
-        TcpServer server(ioService, std::ref(inputQueue), std::ref(outputQueue), PORT);
+        TcpServer server(ioService, std::ref(inputQueue), std::ref(outputQueue), TRANSPORT_TCP_PORT);
 
         boost::thread_group threads;
         for (int i = 0; i < 2; ++i) {

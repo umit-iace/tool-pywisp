@@ -12,6 +12,8 @@ class Test(ExperimentModule):
                   'Value2',
                   'Value3',
                   'Value4',
+                  'ValueNan',
+                  'ValueInf'
                   ]
 
     publicSettings = OrderedDict([("Value1", 0.0),
@@ -41,12 +43,14 @@ class Test(ExperimentModule):
         dataPoints = {}
         fid = frame.min_id
         if fid == self.ids[0]:
-            data = struct.unpack('>Ldfhb', frame.payload[:19])
+            data = struct.unpack('>Qdfhbdd', frame.payload[:39])
             dataPoints['Time'] = data[0]
             dataPoints['DataPoints'] = {'Value1': data[1],
                                         'Value2': data[2],
                                         'Value3': data[3],
                                         'Value4': data[4],
+                                        'ValueNan': data[5],
+                                        'ValueInf': data[6],
                                         }
         else:
             dataPoints = None

@@ -4,9 +4,12 @@
 #ifndef TRANSPORT_H
 #define TRANSPORT_H
 
+#include "define.h"
 #include "Frame.h"
 #include "Trajectory.h"
 #include "Utils.h"
+
+#include <cmath>
 
 //----------------------------------------------------------------------
 
@@ -44,6 +47,8 @@ public:
         float fValue2 = 556.2;
         int iValue3 = 244;
         unsigned char cValue4 = 12;
+        double dNanValue = NAN;
+        double dInfValue = INFINITY;
     } _benchData;
 
     /**

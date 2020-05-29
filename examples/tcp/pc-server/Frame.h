@@ -4,6 +4,7 @@
 #ifndef FRAME_H
 #define FRAME_H
 
+#include "define.h"
 #include "Utils.h"
 
 /**
@@ -16,7 +17,7 @@ class Frame {
 public:
     struct {
         unsigned char id;
-        unsigned char payload[MAX_PAYLOAD];
+        unsigned char payload[TRANSPORT_MAX_PAYLOAD];
     } data;
 
     Frame(unsigned char id) {
@@ -28,143 +29,23 @@ public:
         cCursor = 0;
     }
 
-    /**
-     * Adds a double value to payload
-     * @param dValue value that is packed in payload
-     */
-    void pack(double dValue) {
-        uPack.dVar = dValue;
-        for (int i = 0; i < 8; ++i)
-            data.payload[cCursor + i] = uPack.cVar[7 - i];
+    template<typename T>
+    void pack(T value) {
+        auto *origin = (uint8_t *) &value;
+        for (int i = sizeof(T) - 1; i >= 0; --i) {
+            data.payload[cCursor + i] = *origin++;
+        }
+        cCursor += sizeof(T);
+    }
 
-        cCursor += 8;
-    };
-
-    /**
-     * Adds an unsigned long value to payload
-     * @param lValue value that is packed in payload
-     */
-    void pack(unsigned long lValue) {
-        data.payload[cCursor + 0] = (unsigned char) ((lValue & 0xff000000UL) >> 24);
-        data.payload[cCursor + 1] = (unsigned char) ((lValue & 0x00ff0000UL) >> 16);
-        data.payload[cCursor + 2] = (unsigned char) ((lValue & 0x0000ff00UL) >> 8);
-        data.payload[cCursor + 3] = (unsigned char) (lValue & 0x000000ffUL);
-
-        cCursor += 4;
-    };
-
-    /**
-     * Adds a float value to payload
-     * @param fValue value that is packed in payload
-     */
-    void pack(float fValue) {
-        uPack.fVar1 = fValue;
-        for (int i = 0; i < 4; ++i)
-            data.payload[cCursor + i] = uPack.cVar[7 - i];
-
-        cCursor += 4;
-    };
-
-    /**
-     * Adds an integer value to payload
-     * @param iValue value that is packed in payload
-     */
-    void pack(int iValue) {
-        data.payload[cCursor + 0] = (unsigned char) ((iValue & 0x0000ff00UL) >> 8);
-        data.payload[cCursor + 1] = (unsigned char) (iValue & 0x000000ffUL);
-
-        cCursor += 2;
-    };
-
-    /**
-     * Adds an unsigned char value to payload
-     * @param cValue value that is packed in payload
-     */
-    void pack(unsigned char cValue) {
-        data.payload[cCursor + 0] = cValue;
-
-        cCursor++;
-    };
-
-    /**
-     * Return a double value from payload
-     * @param dValue value with unpacked data
-     */
-    void unPack(double &dValue) {
-        for (int i = 0; i < 8; ++i)
-            uPack.cVar[7 - i] = data.payload[cCursor + i];
-        dValue = uPack.dVar;
-
-        cCursor += 8;
-    };
-
-    /**
-     * Return an unsigned long value from payload
-     * @param lValue value with unpacked data
-     */
-    void unPack(unsigned long &lValue) {
-        lValue = ((uint32_t) (data.payload[cCursor + 0]) << 24) |
-                 ((uint32_t) (data.payload[cCursor + 1]) << 16) |
-                 ((uint32_t) (data.payload[cCursor + 2]) << 8) |
-                 (uint32_t) (data.payload[cCursor + 3]);
-
-        cCursor += 4;
-    };
-
-    /**
-     * Return a float value from payload
-     * @param fValue value with unpacked data
-     */
-    void unPack(float &fValue) {
-        for (int i = 0; i < 4; ++i)
-            uPack.cVar[7 - i] = data.payload[cCursor + i];
-        fValue = uPack.fVar1;
-
-        cCursor += 4;
-    };
-
-    /**
-     * Return an integer value from payload
-     * @param iValue value with unpacked data
-     */
-    void unPack(int &iValue) {
-        iValue = ((uint32_t) (data.payload[cCursor + 0]) << 8) |
-                 (uint32_t) (data.payload[cCursor + 1]);
-
-        cCursor += 2;
-    };
-
-    /**
-     * Return an unsigned char value from payload
-     * @param cValue value with unpacked data
-     */
-    void unPack(unsigned char &cValue) {
-        cValue = data.payload[cCursor + 0];
-
-        cCursor++;
-    };
-
-    /**
-     * Return an unsigned int value from payload
-     * @param cValue value with unpacked data
-     */
-    void unPack(unsigned int &iValue) {
-        iValue = ((uint32_t) (data.payload[cCursor + 0]) << 8) |
-                 (uint32_t) (data.payload[cCursor + 1]);
-
-        cCursor += 2;
-
-    };
-
-    /**
-     * Return a bool value from payload
-     * @param bValue value with unpacked data
-     */
-    void unPack(bool &bValue) {
-        bValue = data.payload[cCursor + 0];
-
-        cCursor++;
-    };
+    template<typename T>
+    void unPack(T &value) {
+        auto *dest = (uint8_t *) &value;
+        for (int i = sizeof(T) - 1; i >= 0; --i) {
+            *dest++ = data.payload[cCursor + i];
+        }
+        cCursor += sizeof(T);
+    }
 
 private:
     unsigned char cCursor = 0;
@@ -180,4 +61,4 @@ private:
 
 };
 
-#endif //SERVER_FRAME_H
+#endif //FRAME_H

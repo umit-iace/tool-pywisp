@@ -964,3 +964,17 @@ class ContextLineEditAction(QWidgetAction):
 
     def onChange(self):
         self.dataEmit.emit(self.data.text())
+
+
+def isNan(value):
+    if value == 6.95165821120223e-310:
+        return True
+    else:
+        return False
+
+
+def isInf(value):
+    if value == 6.94996061456946e-310:
+        return True
+    else:
+        return False

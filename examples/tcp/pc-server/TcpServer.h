@@ -50,7 +50,7 @@ private:
      */
     void receiveLoop() {
         auto This = shared_from_this();
-        boost::asio::async_read(tSocket, sBuffer, boost::asio::transfer_exactly(MAX_PAYLOAD + 1),
+        boost::asio::async_read(tSocket, sBuffer, boost::asio::transfer_exactly(TRANSPORT_MAX_PAYLOAD + 1),
                                 [This, this](boost::system::error_code ec, std::size_t transferred) {
                                     if (ec) {
                                         std::cerr << "Receive error: " << ec.message() << "\n";
@@ -58,11 +58,11 @@ private:
                                         const char *bufPtr = boost::asio::buffer_cast<const char *>(sBuffer.data());
                                         Frame frame;
                                         frame.data.id = (unsigned char) bufPtr++[0];
-                                        for (int i = 0; i < MAX_PAYLOAD; i++) {
+                                        for (int i = 0; i < TRANSPORT_MAX_PAYLOAD; i++) {
                                             frame.data.payload[i] = (unsigned char) *bufPtr++;
                                         }
                                         inputQueue.push(frame);
-                                        sBuffer.consume(MAX_PAYLOAD + 1);
+                                        sBuffer.consume(TRANSPORT_MAX_PAYLOAD + 1);
                                         // chain
                                         receiveLoop();
                                     }
@@ -73,7 +73,7 @@ private:
      * @brief Sends syncronous data to the socket from the output queue in a 100 ms timer.
      */
     void sendLoop() {
-        dlTimer.expires_from_now(boost::posix_time::milliseconds(100));
+        dlTimer.expires_from_now(boost::posix_time::milliseconds(10));
         auto This = shared_from_this();
 
         bool writeError = false;
@@ -123,7 +123,7 @@ private:
      */
     void startAccept() {
         TcpConnection::pointer newConnection =
-                TcpConnection::create(acceptor_.get_executor().context(), std::ref(inputQueue), std::ref(outputQueue));
+                TcpConnection::create(ioContext, std::ref(inputQueue), std::ref(outputQueue));
 
         acceptor_.async_accept(newConnection->socket(),
                                boost::bind(&TcpServer::handleAccept, this, newConnection,

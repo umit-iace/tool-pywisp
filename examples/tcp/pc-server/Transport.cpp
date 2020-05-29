@@ -12,6 +12,8 @@ void Transport::sendData() {
     benchFrame.pack(this->_benchData.fValue2);
     benchFrame.pack(this->_benchData.iValue3);
     benchFrame.pack(this->_benchData.cValue4);
+    benchFrame.pack(this->_benchData.dNanValue);
+    benchFrame.pack(this->_benchData.dInfValue);
     this->outputQueue.push(benchFrame);
 
     Frame trajRampFrame(11);
@@ -116,7 +118,7 @@ void Transport::unpackTrajSeriesData(Frame frame) {
         frame.unPack(iSize);
         this->_trajData.seriesTraj.setSize(iSize);
 
-        for (unsigned int i = 0; i < FRAME_LEN_DOUBLE - 1; i++) {
+        for (unsigned int i = 0; i < TRANSPORT_FRAME_LEN_DOUBLE - 1; ++i) {
             frame.unPack(dValue);
             if (this->iInComingSeriesCounter < this->_trajData.seriesTraj.getSize()) {
                 this->_trajData.seriesTraj.setTime(dValue, this->iInComingSeriesCounter);
@@ -127,7 +129,7 @@ void Transport::unpackTrajSeriesData(Frame frame) {
             this->iInComingSeriesCounter++;
         }
     } else {
-        for (unsigned int i = 0; i < FRAME_LEN_DOUBLE; i++) {
+        for (unsigned int i = 0; i < TRANSPORT_FRAME_LEN_DOUBLE; ++i) {
             frame.unPack(dValue);
             if (this->iInComingSeriesCounter < this->_trajData.seriesTraj.getSize()) {
                 this->_trajData.seriesTraj.setTime(dValue, this->iInComingSeriesCounter);
