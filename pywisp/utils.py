@@ -3,6 +3,7 @@ import copy as cp
 import logging
 import os
 import struct
+from decimal import Decimal
 from bisect import bisect_left
 
 import matplotlib.gridspec as gridspec
@@ -761,7 +762,6 @@ class DoubleSlider(QSlider):
         self._maxValue = 1.0
 
         self._stepSize = 1
-        self._invStepSize = 1
 
     @property
     def value(self):
@@ -769,10 +769,10 @@ class DoubleSlider(QSlider):
         return self.calcValue(curValue)
 
     def calcValue(self, value):
-        return value * self._stepSize + self._minValue
+        return round((value * self._stepSize) + self._minValue, 6)
 
     def setValue(self, value):
-        super().setValue(int((value - self._minValue) / self._stepSize))
+        super().setValue(int(round((value - self._minValue) / self._stepSize, 8)))
 
     def setMinimum(self, value):
         if value > self._maxValue:
