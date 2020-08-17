@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
-import copy as cp
 import logging
 import os
 import struct
-from decimal import Decimal
 from bisect import bisect_left
 
 import matplotlib.gridspec as gridspec
@@ -519,11 +517,12 @@ class RemoteWidgetEdit(QDialog):
             self.settingsWidgetLayout.itemAt(i).widget().deleteLater()
 
         height = QLineEdit().sizeHint().height()
+        doubleValidator = QRegExpValidator(QRegExp("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?"), self)
 
         if self.typeList.currentText() == "PushButton":
             self.valueText = QLineEdit(self.valueOn)
             self.settingsWidgetLayout.addRow(QLabel("Value"), self.valueText)
-            self.valueText.setValidator(QDoubleValidator())
+            self.valueText.setValidator(doubleValidator)
             self.valueText.mousePressEvent = lambda event: self.valueText.selectAll()
             self.shortcutField = ShortcutCreator()
             self.shortcutField.setText(self.shortcut)
@@ -540,12 +539,12 @@ class RemoteWidgetEdit(QDialog):
         elif self.typeList.currentText() == "Switch":
             self.valueOnText = QLineEdit(self.valueOn)
             self.settingsWidgetLayout.addRow(QLabel("Value On"), self.valueOnText)
-            self.valueOnText.setValidator(QDoubleValidator())
+            self.valueOnText.setValidator(doubleValidator)
             self.valueOnText.mousePressEvent = lambda event: self.valueOnText.selectAll()
             self.valueOffText = QLineEdit(self.valueOff)
             self.settingsWidgetLayout.addRow(QLabel("Value Off"), self.valueOffText)
             self.valueOffText.mousePressEvent = lambda event: self.valueOffText.selectAll()
-            self.valueOffText.setValidator(QDoubleValidator())
+            self.valueOffText.setValidator(doubleValidator)
             self.shortcutField = ShortcutCreator()
             self.shortcutField.setText(self.shortcut)
             self.settingsWidgetLayout.addRow(QLabel("Shortcut:"), self.shortcutField)
@@ -558,15 +557,15 @@ class RemoteWidgetEdit(QDialog):
         elif self.typeList.currentText() == "Slider":
             self.maxSliderText = QLineEdit(str(self.maxSlider))
             self.settingsWidgetLayout.addRow(QLabel("Max"), self.maxSliderText)
-            self.maxSliderText.setValidator(QDoubleValidator())
+            self.maxSliderText.setValidator(doubleValidator)
             self.maxSliderText.mousePressEvent = lambda event: self.maxSliderText.selectAll()
             self.minSliderText = QLineEdit(str(self.minSlider))
             self.settingsWidgetLayout.addRow(QLabel("Min"), self.minSliderText)
-            self.minSliderText.setValidator(QDoubleValidator())
+            self.minSliderText.setValidator(doubleValidator)
             self.minSliderText.mousePressEvent = lambda event: self.minSliderText.selectAll()
             self.stepSliderText = QLineEdit(str(self.stepSlider))
             self.settingsWidgetLayout.addRow(QLabel("Step Size"), self.stepSliderText)
-            self.stepSliderText.setValidator(QDoubleValidator())
+            self.stepSliderText.setValidator(doubleValidator)
             self.stepSliderText.mousePressEvent = lambda event: self.stepSliderText.selectAll()
             self.shortcutFieldPlus = ShortcutCreator()
             self.shortcutFieldPlus.setText(self.shortcutPlus)
