@@ -439,8 +439,8 @@ class RemoteWidgetEdit(QDialog):
         self.shortcutPlus = str(kwargs.get('shortcutPlus', ""))
         self.shortcutMinus = str(kwargs.get('shortcutMinus', ""))
 
-        self.curModule = kwargs.get('module', None)
-        self.curParameter = kwargs.get('parameter', None)
+        self.curModule = kwargs.get('Module', None)
+        self.curParameter = kwargs.get('Parameter', None)
 
         self.editWidget = editWidget
 
@@ -586,8 +586,8 @@ class RemoteWidgetEdit(QDialog):
         msg = dict()
         msg['name'] = self.nameText.text()
         msg['widgetType'] = self.typeList.currentText()
-        msg['module'] = self.moduleList.currentText()
-        msg['parameter'] = self.paramList.currentText()
+        msg['Module'] = self.moduleList.currentText()
+        msg['Parameter'] = self.paramList.currentText()
 
         if self.typeList.currentText() == "PushButton":
             msg['valueOn'] = self.valueText.text()
@@ -612,8 +612,8 @@ class RemoteWidgetEdit(QDialog):
         msg = dialog._getData()
 
         if msg['widgetType'] == "Slider":
-            if msg['parameter'] in exp[msg['module']]:
-                msg['startValue'] = exp[msg['module']][msg['parameter']]
+            if msg['Parameter'] in exp[msg['Module']]:
+                msg['startValue'] = exp[msg['Module']][msg['Parameter']]
             else:
                 msg['startValue'] = 0
 
@@ -740,8 +740,8 @@ class MovablePushButton(QPushButton, MovableWidget):
         data['widgetType'] = 'PushButton'
         data['name'] = self.widgetName
         data['valueOn'] = self.valueOn
-        data['module'] = self.module
-        data['parameter'] = self.parameter
+        data['Module'] = self.module
+        data['Parameter'] = self.parameter
         data['shortcut'] = self.shortcut.key().toString()
 
         return data
@@ -839,8 +839,8 @@ class MovableSlider(DoubleSlider, MovableWidget):
         data['minSlider'] = self.minSlider
         data['maxSlider'] = self.maxSlider
         data['stepSlider'] = self.stepSlider
-        data['module'] = self.module
-        data['parameter'] = self.parameter
+        data['Module'] = self.module
+        data['Parameter'] = self.parameter
         data['shortcutPlus'] = self.shortcutPlus.key().toString()
         data['shortcutMinus'] = self.shortcutMinus.key().toString()
 
@@ -883,8 +883,8 @@ class MovableSwitch(QPushButton, MovableWidget):
         data['name'] = self.widgetName
         data['valueOn'] = self.valueOn
         data['valueOff'] = self.valueOff
-        data['module'] = self.module
-        data['parameter'] = self.parameter
+        data['Module'] = self.module
+        data['Parameter'] = self.parameter
         data['shortcut'] = self.shortcut.key().toString()
 
         return data
