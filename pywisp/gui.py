@@ -126,6 +126,19 @@ class MainGui(QMainWindow):
 
         # experiment dock
         self.experimentList = QListWidget(self)
+        self.experimentList.setFocusPolicy(Qt.NoFocus)
+        self.experimentList.setStyleSheet(r"""
+        QListView::item:selected {
+            color: black;
+        }
+        QListView::item:selected:!active {
+            background: transparent;
+        }  
+        QListView::item:selected:active {
+            background: transparent;
+        }
+        QListView::item:hover {
+        }""")
         self.experimentList.setSelectionMode(QAbstractItemView.SingleSelection)
         self.experimentDock.addWidget(self.experimentList)
         self.experimentList.itemDoubleClicked.connect(self.experimentDclicked)
@@ -149,6 +162,19 @@ class MainGui(QMainWindow):
 
         # lastmeas dock
         self.lastMeasList = QListWidget(self)
+        self.lastMeasList.setFocusPolicy(Qt.NoFocus)
+        self.lastMeasList.setStyleSheet(r"""
+        QListView::item:selected {
+            color: black;
+        }
+        QListView::item:selected:!active {
+            background: transparent;
+        }  
+        QListView::item:selected:active {
+            background: transparent;
+        }
+        QListView::item:hover {
+        }""")
         self.lastMeasDock.addWidget(self.lastMeasList)
         self.lastMeasList.itemDoubleClicked.connect(self.loadLastMeas)
         self.measurements = []
