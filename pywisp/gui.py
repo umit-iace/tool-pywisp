@@ -23,7 +23,7 @@ from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .utils import getResource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
     DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, PinnedDock, \
-    ContextLineEditAction
+    ContextLineEditAction, TreeWidgetStyledItemDelegate
 
 
 class MainGui(QMainWindow):
@@ -224,6 +224,21 @@ class MainGui(QMainWindow):
         self.dataLayout.addWidget(self.dataPointManipulationWidget)
 
         self.dataPointTreeWidget = QTreeWidget()
+        custom_QStyledItemDelegate = TreeWidgetStyledItemDelegate()
+        self.dataPointTreeWidget.setItemDelegate(custom_QStyledItemDelegate)
+        self.dataPointTreeWidget.setStyleSheet("""
+            QTreeView {
+                selection-background-color: transparent;
+            }
+            QTreeView::item:selected {
+            }
+        
+            QTreeView::item:hover {
+            }
+        
+            QTreeView::item:hover:selected {
+            }
+        """)
         self.dataPointTreeWidget.setHeaderLabels(["Plot title", "Data point"])
         self.dataPointTreeWidget.itemDoubleClicked.connect(self.plotVectorClicked)
         self.dataPointTreeWidget.setExpandsOnDoubleClick(0)
@@ -815,7 +830,8 @@ class MainGui(QMainWindow):
                                                         unit='s', title='Size', parent=self)
         qActionMovingWindowSize.dataEmit.connect(lambda data,
                                                         _chart=chart,
-                                                        _widget=widget: self.setMovingWindowWidth(data, _chart, _widget))
+                                                        _widget=widget: self.setMovingWindowWidth(data, _chart,
+                                                                                                  _widget))
 
         qActionInterpolationPoints = ContextLineEditAction(min=0, max=10000, current=chart.getInterpolataionPoints(),
                                                            unit='', title='Size', parent=self)

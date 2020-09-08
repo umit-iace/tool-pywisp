@@ -8,10 +8,11 @@ import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from PyQt5.QtCore import Qt, QRegExp, QSize, pyqtSignal
-from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator, QKeySequence
+from PyQt5.QtCore import Qt, QRegExp, QSize, pyqtSignal, QRect
+from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator, QKeySequence, QFont, QPen, \
+    QPainter
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
-    QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction, QShortcut
+    QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction, QShortcut, QStyledItemDelegate, QStyle
 from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
 
@@ -977,3 +978,51 @@ def isInf(value):
         return True
     else:
         return False
+
+
+class TreeWidgetStyledItemDelegate(QStyledItemDelegate):
+    '''
+        For overriding behavior of selection and hovering in QTreeView and QTreeWidget
+
+        When you set background color (QtGui.QColor()) to QTreeWidgetItem you also must set this color like:
+            item.setData(0, QtCore.Qt.BackgroundRole, QtGui.QColor())
+    '''
+
+    def paint(self, painter, option, index):
+        def draw_my(option, painter, brush, text, icon):
+            if brush is None:
+                brush = QColor(255, 255, 255,
+                               0)  # This is original background color. I just set alpha to 0 which means it is transparent
+
+            x, y = (option.rect.x(), option.rect.y())
+            h = option.rect.height()
+            painter.save()
+
+            painter.setFont(option.font)
+            if icon:
+                icon = icon.pixmap(h, h)
+                painter.drawPixmap(QRect(x, y, h, h), icon)
+                painter.drawText(option.rect.adjusted(h, 0, 0, 0), Qt.AlignLeft, text)
+            else:
+                painter.drawText(option.rect, Qt.AlignLeft, text)
+
+            painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
+            painter.setPen(QPen(Qt.NoPen))
+            painter.fillRect(option.rect, brush)
+            painter.setBackgroundMode(Qt.OpaqueMode)
+            painter.setBackground(brush)
+            painter.drawRect(option.rect)
+            painter.restore()
+
+        # Also should be activated in StyleSheet
+        #                             Selected                                             Hovered
+        if (option.state & QStyle.State_Selected) or (option.state & QStyle.State_MouseOver):
+            option.font.setWeight(QFont.Bold)
+
+            brush = index.data(Qt.BackgroundRole)
+            text = index.data(Qt.DisplayRole)
+            icon = index.data(Qt.DecorationRole)
+
+            draw_my(option=option, painter=painter, brush=brush, text=text, icon=icon)
+        else:
+            QStyledItemDelegate.paint(self, painter, option, index)
