@@ -43,11 +43,12 @@ class MainGui(QMainWindow):
         QCoreApplication.setApplicationName(globals()["__package__"])
 
         # general config parameters
-        self.configTimerTime = 100
-        self.configHeartbeatTime = 0
-        self.configInterpolationPoints = 100
-        self.configMovingWindowEnable = False
-        self.configMovingWindowSize = 10
+        self.config = {'TimerTime': 100,
+                       'HeartbeatTime': 0,
+                       'InterpolationPoints': 100,
+                       'MovingWindowEnable': False,
+                       'MovingWindowSize': 10,
+                       }
 
         # Create and display the splash screen
         self.splashScreenIcon = QPixmap(getResource("icon.svg"))
@@ -522,10 +523,10 @@ class MainGui(QMainWindow):
         """
         self._settings.beginGroup('plot')
         timerTime, ok = DataIntDialog.getData(title="Timer Time", min=2, max=10000, unit='ms',
-                                              current=self.configTimerTime)
+                                              current=self.config['TimerTime'])
 
         if ok:
-            self.configTimerTime = timerTime
+            self.config['TimerTime'] = timerTime
             self._logger.info("Set timer time to {}".format(timerTime))
 
         self._settings.endGroup()
@@ -804,9 +805,9 @@ class MainGui(QMainWindow):
         widget = PlotWidget()
         chart = PlotChart(title,
                           self._settings,
-                          self.configInterpolationPoints,
-                          self.configMovingWindowEnable,
-                          self.configMovingWindowSize)
+                          self.config['InterpolationPoints'],
+                          self.config['MovingWindowEnable'],
+                          self.config['MovingWindowSize'])
         chart.plotWidget = widget
         widget.showGrid(True, True)
         widget.getPlotItem().getAxis("bottom").setLabel(text="Time", units="s")
@@ -849,7 +850,7 @@ class MainGui(QMainWindow):
         qActionSep3.setSeparator(True)
 
         qActionMovingWindowEnable = QAction('Enable', self, checkable=True)
-        qActionMovingWindowEnable.setChecked(self.configMovingWindowEnable)
+        qActionMovingWindowEnable.setChecked(self.config['MovingWindowEnable'])
         qActionMovingWindowEnable.triggered.connect(lambda state, _chart=chart: self.enableMovingWindow(state, _chart))
 
         qActionMovingWindowSize = ContextLineEditAction(min=0, max=10000, current=chart.getMovingWindowWidth(),
@@ -1035,9 +1036,9 @@ class MainGui(QMainWindow):
             if connInstance:
                 connInstance.doRead = True
 
-        self.timer.start(int(self.configTimerTime))
-        if self.configHeartbeatTime:
-            self.heartbeatTimer.start(int(self.configHeartbeatTime))
+        self.timer.start(int(self.config['TimerTime']))
+        if self.config['HeartbeatTime']:
+            self.heartbeatTimer.start(int(self.config['HeartbeatTime']))
         self.exp.runExperiment()
 
     @pyqtSlot()
@@ -1131,12 +1132,14 @@ class MainGui(QMainWindow):
         return success
 
     def configureConfig(self, idx):
-        if 'Config' in self._experiments[idx]:
-            self.configTimerTime = self._experiments[idx]['Config']['TimerTime']
-            self.configHeartbeatTime = self._experiments[idx]['Config']['Heartbeat']
-            self.configInterpolationPoints = self._experiments[idx]['Config']['InterpolationPoints']
-            self.configMovingWindowSize = self._experiments[idx]['Config']['MovingWindowSize']
-            self.configMovingWindowEnable = self._experiments[idx]['Config']['MovingWindowEnable']
+        if 'Config' not in self._experiments[idx]:
+            return
+        for key, value in self._experiments[idx]['Config'].items():
+            if key in self.config:
+                self.config[key] = value
+            else:
+                self._logger.warning("Experiment config key '{}' does not exist.\n\
+                Possible keys: {}".format(key, [key for key in self.config.keys()]))
 
     def configureRemote(self, idx):
         self.remoteWidgetLayout.clearAll()
