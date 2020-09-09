@@ -43,11 +43,12 @@ class MainGui(QMainWindow):
         QCoreApplication.setApplicationName(globals()["__package__"])
 
         # general config parameters
-        self.configTimerTime = 100
-        self.configHeartbeatTime = 0
-        self.configInterpolationPoints = 100
-        self.configMovingWindowEnable = False
-        self.configMovingWindowSize = 10
+        self.config = {'TimerTime': 100,
+                       'HeartbeatTime': 0,
+                       'InterpolationPoints': 100,
+                       'MovingWindowEnable': False,
+                       'MovingWindowSize': 10,
+                       }
         QStyleSheet = """
             QListView::item:selected {
                 color: black;
@@ -506,10 +507,10 @@ class MainGui(QMainWindow):
         """
         self._settings.beginGroup('plot')
         timerTime, ok = DataIntDialog.getData(title="Timer Time", min=2, max=10000, unit='ms',
-                                              current=self.configTimerTime)
+                                              current=self.config['TimerTime'])
 
         if ok:
-            self.configTimerTime = timerTime
+            self.config['TimerTime'] = timerTime
             self._logger.info("Set timer time to {}".format(timerTime))
 
         self._settings.endGroup()
@@ -788,9 +789,9 @@ class MainGui(QMainWindow):
         widget = PlotWidget()
         chart = PlotChart(title,
                           self._settings,
-                          self.configInterpolationPoints,
-                          self.configMovingWindowEnable,
-                          self.configMovingWindowSize)
+                          self.config['InterpolationPoints'],
+                          self.config['MovingWindowEnable'],
+                          self.config['MovingWindowSize'])
         chart.plotWidget = widget
         widget.showGrid(True, True)
         widget.getPlotItem().getAxis("bottom").setLabel(text="Time", units="s")
@@ -833,7 +834,7 @@ class MainGui(QMainWindow):
         qActionSep3.setSeparator(True)
 
         qActionMovingWindowEnable = QAction('Enable', self, checkable=True)
-        qActionMovingWindowEnable.setChecked(self.configMovingWindowEnable)
+        qActionMovingWindowEnable.setChecked(self.config['MovingWindowEnable'])
         qActionMovingWindowEnable.triggered.connect(lambda state, _chart=chart: self.enableMovingWindow(state, _chart))
 
         qActionMovingWindowSize = ContextLineEditAction(min=0, max=10000, current=chart.getMovingWindowWidth(),
@@ -1019,9 +1020,9 @@ class MainGui(QMainWindow):
             if connInstance:
                 connInstance.doRead = True
 
-        self.timer.start(int(self.configTimerTime))
-        if self.configHeartbeatTime:
-            self.heartbeatTimer.start(int(self.configHeartbeatTime))
+        self.timer.start(int(self.config['TimerTime']))
+        if self.config['HeartbeatTime']:
+            self.heartbeatTimer.start(int(self.config['HeartbeatTime']))
         self.exp.runExperiment()
 
     @pyqtSlot()
@@ -1115,44 +1116,27 @@ class MainGui(QMainWindow):
         return success
 
     def configureConfig(self, idx):
-        if 'Config' in self._experiments[idx]:
-            self.configTimerTime = self._experiments[idx]['Config']['TimerTime']
-            self.configHeartbeatTime = self._experiments[idx]['Config']['Heartbeat']
-            self.configInterpolationPoints = self._experiments[idx]['Config']['InterpolationPoints']
-            self.configMovingWindowSize = self._experiments[idx]['Config']['MovingWindowSize']
-            self.configMovingWindowEnable = self._experiments[idx]['Config']['MovingWindowEnable']
+        if 'Config' not in self._experiments[idx]:
+            return
+        for key, value in self._experiments[idx]['Config'].items():
+            if key in self.config:
+                self.config[key] = value
+            else:
+                self._logger.warning("Experiment config key '{}' does not exist.\n\
+                Possible keys: {}".format(key, [key for key in self.config.keys()]))
 
     def configureRemote(self, idx):
         self.remoteWidgetLayout.clearAll()
 
-        if 'Remote' in self._experiments[idx]:
-            if self._experiments[idx] is not None:
-                for name in self._experiments[idx]['Remote']:
-                    msg = dict()
-                    msg['name'] = name
-                    msg['module'] = self._experiments[idx]['Remote'][name]['Module']
-                    msg['parameter'] = self._experiments[idx]['Remote'][name]['Parameter']
-                    msg['widgetType'] = self._experiments[idx]['Remote'][name]['widgetType']
-                    if msg['widgetType'] == "PushButton":
-                        msg['shortcut'] = self._experiments[idx]['Remote'][name]['shortcut']
-                        msg['valueOn'] = str(self._experiments[idx]['Remote'][name]['valueOn'])
-                    elif msg['widgetType'] == "Switch":
-                        msg['shortcut'] = self._experiments[idx]['Remote'][name]['shortcut']
-                        msg['valueOn'] = str(self._experiments[idx]['Remote'][name]['valueOn'])
-                        msg['valueOff'] = str(
-                            self._experiments[idx]['Remote'][name]['valueOff'])
-                    elif msg['widgetType'] == "Slider":
-                        msg['shortcutPlus'] = self._experiments[idx]['Remote'][name]['shortcutPlus']
-                        msg['shortcutMinus'] = self._experiments[idx]['Remote'][name]['shortcutMinus']
-                        msg['minSlider'] = self._experiments[idx]['Remote'][name]['minSlider']
-                        msg['maxSlider'] = self._experiments[idx]['Remote'][name]['maxSlider']
-                        msg['stepSlider'] = self._experiments[idx]['Remote'][name]['stepSlider']
-                        msg['startValue'] = self._experiments[idx][msg['module']][msg['parameter']]
-                    else:
-                        continue
-                    self.remoteAddWidget(msg)
-            else:
-                self._logger.warning("Remote not correct configured in file!")
+        if 'Remote' not in self._experiments[idx]:
+            return
+        if self._experiments[idx] is None:
+            self._logger.warning("Remote not correct configured in file!")
+            return
+        for name in self._experiments[idx]['Remote']:
+            config = self._experiments[idx]['Remote'][name]
+            config['name'] = name
+            self.remoteAddWidget(config)
 
     def configureVisualizer(self, idx):
         if self.visualizer is not None:
@@ -1461,107 +1445,83 @@ class MainGui(QMainWindow):
         idx = self.experimentList.row(self._currentExpListItem)
         exp = self.exp.getExperiment()
         del exp['Name']
-        msg, ok = RemoteWidgetEdit.getData(exp, editWidget, **(widget.getData()))
+        config, ok = RemoteWidgetEdit.getData(exp, editWidget, **(widget.getData()))
         if not ok:
             return
-        else:
-            if not 'Remote' in self._experiments[idx]:
-                self._experiments[idx]['Remote'] = {}
-            del self._experiments[idx]['Remote'][widget.widgetName]
-            self._experiments[idx]['Remote'][msg['name']] = {}
-            self._experiments[idx]['Remote'][msg['name']]['widgetType'] = msg['widgetType']
-            self._experiments[idx]['Remote'][msg['name']]['Module'] = msg['module']
-            self._experiments[idx]['Remote'][msg['name']]['Parameter'] = msg['parameter']
+        if not 'Remote' in self._experiments[idx]:
+            self._experiments[idx]['Remote'] = {}
+        del self._experiments[idx]['Remote'][widget.widgetName]
 
-            widget.widgetName = msg['name']
-            widget.widgetType = msg['widgetType']
-            widget.module = msg['module']
-            widget.parameter = msg['parameter']
-            if msg['widgetType'] == "PushButton":
-                widget.valueOn = msg['valueOn']
-                widget.shortcut.setKey(msg['shortcut'])
-                self._experiments[idx]['Remote'][msg['name']]['shortcut'] = msg['shortcut']
-                self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
-            elif msg['widgetType'] == "Switch":
-                widget.valueOn = msg['valueOn']
-                widget.valueOff = msg['valueOff']
-                widget.shortcut.setKey(msg['shortcut'])
-                self._experiments[idx]['Remote'][msg['name']]['shortcut'] = msg['shortcut']
-                self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
-                self._experiments[idx]['Remote'][msg['name']]['valueOff'] = msg['valueOff']
-            elif msg['widgetType'] == "Slider":
-                widget.minSlider = msg['minSlider']
-                widget.maxSlider = msg['maxSlider']
-                widget.stepSlider = msg['stepSlider']
-                widget.shortcutPlus.setKey(msg['shortcutPlus'])
-                self._experiments[idx]['Remote'][msg['name']]['shortcutPlus'] = msg['shortcutPlus']
-                widget.shortcutMinus.setKey(msg['shortcutMinus'])
-                self._experiments[idx]['Remote'][msg['name']]['shortcutMinus'] = msg['shortcutMinus']
-                self._experiments[idx]['Remote'][msg['name']]['minSlider'] = msg['minSlider']
-                self._experiments[idx]['Remote'][msg['name']]['maxSlider'] = msg['maxSlider']
-                self._experiments[idx]['Remote'][msg['name']]['stepSlider'] = msg['stepSlider']
-            widget.updateData()
+        widget.widgetName = config['name']
+        widget.widgetType = config['widgetType']
+        widget.module = config['Module']
+        widget.parameter = config['Parameter']
+        if config['widgetType'] == "PushButton":
+            widget.valueOn = config['valueOn']
+            widget.shortcut.setKey(config['shortcut'])
+        elif config['widgetType'] == "Switch":
+            widget.valueOn = config['valueOn']
+            widget.valueOff = config['valueOff']
+            widget.shortcut.setKey(config['shortcut'])
+        elif config['widgetType'] == "Slider":
+            widget.minSlider = config['minSlider']
+            widget.maxSlider = config['maxSlider']
+            widget.stepSlider = config['stepSlider']
+            widget.shortcutPlus.setKey(config['shortcutPlus'])
+            widget.shortcutMinus.setKey(config['shortcutMinus'])
+        self._experiments[idx]['Remote'][config['name']] = config
+        widget.updateData()
 
-    def remoteAddWidget(self, msg=None, **kwargs):
+    def remoteAddWidget(self, config=None, **kwargs):
         """
         Adds a new widget to the remoteDock
-        :param msg: RemoteWidgetEdit object containing widget parameters and information
+        :param config: RemoteWidgetEdit object containing widget parameters and information
         """
         changed = False
         idx = self.experimentList.row(self._currentExpListItem)
-        if not msg:
-            exp = self.exp.getExperiment()
-            del exp['Name']
-            msg, ok = RemoteWidgetEdit.getData(exp=exp, **kwargs)
+        exp = self.exp.getExperiment()
+        del exp['Name']
+        if not config:
+            config, ok = RemoteWidgetEdit.getData(exp=exp, **kwargs)
             if not ok:
                 return
-            else:
-                changed = True
-                if not 'Remote' in self._experiments[idx]:
-                    self._experiments[idx]['Remote'] = {}
-                self._experiments[idx]['Remote'][msg['name']] = {}
+            changed = True
+            if not 'Remote' in self._experiments[idx]:
+                self._experiments[idx]['Remote'] = {}
+            self._experiments[idx]['Remote'][config['name']] = {}
 
         if changed:
-            self._experiments[idx]['Remote'][msg['name']]['widgetType'] = msg['widgetType']
-            self._experiments[idx]['Remote'][msg['name']]['Module'] = msg['module']
-            self._experiments[idx]['Remote'][msg['name']]['Parameter'] = msg['parameter']
+            self._experiments[idx]['Remote'][config['name']] = config
         sliderLabel = None
-        if msg['widgetType'] == "PushButton":
-            widget = MovablePushButton(msg['name'], msg['valueOn'], msg['shortcut'], module=msg['module'],
-                                       parameter=msg['parameter'])
+        if config['widgetType'] == "PushButton":
+            widget = MovablePushButton(config['name'], config['valueOn'], config['shortcut'], module=config['Module'],
+                                       parameter=config['Parameter'])
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
             widget.clicked.connect(lambda: self.remotePushButtonSendParameter(widget))
             widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
-            if changed:
-                self._experiments[idx]['Remote'][msg['name']]['shortcut'] = msg['shortcut']
-                self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
-        elif msg['widgetType'] == "Switch":
-            widget = MovableSwitch(msg['name'], msg['valueOn'], msg['valueOff'], msg['shortcut'], module=msg['module'],
-                                   parameter=msg['parameter'])
+        elif config['widgetType'] == "Switch":
+            widget = MovableSwitch(config['name'], config['valueOn'], config['valueOff'], config['shortcut'], module=config['Module'],
+                                   parameter=config['Parameter'])
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
             widget.clicked.connect(lambda: self.remoteSwitchSendParameter(widget))
             widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
-            if changed:
-                self._experiments[idx]['Remote'][msg['name']]['shortcut'] = msg['shortcut']
-                self._experiments[idx]['Remote'][msg['name']]['valueOn'] = msg['valueOn']
-                self._experiments[idx]['Remote'][msg['name']]['valueOff'] = msg['valueOff']
-        elif msg['widgetType'] == "Slider":
+        elif config['widgetType'] == "Slider":
             sliderLabel = QLabel()
             sliderLabel.setFixedHeight(15)
             labelFont = sliderLabel.font()
             labelFont.setPointSize(8)
             sliderLabel.setFont(labelFont)
             self.remoteWidgetLayout.addWidget(sliderLabel)
-            widget = MovableSlider(msg['name'], msg['minSlider'], msg['maxSlider'], msg['stepSlider'],
-                                   sliderLabel, msg['shortcutPlus'], msg['shortcutMinus'], msg['startValue'],
-                                   module=msg['module'],
-                                   parameter=msg['parameter'])
+            widget = MovableSlider(config['name'], config['minSlider'], config['maxSlider'], config['stepSlider'],
+                                   sliderLabel, config['shortcutPlus'], config['shortcutMinus'], exp[config['Module']][config['Parameter']],
+                                   module=config['Module'],
+                                   parameter=config['Parameter'])
             widget.setFixedHeight(30)
             widget.setFixedWidth(200)
             widget.valueChanged.connect(lambda value: self.remoteSliderSendParameter(widget, value))
@@ -1569,12 +1529,6 @@ class MainGui(QMainWindow):
             widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
-            if changed:
-                self._experiments[idx]['Remote'][msg['name']]['shortcutPlus'] = msg['shortcutPlus']
-                self._experiments[idx]['Remote'][msg['name']]['shortcutMinus'] = msg['shortcutMinus']
-                self._experiments[idx]['Remote'][msg['name']]['minSlider'] = msg['minSlider']
-                self._experiments[idx]['Remote'][msg['name']]['maxSlider'] = msg['maxSlider']
-                self._experiments[idx]['Remote'][msg['name']]['stepSlider'] = msg['stepSlider']
         else:
             return
         if self.remoteWidget.rect().contains((self.remoteWidgetLayout.count() % 2) * 200,
@@ -1631,28 +1585,30 @@ class MainGui(QMainWindow):
                     if wid.module == widget.module and wid.parameter == widget.parameter:
                         wid.setValue(float(value))
                         wid.valueOn = value
-                        wid.label.setText(wid.widgetName + ': ' + "{:.3f}".format(wid.value))
+                        wid.label.setText(wid.widgetName + ": {:.3f}".format(wid.value))
         else:
             widget.valueOn = value
 
             if isinstance(widget, MovableSlider):
                 value = widget.calcValue(value)
 
-            widget.label.setText(widget.widgetName + ': ' + "{:.3f}".format(value))
+            widget.label.setText(widget.widgetName + ": {:.3f}".format(value))
 
     def remoteSendParamter(self, module, parameter, value):
         exp = deepcopy(self.exp.getExperiment())
         del exp['Name']
 
         for key, val in exp.items():
-            if key == module:
-                for k, v in val.items():
-                    if k == parameter:
-                        exp[key][k] = value
-                        self.exp.editExperiment(exp)
-                        if self.actSendParameter.isEnabled():
-                            self.sendParameter()
-                        return
+            if key != module:
+                continue
+            for k, v in val.items():
+                if k != parameter:
+                    continue
+                exp[key][k] = value
+                self.exp.editExperiment(exp)
+                if self.actSendParameter.isEnabled():
+                    self.sendParameter()
+                return
 
     def copyRemoteSource(self):
         text = "  Remote:\n"
