@@ -1015,8 +1015,8 @@ class TreeWidgetStyledItemDelegate(QStyledItemDelegate):
             painter.restore()
 
         # Also should be activated in StyleSheet
-        #                             Selected                                             Hovered
-        if (option.state & QStyle.State_Selected) or (option.state & QStyle.State_MouseOver):
+        #                             Selected
+        if (option.state & QStyle.State_Selected):
             option.font.setWeight(QFont.Bold)
 
             brush = index.data(Qt.BackgroundRole)

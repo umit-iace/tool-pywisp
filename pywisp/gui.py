@@ -48,6 +48,24 @@ class MainGui(QMainWindow):
         self.configInterpolationPoints = 100
         self.configMovingWindowEnable = False
         self.configMovingWindowSize = 10
+        QStyleSheet = """
+            QListView::item:selected {
+                color: black;
+            }
+            QListView::item:selected:!active {
+                background: transparent;
+            }
+            QListView::item:selected:active {
+                background: transparent;
+            }
+            QListView::item:hover { }
+            QTreeView {
+                selection-background-color: transparent;
+            }
+            QTreeView::item:selected { }
+            QTreeView::item:hover { }
+            QTreeView::item:hover:selected { }
+        """
 
         # Create and display the splash screen
         self.splashScreenIcon = QPixmap(getResource("icon.svg"))
@@ -127,18 +145,7 @@ class MainGui(QMainWindow):
         # experiment dock
         self.experimentList = QListWidget(self)
         self.experimentList.setFocusPolicy(Qt.NoFocus)
-        self.experimentList.setStyleSheet(r"""
-        QListView::item:selected {
-            color: black;
-        }
-        QListView::item:selected:!active {
-            background: transparent;
-        }  
-        QListView::item:selected:active {
-            background: transparent;
-        }
-        QListView::item:hover {
-        }""")
+        self.experimentList.setStyleSheet(QStyleSheet)
         self.experimentList.setSelectionMode(QAbstractItemView.SingleSelection)
         self.experimentDock.addWidget(self.experimentList)
         self.experimentList.itemDoubleClicked.connect(self.experimentDclicked)
@@ -163,18 +170,7 @@ class MainGui(QMainWindow):
         # lastmeas dock
         self.lastMeasList = QListWidget(self)
         self.lastMeasList.setFocusPolicy(Qt.NoFocus)
-        self.lastMeasList.setStyleSheet(r"""
-        QListView::item:selected {
-            color: black;
-        }
-        QListView::item:selected:!active {
-            background: transparent;
-        }  
-        QListView::item:selected:active {
-            background: transparent;
-        }
-        QListView::item:hover {
-        }""")
+        self.lastMeasList.setStyleSheet(QStyleSheet)
         self.lastMeasDock.addWidget(self.lastMeasList)
         self.lastMeasList.itemDoubleClicked.connect(self.loadLastMeas)
         self.measurements = []
@@ -252,19 +248,7 @@ class MainGui(QMainWindow):
         self.dataPointTreeWidget = QTreeWidget()
         custom_QStyledItemDelegate = TreeWidgetStyledItemDelegate()
         self.dataPointTreeWidget.setItemDelegate(custom_QStyledItemDelegate)
-        self.dataPointTreeWidget.setStyleSheet("""
-            QTreeView {
-                selection-background-color: transparent;
-            }
-            QTreeView::item:selected {
-            }
-        
-            QTreeView::item:hover {
-            }
-        
-            QTreeView::item:hover:selected {
-            }
-        """)
+        self.dataPointTreeWidget.setStyleSheet(QStyleSheet)
         self.dataPointTreeWidget.setHeaderLabels(["Plot title", "Data point"])
         self.dataPointTreeWidget.itemDoubleClicked.connect(self.plotVectorClicked)
         self.dataPointTreeWidget.setExpandsOnDoubleClick(0)
