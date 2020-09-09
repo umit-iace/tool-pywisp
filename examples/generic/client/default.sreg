@@ -12,4 +12,4 @@
     InterpolationPoints: 0
     MovingWindowSize: 10
     MovingWindowEnable: True
-    Heartbeat: 0
+    HeartbeatTime: 0

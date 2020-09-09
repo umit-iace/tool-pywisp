@@ -19,7 +19,7 @@
     InterpolationPoints: 0
     MovingWindowSize: 5
     MovingWindowEnable: True
-    Heartbeat: 100
+    HeartbeatTime: 100
 
   Visu:
     MplExampleVisualizer:
