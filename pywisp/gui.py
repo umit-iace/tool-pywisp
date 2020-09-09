@@ -49,6 +49,7 @@ class MainGui(QMainWindow):
                        'MovingWindowEnable': False,
                        'MovingWindowSize': 10,
                        }
+        self.configDefaults = self.config.copy()
         QStyleSheet = """
             QListView::item:selected {
                 color: black;
@@ -1116,6 +1117,7 @@ class MainGui(QMainWindow):
         return success
 
     def configureConfig(self, idx):
+        self.config = self.configDefaults.copy()
         if 'Config' not in self._experiments[idx]:
             return
         for key, value in self._experiments[idx]['Config'].items():
