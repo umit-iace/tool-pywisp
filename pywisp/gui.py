@@ -1543,8 +1543,8 @@ class MainGui(QMainWindow):
 
     def remotePushButtonSendParameter(self, widget):
         """
-                Gets called when a user interacts with the pushbutton and sends the specified parameter to the bench
-                :param widget: the widget the user interacted with
+        Gets called when a user interacts with the pushbutton and sends the specified parameter to the bench
+        :param widget: the widget the user interacted with
         """
         value = widget.valueOn
         self.remoteSendParamter(widget.module, widget.parameter, value)
@@ -1552,8 +1552,8 @@ class MainGui(QMainWindow):
 
     def remoteSwitchSendParameter(self, widget):
         """
-                Gets called when a user interacts with the switch and sends the specified parameter to the bench
-                :param widget: the widget the user interacted with
+        Gets called when a user interacts with the switch and sends the specified parameter to the bench
+        :param widget: the widget the user interacted with
         """
         if widget.isChecked():
             value = widget.valueOn
@@ -1585,9 +1585,11 @@ class MainGui(QMainWindow):
             for wid in self.remoteWidgetLayout.list:
                 if isinstance(wid, MovableSlider):
                     if wid.module == widget.module and wid.parameter == widget.parameter:
+                        wid.valueChanged.disconnect()
                         wid.setValue(float(value))
                         wid.valueOn = value
                         wid.label.setText(wid.widgetName + ": {:.3f}".format(wid.value))
+                        wid.valueChanged.connect(lambda value: self.remoteSliderSendParameter(wid, value))
         else:
             widget.valueOn = value
 
