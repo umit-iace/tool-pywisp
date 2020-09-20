@@ -2,9 +2,9 @@
 import logging
 import os
 import struct
-from bisect import subprocess
+from bisect import bisect_left
+import subprocess
 from pathlib import Path
-import bisect_left
 import importlib.util
 
 import matplotlib.gridspec as gridspec

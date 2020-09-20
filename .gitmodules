@@ -1,0 +1,3 @@
+[submodule "pywisp/libs/pybind11"]
+	path = pywisp/libs/pybind11
+	url = https://github.com/pybind/pybind11.git
