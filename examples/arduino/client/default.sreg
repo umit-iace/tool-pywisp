@@ -15,7 +15,7 @@
     Value4: 1
 
   Config:
-    TimerTime: 10
+    PlotTimeout: 10
     InterpolationPoints: 0
     MovingWindowSize: 5
     MovingWindowEnable: True

@@ -43,8 +43,8 @@ class MainGui(QMainWindow):
         QCoreApplication.setApplicationName(globals()["__package__"])
 
         # general config parameters
-        self.config = {'TimerTime': 100,
-                       'HeartbeatTime': 0,
+        self.config = {'PlotTimeout': 100,
+                       'HeartbeatTimeout': 0,
                        'InterpolationPoints': 100,
                        'MovingWindowEnable': False,
                        'MovingWindowSize': 10,
@@ -296,9 +296,13 @@ class MainGui(QMainWindow):
 
         # options
         self.optMenu = self.menuBar().addMenu('&Options')
-        self.actTimerTime = QAction("&Timer time", self)
-        self.optMenu.addAction(self.actTimerTime)
-        self.actTimerTime.triggered.connect(self.setTimerTime)
+        self.actPlotTimeout = QAction("&Plot Timeout", self)
+        self.optMenu.addAction(self.actPlotTimeout)
+        self.actPlotTimeout.triggered.connect(self.setPlotTimeout)
+
+        self.actHeartbeat = QAction("&Heartbeat Timeout", self)
+        self.optMenu.addAction(self.actHeartbeat)
+        self.actHeartbeat.triggered.connect(self.setHeartbeat)
 
         # experiment
         self.expMenu = self.menuBar().addMenu('&Experiment')
@@ -502,17 +506,31 @@ class MainGui(QMainWindow):
             self._logger.debug("Add '{}' to experiment list".format(exp["Name"]))
             self.experimentList.addItem(exp["Name"])
 
-    def setTimerTime(self):
+    def setPlotTimeout(self):
         """
-        Sets the timer time in settings with a dialog.
+        Sets the plot timeout in settings with a dialog.
         """
         self._settings.beginGroup('plot')
-        timerTime, ok = DataIntDialog.getData(title="Timer Time", min=2, max=10000, unit='ms',
-                                              current=self.config['TimerTime'])
+        plotTimeout, ok = DataIntDialog.getData(title="Plot Timeout", min=2, max=10000, unit='ms',
+                                                current=self.config['PlotTimeout'])
 
         if ok:
-            self.config['TimerTime'] = timerTime
-            self._logger.info("Set timer time to {}".format(timerTime))
+            self.config['PlotTimeout'] = plotTimeout
+            self._logger.info("Set Plot Timeout to {}".format(plotTimeout))
+
+        self._settings.endGroup()
+
+    def setHeartbeat(self):
+        """
+        Sets the heartbeat timeout in settings with a dialog.
+        """
+        self._settings.beginGroup('plot')
+        heartbeatTimeout, ok = DataIntDialog.getData(title="Heartbeat Timeout", min=0, max=10000, unit='ms',
+                                                     current=self.config['PlotTimeout'])
+
+        if ok:
+            self.config['HeartbeatTimeout'] = heartbeatTimeout
+            self._logger.info("Set Heartbeat Timeout to {}".format(heartbeatTimeout))
 
         self._settings.endGroup()
 
@@ -1021,9 +1039,9 @@ class MainGui(QMainWindow):
             if connInstance:
                 connInstance.doRead = True
 
-        self.timer.start(int(self.config['TimerTime']))
-        if self.config['HeartbeatTime']:
-            self.heartbeatTimer.start(int(self.config['HeartbeatTime']))
+        self.timer.start(int(self.config['PlotTimeout']))
+        if self.config['HeartbeatTimeout']:
+            self.heartbeatTimer.start(int(self.config['HeartbeatTimeout']))
         self.exp.runExperiment()
 
     @pyqtSlot()

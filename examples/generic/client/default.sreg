@@ -8,8 +8,8 @@
     MplTwoPendulumVisualizer:
 
   Config:
-    TimerTime: 10
+    PlotTimeout: 10
     InterpolationPoints: 0
     MovingWindowSize: 10
     MovingWindowEnable: True
-    HeartbeatTime: 0
+    HeartbeatTimeout: 0
