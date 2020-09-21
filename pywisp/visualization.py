@@ -42,12 +42,6 @@ class MplVisualizer(Visualizer):
 
         self.canvas = FigureCanvas(self.fig)
         self.canvas.setParent(self.qWidget)
-        self.canvasMenu = QMenu(self.qWidget)
-        self.qActSaveAnimation = QAction('Save Animation', self.qWidget, checkable=True)
-        self.qActSaveAnimation.triggered.connect(self.saveAnimation)
-        self.canvasMenu.addAction(self.qActSaveAnimation)
-        self.canvas.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.canvas.customContextMenuRequested.connect(self.execCanvasMenu)
 
         self.axes = self.fig.add_subplot(111)
         self.qLayout.addWidget(self.canvas)

@@ -300,6 +300,11 @@ class MainGui(QMainWindow):
         self.optMenu.addAction(self.actTimerTime)
         self.actTimerTime.triggered.connect(self.setTimerTime)
 
+        self.actSaveAnimation = QAction("&Save Animation", self, checkable=True)
+        self.optMenu.addAction(self.actSaveAnimation)
+        # TODO connect to active visualiser
+        # self.actSaveAnimation.triggered.connect(self.saveAnimation)
+
         # experiment
         self.expMenu = self.menuBar().addMenu('&Experiment')
         self.connMenu = self.menuBar().addMenu('&Connections')
