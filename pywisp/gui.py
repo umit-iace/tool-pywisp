@@ -953,14 +953,19 @@ class MainGui(QMainWindow):
             file, ext = os.path.splitext(filename[0])
             self._settings.setValue("path/previous_plot_export",
                                     os.path.dirname(file))
-            if ext == '.csv':
-                exporter.exportCsv(filename[0])
-            elif ext == '.png':
-                exporter.exportPng(filename[0])
-            else:
-                self._logger.error("Wrong extension used!")
+            try:
+                if ext == '.csv':
+                    exporter.exportCsv(filename[0])
+                elif ext == '.png':
+                    exporter.exportPng(filename[0])
+                else:
+                    self._logger.error("Wrong extension used!")
+                    return
+            except (OSError, IOError) as e:
+                self._logger.error("Write error: {}".format(e))
                 return
-            self._logger.info("Export successful as '{}.".format(filename[0]))
+            else:
+                self._logger.info("Export successful as '{}.".format(filename[0]))
 
     @pyqtSlot(QModelIndex)
     def targetViewChanged(self, index=None):
