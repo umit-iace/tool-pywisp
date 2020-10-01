@@ -12,6 +12,7 @@ docu:
     - pip install -r requirements.txt
     - python setup.py develop
     - cd docs
+    - export DISPLAY=:0
     - make html
     - rm -rf /srv/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
     - mkdir -p /srv/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
