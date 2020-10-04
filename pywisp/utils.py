@@ -1124,7 +1124,7 @@ class CppBinding:
             bool: True if build config has been changed and cmake has to be
             rerun.
         """
-        config_line = "add_library({} {} {})".format(
+        config_line = "add_library({} SHARED {} {})".format(
             self.module_name, self.module_src_path.as_posix(),
             'binding_' + self.module_name + '.cpp')
 
