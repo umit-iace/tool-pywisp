@@ -1167,7 +1167,6 @@ class CppBinding:
         """
         c_make_lists = "cmake_minimum_required(VERSION 3.4)\n"
         c_make_lists += "project({})\n\n".format(self.module_name)
-        c_make_lists += "cmake_minimum_required(VERSION 3.4)\n\n"
 
         c_make_lists += "set( CMAKE_CXX_STANDARD 11 )\n\n"
         c_make_lists += "find_package(PythonLibs REQUIRED)\n\n"
