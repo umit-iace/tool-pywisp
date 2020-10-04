@@ -1059,8 +1059,6 @@ class CppBinding:
 
         self.module_src_path = self.module_path / str(self.module_name + '.cpp')
 
-        self.pybind_path = Path(__file__).resolve().parent / "libs" / "pybind11"
-
         self.cmake_lists_path = self.src_path / "CMakeLists.txt"
 
         if self.create_binding_config():
@@ -1126,18 +1124,22 @@ class CppBinding:
             bool: True if build config has been changed and cmake has to be
             rerun.
         """
-        config_line = "pybind11_add_module({} {} {})".format(
+        config_line = "add_library({} {} {})".format(
             self.module_name, self.module_src_path.as_posix(),
             'binding_' + self.module_name + '.cpp')
 
         if os.name == 'nt':
-            target_config_line = "set_target_properties({} PROPERTIES OUTPUT_NAME \"{}\" SUFFIX \".pyd\")".format(
+            target_config_line = "set_target_properties({} PROPERTIES PREFIX \"\" OUTPUT_NAME \"{}\" SUFFIX \".pyd\")\n".format(
                 self.module_name,
                 self.module_name)
         else:
-            target_config_line = "set_target_properties({} PROPERTIES OUTPUT_NAME \"{}\" SUFFIX \".so\")".format(
+            target_config_line = "set_target_properties({} PROPERTIES PREFIX \"\" OUTPUT_NAME \"{}\" SUFFIX \".so\")\n".format(
                 self.module_name,
                 self.module_name)
+
+        target_config_line += "target_link_libraries({} ${{PYTHON_LIBRARIES}})".format(
+            self.module_name
+        )
 
         with open(self.cmake_lists_path, "r") as f:
             if config_line in f.read():
@@ -1163,9 +1165,11 @@ class CppBinding:
         Returns:
 
         """
-        c_make_lists = "cmake_minimum_required(VERSION 2.8.12)\n"
+        c_make_lists = "cmake_minimum_required(VERSION 3.4)\n"
         c_make_lists += "project({})\n\n".format(self.module_name)
+        c_make_lists += "cmake_minimum_required(VERSION 3.4)\n\n"
 
+        c_make_lists += "set( CMAKE_CXX_STANDARD 11 )\n\n"
         c_make_lists += "find_package(PythonLibs REQUIRED)\n\n"
 
         c_make_lists += "set( CMAKE_RUNTIME_OUTPUT_DIRECTORY . )\n"
@@ -1179,7 +1183,7 @@ class CppBinding:
         c_make_lists += "\tset( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG} . )\n"
         c_make_lists += "endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )\n\n"
 
-        c_make_lists += "add_subdirectory(\"{}\" pybind11)\n".format(self.pybind_path.as_posix())
+        c_make_lists += "include_directories(${PYTHON_INCLUDE_DIRS})\n"
 
         with open(self.cmake_lists_path, "w") as f:
             f.write(c_make_lists)
