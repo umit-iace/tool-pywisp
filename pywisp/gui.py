@@ -1526,8 +1526,8 @@ class MainGui(QMainWindow):
                                    parameter=config['Parameter'])
             widget.setFixedHeight(30)
             widget.setFixedWidth(200)
-            widget.valueChanged.connect(lambda value: self.remoteSliderSendParameter(widget, value))
-            widget.sliderMoved.connect(lambda value: self.remoteSliderUpdate(widget, value))
+            widget.valueChanged.connect(lambda value, _wid=widget: self.remoteSliderSendParameter(_wid, value))
+            widget.sliderMoved.connect(lambda value, _wid=widget: self.remoteSliderUpdate(_wid, value))
             widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
@@ -1589,7 +1589,7 @@ class MainGui(QMainWindow):
                         wid.setValue(float(value))
                         wid.valueOn = value
                         wid.label.setText(wid.widgetName + ": {:.3f}".format(wid.value))
-                        wid.valueChanged.connect(lambda value: self.remoteSliderSendParameter(wid, value))
+                        wid.valueChanged.connect(lambda value, _wid=wid: self.remoteSliderSendParameter(_wid, value))
         else:
             widget.valueOn = value
 
