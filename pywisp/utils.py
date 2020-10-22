@@ -21,6 +21,8 @@ from pyqtgraph.dockarea import Dock
 
 __all__ = ["getResource", "packArrayToFrame", "CppBinding"]
 
+BUILD_DIR = "_build"
+
 
 def getResource(resName, resType="icons"):
     """
@@ -1039,50 +1041,62 @@ class BindingException(Exception):
 
 
 class CppBinding:
-    def __init__(self, module_name=None, module_path=None):
+    def __init__(self, module_name=None, module_path=None, binding_class_name=None):
         self._logger = logging.getLogger(self.__class__.__name__)
 
         if module_name is None:
+            self._logger.error("Instantiation of binding class without"
+                               " module_name is not allowed!")
             raise BindingException("Instantiation of binding class without"
                                    " module_name is not allowed!")
-
         self.module_name = module_name
 
         if module_path is None:
+            self._logger.error("Instantiation of binding class without"
+                               " module_path is not allowed!")
             raise BindingException("Instantiation of binding class without"
                                    " module_path is not allowed!")
+
+        if binding_class_name is None:
+            self._logger.error("Instantiation of binding class without"
+                               " binding_class_name is not allowed!")
+            raise BindingException("Instantiation of binding class without"
+                                   " binding_class_name is not allowed!")
+
         self.module_path = Path(module_path)
-
-        self.src_path = self.module_path / "binding"
-
         self.module_inc_path = self.module_path / str(self.module_name + ".h")
-
         self.module_src_path = self.module_path / str(self.module_name + '.cpp')
-
-        self.cmake_lists_path = self.src_path / "CMakeLists.txt"
+        self.cmake_lists_path = self.module_path / "CMakeLists.txt"
+        self.module_build_path = self.module_path / BUILD_DIR
+        self.binding_class_name = binding_class_name
 
         if self.create_binding_config():
             self.build_binding()
+            self.install_binding()
 
     def create_binding_config(self):
         # check if folder exists
-        if not self.src_path.is_dir():
-            self._logger.error("Dir binding not available in project folder '{}'"
-                               "".format(os.getcwd()))
+        if not self.module_path.is_dir():
+            self._logger.error("Module directory '{}' could not be found."
+                               "".format(self.module_path))
+            return False
+
+        if not self.module_src_path.is_file():
+            self._logger.error("CPP binding '{}' could not be found in the "
+                               "given module path '{}'."
+                               "".format(self.module_src_path,
+                                         self.module_path))
             return False
 
         if not self.module_inc_path.exists():
-            self._logger.error("Module '{}' could not found in binding folder"
-                               "".format(self.module_inc_path))
-            return False
-
-        if not self.module_inc_path.exists():
-            self._logger.error("Module '{}' could not found in binding folder"
-                               "".format(self.module_inc_path))
+            self._logger.error("Header file '{}' could not be found in the "
+                               "given module path '{}'."
+                               "".format(self.module_inc_path,
+                                         self.module_path))
             return False
 
         if not self.cmake_lists_path.exists():
-            self._logger.warning("No CMakeLists.txt found!")
+            self._logger.warning("CMakeLists.txt not found in module path.")
             self._logger.info("Generating new CMake config.")
             self.create_cmake_lists()
 
@@ -1093,24 +1107,38 @@ class CppBinding:
         return True
 
     def build_config(self):
-        # generate config
         if os.name == 'nt':
-            cmd = ['cmake', '-A', 'x64', '.']
+            cmd = ['cmake', '-A', 'x64', '-S', '.', '-B', BUILD_DIR]
         else:
-            cmd = ['cmake .']
-        result = subprocess.run(cmd, cwd=self.src_path, shell=True)
+            cmd = ['cmake -S . -B ' + BUILD_DIR]
+        result = subprocess.run(cmd, cwd=self.module_path, shell=True)
 
         if result.returncode != 0:
             self._logger.error("Generation of binding config failed.")
             raise BindingException("Generation of binding config failed.")
 
+    def install_binding(self):
+        # generate config
+        if os.name == 'nt':
+            cmd = ['cmake', '--install', BUILD_DIR]
+        else:
+            cmd = ['cmake --install ' + BUILD_DIR]
+        result = subprocess.run(cmd, cwd=self.module_path, shell=True)
+
+        if result.returncode != 0:
+            self._logger.error("Installation of binding config failed.")
+            raise BindingException("Installation of binding config failed.")
+
     def build_binding(self):
+        if not self.module_build_path.is_dir():
+            os.mkdir(self.module_build_path)
+
         # build
         if os.name == 'nt':
-            cmd = ['cmake', '--build', '.', '--config', 'Release']
+            cmd = ['cmake', '--build', BUILD_DIR, '--config', 'Release']
         else:
-            cmd = ['make']
-        result = subprocess.run(cmd, cwd=self.src_path, shell=True)
+            cmd = ['cmake --build ' + BUILD_DIR]
+        result = subprocess.run(cmd, cwd=self.module_path, shell=True)
 
         if result.returncode != 0:
             self._logger.error("Build failed!")
@@ -1126,35 +1154,41 @@ class CppBinding:
         """
         config_line = "add_library({} SHARED {} {})".format(
             self.module_name, self.module_src_path.as_posix(),
-            'binding_' + self.module_name + '.cpp')
+            self.binding_class_name + '.cpp')
 
         if os.name == 'nt':
-            target_config_line = "set_target_properties({} PROPERTIES PREFIX \"\" OUTPUT_NAME \"{}\" SUFFIX \".pyd\")\n".format(
+            config_line += "\nset_target_properties({} PROPERTIES PREFIX \"\" OUTPUT_NAME \"{}\" SUFFIX \".pyd\")\n".format(
                 self.module_name,
                 self.module_name)
         else:
-            target_config_line = "set_target_properties({} PROPERTIES PREFIX \"\" OUTPUT_NAME \"{}\" SUFFIX \".so\")\n".format(
+            config_line += "\nset_target_properties({} PROPERTIES PREFIX \"\" OUTPUT_NAME \"{}\" SUFFIX \".so\")\n".format(
                 self.module_name,
                 self.module_name)
 
-        target_config_line += "target_link_libraries({} ${{PYTHON_LIBRARIES}})".format(
+        config_line += "target_link_libraries({} ${{PYTHON_LIBRARIES}})".format(
             self.module_name
         )
+        if os.name == 'nt':
+            config_line += "\ninstall(FILES {}/{}.pyd DESTINATION {})".format(
+                BUILD_DIR,
+                self.module_name,
+                self.module_path.as_posix()
+            )
+        else:
+            config_line += "\n\ninstall(FILES {}/{}.so DESTINATION {})".format(
+                BUILD_DIR,
+                self.module_name,
+                self.module_path.as_posix()
+            )
 
         with open(self.cmake_lists_path, "r") as f:
             if config_line in f.read():
-                return False
-
-        with open(self.cmake_lists_path, "r") as f:
-            if target_config_line in f.read():
                 return False
 
         self._logger.info("Appending build info for '{}'".format(self.module_name))
         with open(self.cmake_lists_path, "a") as f:
             f.write("\n")
             f.write(config_line)
-            f.write("\n")
-            f.write(target_config_line)
 
         return True
 
@@ -1190,9 +1224,9 @@ class CppBinding:
     def get_class_from_module(self):
         try:
             if os.name == 'nt':
-                module_path = self.src_path / str(self.module_name + '.pyd')
+                module_path = self.module_path / str(self.module_name + '.pyd')
             else:
-                module_path = self.src_path / str(self.module_name + '.so')
+                module_path = self.module_path / str(self.module_name + '.so')
 
             spec = importlib.util.spec_from_file_location(self.module_name, module_path)
             module = importlib.util.module_from_spec(spec)
