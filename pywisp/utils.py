@@ -986,12 +986,12 @@ def isInf(value):
 
 
 class TreeWidgetStyledItemDelegate(QStyledItemDelegate):
-    '''
+    """
         For overriding behavior of selection and hovering in QTreeView and QTreeWidget
 
         When you set background color (QtGui.QColor()) to QTreeWidgetItem you also must set this color like:
             item.setData(0, QtCore.Qt.BackgroundRole, QtGui.QColor())
-    '''
+    """
 
     def paint(self, painter, option, index):
         def draw_my(option, painter, brush, text, icon):
@@ -1041,110 +1041,116 @@ class BindingException(Exception):
 
 
 class CppBinding:
-    def __init__(self, module_name=None, module_path=None, binding_class_name=None):
+    buildDir = "_build"
+    libDir = "_lib"
+    cmakeLists = "CMakeLists.txt"
+
+    def __init__(self,
+                 moduleName=None,
+                 modulePath=None,
+                 bindingClassName=None):
         self._logger = logging.getLogger(self.__class__.__name__)
 
-        if module_name is None:
+        # adapt to os-specific extensions
+        if os.name == 'nt':
+            self.sfx = '.pyd'
+        else:
+            self.sfx = '.so'
+
+        if moduleName is None:
             self._logger.error("Instantiation of binding class without"
-                               " module_name is not allowed!")
+                               " moduleName is not allowed!")
             raise BindingException("Instantiation of binding class without"
-                                   " module_name is not allowed!")
-        self.module_name = module_name
+                                   " moduleName is not allowed!")
+        self.moduleName = moduleName
 
-        if module_path is None:
+        if modulePath is None:
             self._logger.error("Instantiation of binding class without"
-                               " module_path is not allowed!")
+                               " modulePath is not allowed!")
             raise BindingException("Instantiation of binding class without"
-                                   " module_path is not allowed!")
+                                   " modulePath is not allowed!")
 
-        if binding_class_name is None:
+        self.modulePath = Path(modulePath)
+        self.moduleStem = self.modulePath / self.moduleName
+        self.moduleIncPath = self.moduleStem.with_suffix(".h")
+        self.moduleSrcPath = self.moduleStem.with_suffix(".cpp")
+        self.cmakeListsPath = self.modulePath / self.cmakeLists
+        self.moduleBuildPath = self.modulePath / self.buildDir
+        self.moduleLibPath = self.modulePath / self.libDir
+
+        if bindingClassName is None:
             self._logger.error("Instantiation of binding class without"
-                               " binding_class_name is not allowed!")
+                               " bindingClassName is not allowed!")
             raise BindingException("Instantiation of binding class without"
-                                   " binding_class_name is not allowed!")
+                                   " bindingClassName is not allowed!")
+        self.bindingClassName = bindingClassName
 
-        self.module_path = Path(module_path)
-        self.module_inc_path = self.module_path / str(self.module_name + ".h")
-        self.module_src_path = self.module_path / str(self.module_name + '.cpp')
-        self.cmake_lists_path = self.module_path / "CMakeLists.txt"
-        self.module_build_path = self.module_path / BUILD_DIR
-        self.binding_class_name = binding_class_name
+        if self.createBindingConfig():
+            self.buildBinding()
+            self.installBinding()
 
-        if self.create_binding_config():
-            self.build_binding()
-            self.install_binding()
-
-    def create_binding_config(self):
+    def createBindingConfig(self):
         # check if folder exists
-        if not self.module_path.is_dir():
+        if not self.modulePath.is_dir():
             self._logger.error("Module directory '{}' could not be found."
-                               "".format(self.module_path))
+                               "".format(self.modulePath))
             return False
 
-        if not self.module_src_path.is_file():
+        if not self.moduleSrcPath.is_file():
             self._logger.error("CPP binding '{}' could not be found in the "
                                "given module path '{}'."
-                               "".format(self.module_src_path,
-                                         self.module_path))
+                               "".format(self.moduleSrcPath,
+                                         self.modulePath))
             return False
 
-        if not self.module_inc_path.exists():
+        if not self.moduleIncPath.is_file():
             self._logger.error("Header file '{}' could not be found in the "
                                "given module path '{}'."
-                               "".format(self.module_inc_path,
-                                         self.module_path))
+                               "".format(self.moduleIncPath,
+                                         self.modulePath))
             return False
 
-        if not self.cmake_lists_path.exists():
+        if not self.cmakeListsPath.is_file():
             self._logger.warning("CMakeLists.txt not found in module path.")
             self._logger.info("Generating new CMake config.")
-            self.create_cmake_lists()
+            self.createCmakeLists()
 
-        config_changed = self.update_binding_config()
-        if config_changed:
-            self.build_config()
+        configChanged = self.updateBindingConfig()
+        if configChanged:
+            self.buildConfig()
 
         return True
 
-    def build_config(self):
-        if os.name == 'nt':
-            cmd = ['cmake', '-A', 'x64', '-S', '.', '-B', BUILD_DIR]
-        else:
-            cmd = ['cmake -S . -B ' + BUILD_DIR]
-        result = subprocess.run(cmd, cwd=self.module_path, shell=True)
+    def createCmakeLists(self):
+        """
+        Create the stub of a `CMakeLists.txt` .
 
-        if result.returncode != 0:
-            self._logger.error("Generation of binding config failed.")
-            raise BindingException("Generation of binding config failed.")
+        Returns:
 
-    def install_binding(self):
-        # generate config
-        if os.name == 'nt':
-            cmd = ['cmake', '--install', BUILD_DIR]
-        else:
-            cmd = ['cmake --install ' + BUILD_DIR]
-        result = subprocess.run(cmd, cwd=self.module_path, shell=True)
+        """
+        cMakeLists = "cmake_minimum_required(VERSION 3.4)\n"
+        cMakeLists += "project(Bindings)\n\n"
 
-        if result.returncode != 0:
-            self._logger.error("Installation of binding config failed.")
-            raise BindingException("Installation of binding config failed.")
+        cMakeLists += "set( CMAKE_CXX_STANDARD 11 )\n\n"
+        cMakeLists += "find_package(PythonLibs REQUIRED)\n\n"
 
-    def build_binding(self):
-        if not self.module_build_path.is_dir():
-            os.mkdir(self.module_build_path)
+        cMakeLists += "set( CMAKE_RUNTIME_OUTPUT_DIRECTORY . )\n"
+        cMakeLists += "set( CMAKE_LIBRARY_OUTPUT_DIRECTORY . )\n"
+        cMakeLists += "set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY . )\n\n"
 
-        # build
-        if os.name == 'nt':
-            cmd = ['cmake', '--build', BUILD_DIR, '--config', 'Release']
-        else:
-            cmd = ['cmake --build ' + BUILD_DIR]
-        result = subprocess.run(cmd, cwd=self.module_path, shell=True)
+        cMakeLists += "foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )\n"
+        cMakeLists += "\tstring( TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG )\n"
+        cMakeLists += "\tset( CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} . )\n"
+        cMakeLists += "\tset( CMAKE_LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG} . )\n"
+        cMakeLists += "\tset( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG} . )\n"
+        cMakeLists += "endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )\n\n"
 
-        if result.returncode != 0:
-            self._logger.error("Build failed!")
-            raise BindingException("Build failed!")
+        cMakeLists += "include_directories(${PYTHON_INCLUDE_DIRS})\n"
 
-    def update_binding_config(self):
+        with open(self.cmakeListsPath, "w") as f:
+            f.write(cMakeLists)
+
+    def updateBindingConfig(self):
         """
         Add the module config to the cmake lists.
 
@@ -1152,83 +1158,74 @@ class CppBinding:
             bool: True if build config has been changed and cmake has to be
             rerun.
         """
-        config_line = "add_library({} SHARED {} {})".format(
-            self.module_name, self.module_src_path.as_posix(),
-            self.binding_class_name + '.cpp')
-
-        if os.name == 'nt':
-            config_line += "\nset_target_properties({} PROPERTIES PREFIX \"\" OUTPUT_NAME \"{}\" SUFFIX \".pyd\")\n".format(
-                self.module_name,
-                self.module_name)
-        else:
-            config_line += "\nset_target_properties({} PROPERTIES PREFIX \"\" OUTPUT_NAME \"{}\" SUFFIX \".so\")\n".format(
-                self.module_name,
-                self.module_name)
-
-        config_line += "target_link_libraries({} ${{PYTHON_LIBRARIES}})".format(
-            self.module_name
+        configLine = "add_library({} SHARED {} {})\n".format(
+            self.moduleName,
+            self.moduleSrcPath.as_posix(),
+            self.bindingClassName + '.cpp'
         )
-        if os.name == 'nt':
-            config_line += "\ninstall(FILES {}/{}.pyd DESTINATION {})".format(
-                BUILD_DIR,
-                self.module_name,
-                self.module_path.as_posix()
-            )
-        else:
-            config_line += "\n\ninstall(FILES {}/{}.so DESTINATION {})".format(
-                BUILD_DIR,
-                self.module_name,
-                self.module_path.as_posix()
-            )
-
-        with open(self.cmake_lists_path, "r") as f:
-            if config_line in f.read():
+        configLine += "set_target_properties({} PROPERTIES PREFIX \"\" OUTPUT_NAME \"{}\" SUFFIX \"{}\")\n".format(
+            self.moduleName,
+            self.moduleName,
+            self.sfx
+        )
+        configLine += "target_link_libraries({} ${{PYTHON_LIBRARIES}})\n".format(
+            self.moduleName
+        )
+        configLine += "install(FILES {}/{} DESTINATION {})".format(
+            BUILD_DIR,
+            self.moduleName + self.sfx,
+            self.moduleLibPath.as_posix()
+        )
+        with open(self.cmakeListsPath, "r") as f:
+            if configLine in f.read():
                 return False
 
-        self._logger.info("Appending build info for '{}'".format(self.module_name))
-        with open(self.cmake_lists_path, "a") as f:
+        self._logger.info("Appending build info for '{}'".format(self.moduleName))
+        with open(self.cmakeListsPath, "a") as f:
             f.write("\n")
-            f.write(config_line)
+            f.write(configLine)
 
         return True
 
-    def create_cmake_lists(self):
-        """
-        Create the stub of a `CMakeLists.txt` .
+    def buildConfig(self):
+        if os.name == 'nt':
+            cmd = ['cmake', '-A', 'x64', '-S', '.', '-B', self.buildDir]
+        else:
+            cmd = ['cmake',  '-S', '.', '-B', self.buildDir]
+        result = subprocess.run(cmd, cwd=self.modulePath)
 
-        Returns:
+        if result.returncode != 0:
+            self._logger.error("Generation of binding config failed.")
+            raise BindingException("Generation of binding config failed.")
 
-        """
-        c_make_lists = "cmake_minimum_required(VERSION 3.4)\n"
-        c_make_lists += "project({})\n\n".format(self.module_name)
+    def buildBinding(self):
+        # build
+        if os.name == 'nt':
+            cmd = ['cmake', '--build', self.buildDir, '--config', 'Release', '--target', 'INSTALL']
+        else:
+            cmd = ['cmake', '--build', self.buildDir]
+        result = subprocess.run(cmd, cwd=self.modulePath)
 
-        c_make_lists += "set( CMAKE_CXX_STANDARD 11 )\n\n"
-        c_make_lists += "find_package(PythonLibs REQUIRED)\n\n"
+        if result.returncode != 0:
+            self._logger.error("Build failed!")
+            raise BindingException("Build failed!")
 
-        c_make_lists += "set( CMAKE_RUNTIME_OUTPUT_DIRECTORY . )\n"
-        c_make_lists += "set( CMAKE_LIBRARY_OUTPUT_DIRECTORY . )\n"
-        c_make_lists += "set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY . )\n\n"
+    def installBinding(self):
+        # generate config
+        if os.name == 'nt':
+            return
+        else:
+            cmd = ['cmake', '--install', self.buildDir]
+        result = subprocess.run(cmd, cwd=self.modulePath)
 
-        c_make_lists += "foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )\n"
-        c_make_lists += "\tstring( TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG )\n"
-        c_make_lists += "\tset( CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} . )\n"
-        c_make_lists += "\tset( CMAKE_LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG} . )\n"
-        c_make_lists += "\tset( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG} . )\n"
-        c_make_lists += "endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )\n\n"
+        if result.returncode != 0:
+            self._logger.error("Installation of bindings failed.")
+            raise BindingException("Installation of bindings failed.")
 
-        c_make_lists += "include_directories(${PYTHON_INCLUDE_DIRS})\n"
-
-        with open(self.cmake_lists_path, "w") as f:
-            f.write(c_make_lists)
-
-    def get_class_from_module(self):
+    def getClassFromModule(self):
         try:
-            if os.name == 'nt':
-                module_path = self.module_path / str(self.module_name + '.pyd')
-            else:
-                module_path = self.module_path / str(self.module_name + '.so')
-
-            spec = importlib.util.spec_from_file_location(self.module_name, module_path)
+            spec = importlib.util.spec_from_file_location(self.moduleName,
+                                                          (self.moduleLibPath / self.moduleName).with_suffix(self.sfx))
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             return module
