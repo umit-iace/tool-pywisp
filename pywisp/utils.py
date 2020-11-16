@@ -219,6 +219,9 @@ class PlotChart(object):
         if self.plotWidget:
             startPlotRange = 0
             for indx, curve in enumerate(self.plotCurves):
+                # check if data is multidimensional
+                if len(self.dataPoints[curve.name()].value[-1]) > 1:
+                    continue
                 if self.movingWindowEnable:
                     timeLen = len(self.dataPoints[curve.name()].time)
                     if timeLen > 0:
