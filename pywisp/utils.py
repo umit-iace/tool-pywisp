@@ -220,8 +220,9 @@ class PlotChart(object):
             startPlotRange = 0
             for indx, curve in enumerate(self.plotCurves):
                 # check if data is multidimensional
-                if len(self.dataPoints[curve.name()].value[-1]) > 1:
-                    continue
+                if self.dataPoints[curve.name()].values:
+                    if isinstance(self.dataPoints[curve.name()].values[-1], (list, np.ndarray)):
+                        continue
                 if self.movingWindowEnable:
                     timeLen = len(self.dataPoints[curve.name()].time)
                     if timeLen > 0:
