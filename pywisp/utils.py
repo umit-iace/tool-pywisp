@@ -21,8 +21,6 @@ from pyqtgraph.dockarea import Dock
 
 __all__ = ["getResource", "packArrayToFrame", "CppBinding"]
 
-BUILD_DIR = "_build"
-
 
 def getResource(resName, resType="icons"):
     """
@@ -1176,7 +1174,7 @@ class CppBinding:
             self.moduleName
         )
         configLine += "install(FILES {}/{} DESTINATION {})".format(
-            BUILD_DIR,
+            self.buildDir,
             self.moduleName + self.sfx,
             self.moduleLibPath.as_posix()
         )
