@@ -88,7 +88,8 @@ def packArrayToFrame(id, data, frameLen, dataLenFloat, dataLenInt):
             payload = struct.pack(fmtStr, *outList)
         else:
             outList = [len(data)]
-            outList += [float(data[i * frameLenFloat + j]) for j in range(frameLenFloat - 1)]
+            outList += [float(data[i * frameLenFloat + j]) for j in range(frameLenFloat - 1) if
+                       i * frameLenFloat + j < len(data)]
             fmtStr = getFormatedStructString(dataLenFloat, dataLenInt, len(outList) - 1)
             payload = struct.pack(fmtStr, *outList)
         dataPoints += [{'id': id,
