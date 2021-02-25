@@ -156,7 +156,8 @@ class TcpConnection(Connection, QtCore.QThread):
     def __init__(self,
                  ip,
                  port,
-                 payloadLen=80):
+                 payloadLen=80,
+                 timeout=0.001):
         super(TcpConnection, self).__init__()
         QtCore.QThread.__init__(self)
 
@@ -164,6 +165,7 @@ class TcpConnection(Connection, QtCore.QThread):
         self.port = port
         self.sock = None
         self.payloadLen = payloadLen
+        self.timeout = timeout
         self.moveToThread(self)
 
     def disconnect(self):
@@ -193,7 +195,7 @@ class TcpConnection(Connection, QtCore.QThread):
             self.sock = None
             return False
         self.isConnected = True
-        self.sock.settimeout(0.001)
+        self.sock.settimeout(self.timeout)
         return True
 
     def getIP(self):
