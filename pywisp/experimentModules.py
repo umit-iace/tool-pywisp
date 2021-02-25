@@ -55,11 +55,11 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
         pass
 
     @abstractmethod
-    def getStartParams(self):
+    def getStartParams(self, *kwargs):
         pass
 
     @abstractmethod
-    def getStopParams(self):
+    def getStopParams(self, *kwargs):
         pass
 
     @abstractmethod
