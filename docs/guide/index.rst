@@ -153,10 +153,11 @@ Below a normal configuration with two experiments is presented:
         MplExampleVisualizer:
 
       Config:
-        TimerTime: 10
+        PlotTimeout: 10
         InterpolationPoints: 0
         MovingWindowSize: 5
         MovingWindowEnable: True
+        HeartbeatTimeout: 0
 
 In this example `Test` and `SeriesTrajectory` are derived :mod:`pywisp.experimentModules` classes. The settings below
 of `Remote` configurates a Push Button, that is connected to ´Value1` of the :mod:`pywisp.experimentModules` class
@@ -169,18 +170,20 @@ Plot Configuration
 
 Additionally the plot and visualization have some configuration parameters. These are:
 
-* TimerTime: Update intervall of the visualization/plot data
+* PlotTimeout: Update intervall of the visualization/plot data
 * InterpolationPoints: Count of grid points to interpolation plot data
 * MovingWindow: Moving Window of the plot visualization
+* HeartbeatTimeout: Timeout for heart beat
 
 The can be set by a right click of the plot in the GUI or about the Config menu.
 To save the configuration the `defaults.sreg` can be extended by a `Config section` with the keys:
 
 .. code-block:: json
 
-    TimerTime:           <time in ms>
+    PlotTimeout:         <time in ms>
     InterpolationPoints: <0..no interpolation, >0..grid points for interpolation>
     MovingWindowSize:    <time in s>
     MovingWindowEnable:  <True..enable moving window, False..disable moving window>
+    HeartbeatTimeout:    <time in ms>
 
 For detailed information see the :ref:`chapter_examples` section.
