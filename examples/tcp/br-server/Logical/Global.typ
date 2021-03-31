@@ -16,5 +16,7 @@ TYPE
 		fValue2 : REAL;
 		iValue3 : INT;
 		cValue4 : BYTE;
+		dValueNan : LREAL;
+		dValueInf : LREAL;
 	END_STRUCT;
 END_TYPE

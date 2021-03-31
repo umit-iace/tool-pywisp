@@ -1,5 +1,6 @@
 #include <bur/plc.h>
 #include <bur/plctypes.h>
+
 #ifdef _DEFAULT_INCLUDES
 	#include <AsDefault.h>
 #endif
@@ -36,6 +37,8 @@ void _INIT ProgramInit(void)
 	benchData.fValue2 = 0;
 	benchData.iValue3 = 0;
 	benchData.cValue4 = 0;
+	benchData.dValueNan = 0; // no way was found to set to nan
+	benchData.dValueInf = 0; // no way was found to set to inf
 	
 	trajData.dStartValue = 0;
 	trajData.lStartTime = 0;

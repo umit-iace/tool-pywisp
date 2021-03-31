@@ -14,6 +14,8 @@ void Transport::sendData() {
 	benchFrame.pack(benchData.fValue2);
 	benchFrame.pack(benchData.iValue3);
 	benchFrame.pack(benchData.cValue4);
+	benchFrame.pack(benchData.dValueNan);
+	benchFrame.pack(benchData.dValueInf);
 	tcp->handleFrame(benchFrame);
 
 	Frame trajFrame(11);
