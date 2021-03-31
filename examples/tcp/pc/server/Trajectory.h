@@ -16,7 +16,7 @@ public:
      * @param dTime current time in milliseconds
      * @return trajectory output for the current time
      */
-    virtual double compute(const unsigned int &lTime) = 0;
+    virtual double compute(const unsigned long &lTime) = 0;
 };
 
 /**
@@ -24,9 +24,9 @@ public:
  */
 class RampTrajectory : public Trajectory {
 private:
-    unsigned int lStartTime = 0;       ///< value of start time in ms
+    unsigned long lStartTime = 0;       ///< value of start time in ms
     double dStartValue = 0.0;           ///< value of start value in ms
-    unsigned int lEndTime = 0;         ///< value of final time
+    unsigned long lEndTime = 0;         ///< value of final time
     double dEndValue = 0;               ///< value of final value
 
 public:
@@ -36,7 +36,7 @@ public:
     /// Destructor of the Ramp trajectory
     ~RampTrajectory() {}
 
-    double compute(const unsigned int &lTime) {
+    double compute(const unsigned long &lTime) {
         double dQ = 0;
         if (lTime <= this->lStartTime) {
             dQ = this->dStartValue;
@@ -53,8 +53,8 @@ public:
         return dQ;
     };
 
-    void setTimesValues(const unsigned int &lStartTime,
-                        const unsigned int &lEndTime,
+    void setTimesValues(const unsigned long &lStartTime,
+                        const unsigned long &lEndTime,
                         const double &dStartValue,
                         const double &dEndValue) {
         this->lStartTime = lStartTime;
@@ -71,7 +71,7 @@ public:
 class SeriesTrajectory : public Trajectory {
 private:
     unsigned int iSeriesSize;           ///< length of time series
-    unsigned int *lTimes = nullptr;    ///< array of times
+    unsigned long *lTimes = nullptr;    ///< array of times
     double *dValues = nullptr;          ///< array of values
 
 public:
@@ -81,7 +81,7 @@ public:
     /// Destructor of the Polynomial trajectory
     ~SeriesTrajectory() {}
 
-    double compute(const unsigned int &lTime) {
+    double compute(const unsigned long &lTime) {
         double dQ = 0;
         if (lTime <= this->lTimes[0]) {
             dQ = this->dValues[0];
@@ -100,7 +100,7 @@ public:
     };
 
     void setTime(double dTime, unsigned int iPosition) {
-        this->lTimes[iPosition] = (unsigned int) dTime;
+        this->lTimes[iPosition] = (unsigned long) dTime;
     }
 
     void setValue(const double dValue, unsigned int iPosition) {
@@ -113,7 +113,7 @@ public:
 
         this->iSeriesSize = iSeriesSize / 2;
 
-        this->lTimes = new unsigned int[this->iSeriesSize];
+        this->lTimes = new unsigned long[this->iSeriesSize];
         this->dValues = new double[this->iSeriesSize];
     }
 

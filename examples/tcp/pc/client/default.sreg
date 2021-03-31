@@ -1,0 +1,55 @@
+# default experiment file that is loaded when the gui starts up
+
+- Name: RunSystem
+
+  RampTrajectory:
+   StartTime: 5
+   StartValue: 28.0
+   EndTime: 70
+   EndValue: 5.0
+
+  SeriesTrajectory:
+   StartTime: 5
+   StartValue: 28.0
+   EndTime: 70
+   EndValue: 5.0
+
+  Test:
+    Value1: 11.2
+    Value2: 22.1
+    Value3: 4
+    Value4: 1
+
+  Remote:
+    PushExample:
+      Module: Test
+      Parameter: Value1
+      valueOn: '99.99'
+      widgetType: PushButton
+      shortcut: P
+    SwitchExample:
+      Module: Test
+      Parameter: Value2
+      valueOff: '11.1'
+      valueOn: '22.2'
+      widgetType: Switch
+      shortcut: O
+    SliderExample:
+      Module: Test
+      Parameter: Value3
+      maxSlider: 255
+      minSlider: 0
+      stepSlider: 1
+      widgetType: Slider
+      shortcutPlus: H
+      shortcutMinus: G
+
+  Visu:
+    MplExampleVisualizer:
+
+  Config:
+    TimerTime: 10
+    InterpolationPoints: 0
+    MovingWindowSize: 5
+    MovingWindowEnable: True
+    HeartbeatTime: 0

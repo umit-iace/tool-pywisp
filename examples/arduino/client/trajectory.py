@@ -21,10 +21,10 @@ class RampTrajectory(ExperimentModule):
     def __init__(self):
         ExperimentModule.__init__(self)
 
-    def getStartParams(self):
+    def getStartParams(self, data):
         pass
 
-    def getStopParams(self):
+    def getStopParams(self, data):
         pass
 
     def getParams(self, data):
