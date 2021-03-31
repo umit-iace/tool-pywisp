@@ -96,9 +96,9 @@ void Transport::unpackBenchData(Frame frame) {
 
 void Transport::unpackTrajRampData(Frame frame) {
     double dStartValue = 0;
-    unsigned long lStartTime = 0;
+    unsigned int lStartTime = 0;
     double dEndValue = 0;
-    unsigned long lEndTime = 0;
+    unsigned int lEndTime = 0;
     frame.unPack(dStartValue);
     frame.unPack(lStartTime);
     frame.unPack(dEndValue);

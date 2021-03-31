@@ -42,7 +42,7 @@ public:
      * @brief struct of test rig data
      */
     struct benchData {
-        unsigned long lTime = 0;                    ///< seconds since start of experiment
+        unsigned int lTime = 0;                    ///< seconds since start of experiment
         double dValue1 = 21342354.2213;
         float fValue2 = 556.2;
         int iValue3 = 244;
