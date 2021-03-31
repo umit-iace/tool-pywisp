@@ -1,5 +1,6 @@
 #include <bur/plc.h>
 #include <bur/plctypes.h>
+#include <math.h>
 
 #ifdef _DEFAULT_INCLUDES
 	#include <AsDefault.h>
@@ -8,7 +9,7 @@
 #include "../Libraries/Transport/Transport.h"
 
 // amount of memory to be allocated for heap storage must be specified for every ANSI C++ program with the bur_heap_size variable
-unsigned long bur_heap_size = 0xFFFF; 
+unsigned long bur_heap_size = 0xFFFF;
 const unsigned long lDt = 1000;          ///< Sampling step [ms]
 
 /**
@@ -30,15 +31,14 @@ void fTrajectory() {
 	}
 }
 
-void _INIT ProgramInit(void)
-{
+void _INIT ProgramInit(void) {
 	benchData.lTime = 0;
 	benchData.dValue1 = 0;
 	benchData.fValue2 = 0;
 	benchData.iValue3 = 0;
 	benchData.cValue4 = 0;
-	benchData.dValueNan = 0; // no way was found to set to nan
-	benchData.dValueInf = 0; // no way was found to set to inf
+	benchData.dValueNan = nan("");
+	benchData.dValueInf =  infinity();
 	
 	trajData.dStartValue = 0;
 	trajData.lStartTime = 0;
