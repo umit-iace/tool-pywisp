@@ -43,7 +43,7 @@ class Test(ExperimentModule):
         dataPoints = {}
         fid = frame.min_id
         if fid == self.ids[0]:
-            data = struct.unpack('>Qdfhb2d', frame.payload[:39])
+            data = struct.unpack('>Ldfhb2d', frame.payload[:35])
             dataPoints['Time'] = data[0]
             dataPoints['DataPoints'] = {'Value1': data[1],
                                         'Value2': data[2],
