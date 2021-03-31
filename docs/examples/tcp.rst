@@ -9,17 +9,11 @@ Currently two implementation variants are available for:
 PC
 --
 
-.. include:: ../../examples/tcp/pc-server/README.rst
+.. include:: ../../examples/tcp/pc/server/README.rst
    :start-after: sphinx-marker
 
 B&R
 ---
 
-.. include:: ../../examples/tcp/br-server/README.rst
-   :start-after: sphinx-marker
-
-Generic
--------
-
-.. include:: ../../examples/tcp/pc-server/README.rst
+.. include:: ../../examples/tcp/bur/server/README.rst
    :start-after: sphinx-marker
