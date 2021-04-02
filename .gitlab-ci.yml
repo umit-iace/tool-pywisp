@@ -13,7 +13,7 @@ docu:
     - python setup.py develop
     - cd docs
     - export DISPLAY=:0
-    - make html
+    - xvfb-run -a -s "-screen 0 1400x900x24 +extension RANDR" make html
     - rm -rf /srv/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
     - mkdir -p /srv/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
     - mv _build/html/* /srv/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
