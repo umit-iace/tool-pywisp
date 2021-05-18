@@ -439,6 +439,7 @@ class RemoteWidgetEdit(QDialog):
         self.widgetType = kwargs.get('widgetType', 'PushButton')
         self.name = kwargs.get('name', 'New')
         self.valueOn = str(kwargs.get('valueOn', 0.0))
+        self.valueReset = str(kwargs.get('valueReset', ''))
         self.valueOff = str(kwargs.get('valueOff', 0.0))
         self.minSlider = str(kwargs.get('minSlider', 0))
         self.maxSlider = str(kwargs.get('maxSlider', 1))
@@ -458,6 +459,7 @@ class RemoteWidgetEdit(QDialog):
         self.valueOffText = None
         self.valueOnText = None
         self.valueText = None
+        self.valueResetText =None
         self.shortcutField = None
         self.shortcutFieldPlus = None
         self.shortcutFieldMinus = None
@@ -536,15 +538,14 @@ class RemoteWidgetEdit(QDialog):
             self.shortcutField = ShortcutCreator()
             self.shortcutField.setText(self.shortcut)
             self.settingsWidgetLayout.addRow(QLabel("Shortcut:"), self.shortcutField)
+            self.valueResetText = QLineEdit(self.valueReset)
+            self.settingsWidgetLayout.addRow(QLabel("Reset Value"), self.valueResetText)
             dummy = QLabel("")
             dummy.setFixedHeight(height)
             self.settingsWidgetLayout.addRow(None, dummy)
             dummy2 = QLabel("")
             dummy2.setFixedHeight(height)
             self.settingsWidgetLayout.addRow(None, dummy2)
-            dummy3 = QLabel("")
-            dummy3.setFixedHeight(height)
-            self.settingsWidgetLayout.addRow(None, dummy3)
         elif self.typeList.currentText() == "Switch":
             self.valueOnText = QLineEdit(self.valueOn)
             self.settingsWidgetLayout.addRow(QLabel("Value On"), self.valueOnText)
@@ -600,6 +601,7 @@ class RemoteWidgetEdit(QDialog):
         if self.typeList.currentText() == "PushButton":
             msg['valueOn'] = self.valueText.text()
             msg['shortcut'] = self.shortcutField.getKeySequence()
+            msg['valueReset'] = self.valueResetText.text()
         elif self.typeList.currentText() == "Switch":
             msg['valueOn'] = self.valueOnText.text()
             msg['valueOff'] = self.valueOffText.text()
@@ -727,10 +729,11 @@ class MovableWidget(object):
 
 
 class MovablePushButton(QPushButton, MovableWidget):
-    def __init__(self, name, valueOn, shortcutKey, **kwargs):
+    def __init__(self, name, valueOn, valueReset, shortcutKey, **kwargs):
         MovableWidget.__init__(self, name)
         QPushButton.__init__(self, name=name)
         self.valueOn = valueOn
+        self.valueReset = valueReset
 
         self.parameter = kwargs.get('parameter', None)
         self.module = kwargs.get('module', None)
@@ -748,6 +751,7 @@ class MovablePushButton(QPushButton, MovableWidget):
         data['widgetType'] = 'PushButton'
         data['name'] = self.widgetName
         data['valueOn'] = self.valueOn
+        data['valueReset'] = self.valueReset
         data['Module'] = self.module
         data['Parameter'] = self.parameter
         data['shortcut'] = self.shortcut.key().toString()
