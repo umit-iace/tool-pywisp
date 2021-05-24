@@ -1441,6 +1441,8 @@ class MainGui(QMainWindow):
         qList.repaint()
 
     def remoteRemoveWidget(self, widget):
+        idx = self.experimentList.row(self._currentExpListItem)
+        del self._experiments[idx]['Remote'][widget.widgetName]
         self.remoteWidgetLayout.removeWidget(widget)
 
     def remoteConfigWidget(self, widget, editWidget=True):
@@ -1460,6 +1462,7 @@ class MainGui(QMainWindow):
         widget.parameter = config['Parameter']
         if config['widgetType'] == "PushButton":
             widget.valueOn = config['valueOn']
+            widget.valueReset = config['valueReset']
             widget.shortcut.setKey(config['shortcut'])
         elif config['widgetType'] == "Switch":
             widget.valueOn = config['valueOn']
@@ -1496,7 +1499,9 @@ class MainGui(QMainWindow):
             self._experiments[idx]['Remote'][config['name']] = config
         sliderLabel = None
         if config['widgetType'] == "PushButton":
-            widget = MovablePushButton(config['name'], config['valueOn'], config['shortcut'], module=config['Module'],
+            if 'valueReset' not in config:
+                config['valueReset'] = ''
+            widget = MovablePushButton(config['name'], config['valueOn'], config['valueReset'], config['shortcut'], module=config['Module'],
                                        parameter=config['Parameter'])
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
@@ -1550,6 +1555,9 @@ class MainGui(QMainWindow):
         self.remoteSendParamter(widget.module, widget.parameter, value)
         self.remoteSliderUpdate(widget, value, sliderMoved=False)
 
+        if widget.valueReset != '':
+            self.remoteSetParamter(widget.module, widget.parameter, widget.valueReset)
+
     def remoteSwitchSendParameter(self, widget):
         """
         Gets called when a user interacts with the switch and sends the specified parameter to the bench
@@ -1599,6 +1607,11 @@ class MainGui(QMainWindow):
             widget.label.setText(widget.widgetName + ": {:.3f}".format(value))
 
     def remoteSendParamter(self, module, parameter, value):
+        self.remoteSetParamter(module, parameter, value)
+        if self.actSendParameter.isEnabled():
+            self.sendParameter()
+
+    def remoteSetParamter(self, module, parameter, value):
         exp = deepcopy(self.exp.getExperiment())
         del exp['Name']
 
@@ -1610,8 +1623,6 @@ class MainGui(QMainWindow):
                     continue
                 exp[key][k] = value
                 self.exp.editExperiment(exp)
-                if self.actSendParameter.isEnabled():
-                    self.sendParameter()
                 return
 
     def copyRemoteSource(self):
