@@ -1015,6 +1015,7 @@ class MainGui(QMainWindow):
         item = QListWidgetItem(str(self.lastMeasList.count() + 1) + ": "
                                + self._currentExperimentName + " ~current~")
         self.lastMeasList.addItem(item)
+        self.lastMeasList.scrollToItem(item)
         self.copyLastMeas(item)
 
         for conn, connInstance in self.connections.items():
