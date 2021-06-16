@@ -157,7 +157,7 @@ class TcpConnection(Connection, QtCore.QThread):
                  ip,
                  port,
                  payloadLen=80,
-                 timeout=0.001):
+                 timeout=0.01):
         super(TcpConnection, self).__init__()
         QtCore.QThread.__init__(self)
 
@@ -211,10 +211,11 @@ class TcpConnection(Connection, QtCore.QThread):
         """
         Endless loop of the thread
         """
-        while True and self.isConnected:
+        while self.isConnected:
             if self.doRead:
                 self.readData(None)
-            time.sleep(0.001)
+            else:
+                time.sleep(self.timeout)
 
     def readData(self, frames):
         """
