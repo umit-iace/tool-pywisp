@@ -106,14 +106,14 @@ class MainGui(QMainWindow):
         self.setStatusBar(self.statusBar)
         self.statusbarLabel = QLabel("Not connected!")
         self.statusBar.addPermanentWidget(self.statusbarLabel, 1)
-        self.guiTime = 0
+        self.guiStartTime = 0.0
         self.guiTimer = QTimer()
         # set most precise timer type
         self.guiTimer.setTimerType(0)
         self.guiTimer.timeout.connect(self.updateGuiTimeLabel)
-        self.guiTimeLabel = QLabel("gui time=00:00:00")
+        self.guiTimeLabel = QLabel("GUI time=00:00:00")
         self.statusBar.addPermanentWidget(self.guiTimeLabel, 1)
-        self.expTimeLabel = QLabel("exp time=00:00:00")
+        self.expTimeLabel = QLabel("Exp time=00:00:00")
         self.statusBar.addPermanentWidget(self.expTimeLabel, 1)
         statusBarDummyLabel = QLabel("")
         self.statusBar.addPermanentWidget(statusBarDummyLabel, 4)
@@ -1050,7 +1050,7 @@ class MainGui(QMainWindow):
             self.heartbeatTimer.start(int(self.config['HeartbeatTime']))
         self.exp.runExperiment()
 
-        self.guiTime = 0
+        self.guiStartTime = time.time()
         self.updateGuiTimeLabel()
         self.guiTimer.start(1000)
 
@@ -1354,7 +1354,7 @@ class MainGui(QMainWindow):
             if key in names:
                 value.addValue(time, dataPoints[key])
 
-        time_text = "exp time={:02d}:{:02d}:{:02d}".format(int(time // 3600), int(time // 60), int(time % 60))
+        time_text = "Exp time={:02d}:{:02d}:{:02d}".format(int(time // 3600), int(time // 60), int(time % 60))
         self.expTimeLabel.setText(time_text)
 
     def updateDataPlots(self):
@@ -1681,7 +1681,7 @@ class MainGui(QMainWindow):
             self.copyRemoteSource()
 
     def updateGuiTimeLabel(self):
-        self.guiTime += 1
-        time_text = "gui time={:02d}:{:02d}:{:02d}".format(int(self.guiTime // 3600), int(self.guiTime // 60),
-                                                           int(self.guiTime % 60))
+        elapsedSeconds = time.time() - self.guiStartTime
+        time_text = "GUI time={:02d}:{:02d}:{:02d}".format(int(elapsedSeconds // 3600), int(elapsedSeconds // 60),
+                                                           int(elapsedSeconds % 60))
         self.guiTimeLabel.setText(time_text)
