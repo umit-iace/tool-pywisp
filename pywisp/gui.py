@@ -106,8 +106,22 @@ class MainGui(QMainWindow):
         self.setStatusBar(self.statusBar)
         self.statusbarLabel = QLabel("Not connected!")
         self.statusBar.addPermanentWidget(self.statusbarLabel, 1)
+        self.guiStartTime = 0.0
+        self.guiTimer = QTimer()
+        # set most precise timer type
+        self.guiTimer.setTimerType(0)
+        self.guiTimer.timeout.connect(self.updateGuiTimeLabel)
+        self.guiTimeLabel = QLabel("GUI time=00:00:00")
+        self.statusBar.addPermanentWidget(self.guiTimeLabel, 1)
+        self.expTimeLabel = QLabel("Exp time=00:00:00")
+        self.statusBar.addPermanentWidget(self.expTimeLabel, 1)
+        statusBarDummyLabel = QLabel("")
+        self.statusBar.addPermanentWidget(statusBarDummyLabel, 4)
+        self.coordTimer = QTimer()
+        self.coordTimer.timeout.connect(self.disableCoord)
         self.coordLabel = QLabel("x=0.0 y=0.0")
-        self.statusBar.addPermanentWidget(self.coordLabel)
+        self.coordLabel.setVisible(False)
+        self.statusBar.addPermanentWidget(self.coordLabel, 2)
 
         # the docking area allows to rearrange the user interface at runtime
         self.area = DockArea()
@@ -559,6 +573,8 @@ class MainGui(QMainWindow):
         self._addSetting("plot_colors", "cyan", "#17becf")
 
     def updateCoordInfo(self, pos, widget, coordItem):
+        self.coordLabel.setVisible(True)
+        self.coordTimer.start(5000)
         mouseCoords = widget.getPlotItem().vb.mapSceneToView(pos)
         coordItem.setPos(mouseCoords.x(), mouseCoords.y())
         coord_text = "x={:.3e} y={:.3e}".format(mouseCoords.x(),
@@ -571,6 +587,10 @@ class MainGui(QMainWindow):
             coordItem.show()
         else:
             coordItem.hide()
+
+    def disableCoord(self):
+        self.coordLabel.setVisible(False)
+        self.coordTimer.stop()
 
     # event functions
     def addPlotTreeItem(self, default=False):
@@ -914,6 +934,9 @@ class MainGui(QMainWindow):
             if not plot.title in openDocks:
                 self.plotCharts.pop(indx)
 
+        if len(self.findAllPlotDocks()) == 0:
+            self.disableCoord()
+
     def setAutoRange(self, widget):
         widget.autoRange()
         widget.enableAutoRange()
@@ -1027,6 +1050,10 @@ class MainGui(QMainWindow):
             self.heartbeatTimer.start(int(self.config['HeartbeatTime']))
         self.exp.runExperiment()
 
+        self.guiStartTime = time.time()
+        self.updateGuiTimeLabel()
+        self.guiTimer.start(1000)
+
     @pyqtSlot()
     def stopExperiment(self):
         """
@@ -1050,6 +1077,8 @@ class MainGui(QMainWindow):
             if connInstance:
                 connInstance.doRead = False
                 connInstance.clear()
+
+        self.guiTimer.stop()
 
     def sendParameter(self):
         """
@@ -1325,6 +1354,9 @@ class MainGui(QMainWindow):
             if key in names:
                 value.addValue(time, dataPoints[key])
 
+        time_text = "Exp time={:02d}:{:02d}:{:02d}".format(int(time // 3600), int(time // 60), int(time % 60))
+        self.expTimeLabel.setText(time_text)
+
     def updateDataPlots(self):
         if self.visualizer:
             self.visualizer.update(self._currentDataPointBuffers)
@@ -1502,8 +1534,8 @@ class MainGui(QMainWindow):
         if config['widgetType'] == "PushButton":
             if 'valueReset' not in config:
                 config['valueReset'] = ''
-            widget = MovablePushButton(config['name'], config['valueOn'], config['valueReset'], config['shortcut'], module=config['Module'],
-                                       parameter=config['Parameter'])
+            widget = MovablePushButton(config['name'], config['valueOn'], config['valueReset'], config['shortcut'],
+                                       module=config['Module'], parameter=config['Parameter'])
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
             widget.clicked.connect(lambda: self.remotePushButtonSendParameter(widget))
@@ -1511,8 +1543,8 @@ class MainGui(QMainWindow):
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
         elif config['widgetType'] == "Switch":
-            widget = MovableSwitch(config['name'], config['valueOn'], config['valueOff'], config['shortcut'], module=config['Module'],
-                                   parameter=config['Parameter'])
+            widget = MovableSwitch(config['name'], config['valueOn'], config['valueOff'], config['shortcut'],
+                                   module=config['Module'], parameter=config['Parameter'])
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
             widget.clicked.connect(lambda: self.remoteSwitchSendParameter(widget))
@@ -1527,8 +1559,8 @@ class MainGui(QMainWindow):
             sliderLabel.setFont(labelFont)
             self.remoteWidgetLayout.addWidget(sliderLabel)
             widget = MovableSlider(config['name'], config['minSlider'], config['maxSlider'], config['stepSlider'],
-                                   sliderLabel, config['shortcutPlus'], config['shortcutMinus'], exp[config['Module']][config['Parameter']],
-                                   module=config['Module'],
+                                   sliderLabel, config['shortcutPlus'], config['shortcutMinus'],
+                                   exp[config['Module']][config['Parameter']], module=config['Module'],
                                    parameter=config['Parameter'])
             widget.setFixedHeight(30)
             widget.setFixedWidth(200)
@@ -1647,3 +1679,9 @@ class MainGui(QMainWindow):
             self.remoteAddWidget()
         elif action == saveAction:
             self.copyRemoteSource()
+
+    def updateGuiTimeLabel(self):
+        elapsedSeconds = time.time() - self.guiStartTime
+        time_text = "GUI time={:02d}:{:02d}:{:02d}".format(int(elapsedSeconds // 3600), int(elapsedSeconds // 60),
+                                                           int(elapsedSeconds % 60))
+        self.guiTimeLabel.setText(time_text)
