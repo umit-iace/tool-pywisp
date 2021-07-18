@@ -1571,12 +1571,10 @@ class MainGui(QMainWindow):
             widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
         else:
             return
-        if self.remoteWidget.rect().contains((self.remoteWidgetLayout.count() % 2) * 200,
-                                             (self.remoteWidgetLayout.count() // 2) * 40):
-            widget.move((self.remoteWidgetLayout.count() % 2) * 200, (self.remoteWidgetLayout.count() // 2) * 40)
-            if sliderLabel:
-                sliderLabel.move((self.remoteWidgetLayout.count() % 2) * 200 + 80,
-                                 (self.remoteWidgetLayout.count() // 2) * 40 + 30)
+        widget.move((self.remoteWidgetLayout.count() % 2) * 200, (self.remoteWidgetLayout.count() // 2) * 40)
+        if sliderLabel:
+            sliderLabel.move((self.remoteWidgetLayout.count() % 2) * 200 + 80,
+                             (self.remoteWidgetLayout.count() // 2) * 40 + 30)
         self.remoteWidgetLayout.addWidget(widget)
 
     def remotePushButtonSendParameter(self, widget):
