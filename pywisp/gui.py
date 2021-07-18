@@ -1416,6 +1416,7 @@ class MainGui(QMainWindow):
         """
         self.actStartExperiment.setDisabled(True)
         self.selectedExp = False
+        self.remoteWidgetLayout.clearAll()
 
         expName = str(item.text())
         self._currentLastMeasItem = item
