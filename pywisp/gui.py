@@ -8,6 +8,23 @@ import pkg_resources
 import serial.tools.list_ports
 import yaml
 
+# vtk
+vtk_error_msg = ""
+try:
+    import vtk
+
+    from vtk import vtkRenderer
+    from vtk import qt
+    # import patched class that fixes scroll problem
+    from .visualization import QVTKRenderWindowInteractor
+
+    vtk_available = True
+except ImportError as e:
+    vtk_available = False
+    vtk_error_msg = e
+    vtkRenderer = None
+    QVTKRenderWindowInteractor = None
+    
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
 except ImportError:
@@ -24,6 +41,8 @@ from .registry import *
 from .utils import getResource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
     DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, PinnedDock, \
     ContextLineEditAction, TreeWidgetStyledItemDelegate
+
+from .visualization import MplVisualizer, VtkVisualizer
 
 
 class MainGui(QMainWindow):
@@ -1188,9 +1207,25 @@ class MainGui(QMainWindow):
 
         if len(used) == 1:
             self._logger.info("loading visualizer '{}'".format(used[0][1]))
-            self.visualizer = used[0][0](self.animationWidget,
-                                         self.animationLayout)
-            self.animationDock.addWidget(self.animationWidget)
+            if issubclass(used[0][0], MplVisualizer):
+                self.visualizer = used[0][0](self.animationWidget,
+                                             self.animationLayout)
+                self.animationDock.addWidget(self.animationWidget)
+            elif issubclass(used[0][0], VtkVisualizer):
+                if vtk_available:
+                    # vtk window
+                    self.animationFrame = QFrame()
+                    self.vtkWidget = QVTKRenderWindowInteractor(self.animationFrame)
+                    self.animationLayout.addWidget(self.vtkWidget)
+                    self.animationFrame.setLayout(self.animationLayout)
+                    self.animationDock.addWidget(self.animationFrame, row=0)
+                    self.vtkRenderer = vtkRenderer()
+                    self.vtkWidget.GetRenderWindow().AddRenderer(self.vtkRenderer)
+                    self.visualizer = used[0][0](self.vtkRenderer)
+                    self.vtkWidget.Initialize()
+                else:
+                    self._logger.warning("visualizer depends on vtk which is "
+                                         "not available on this system!")
         elif len(used) > 1:
             self.visComboBox = QComboBox()
             for vis in used:
