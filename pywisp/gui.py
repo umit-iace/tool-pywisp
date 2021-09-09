@@ -242,7 +242,7 @@ class MainGui(QMainWindow):
             "Add the selected data set from the left to the selected plot "
             "on the right.")
         self.dataPointRightButton.clicked.connect(self.addDatapointToTree)
-        self.dataPointLabel = QLabel('Data point', self)
+        self.dataPointLabel = QLabel('DataPoint', self)
         self.dataPointLabel.setAlignment(Qt.AlignCenter)
         self.dataPointManipulationLayout.addWidget(self.dataPointLabel)
         self.dataPointManipulationLayout.addWidget(self.dataPointRightButton)
@@ -286,7 +286,7 @@ class MainGui(QMainWindow):
         custom_QStyledItemDelegate = TreeWidgetStyledItemDelegate()
         self.dataPointTreeWidget.setItemDelegate(custom_QStyledItemDelegate)
         self.dataPointTreeWidget.setStyleSheet(QStyleSheet)
-        self.dataPointTreeWidget.setHeaderLabels(["Plot title", "Data point"])
+        self.dataPointTreeWidget.setHeaderLabels(["PlotTitle", "DataPoint"])
         self.dataPointTreeWidget.itemDoubleClicked.connect(self.plotVectorClicked)
         self.dataPointTreeWidget.setExpandsOnDoubleClick(0)
         self.dataPointTreeLayout = QVBoxLayout()
@@ -624,8 +624,8 @@ class MainGui(QMainWindow):
         text = "plot_{:03d}".format(self.dataPointTreeWidget.topLevelItemCount())
         if not default:
             name, ok = QInputDialog.getText(self,
-                                            "PlotTitle",
-                                            "PlotTitle:",
+                                            "Select a plot title",
+                                            "Name of the new plot:",
                                             text=text)
             if not (ok and name):
                 return
