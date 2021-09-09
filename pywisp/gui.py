@@ -24,7 +24,7 @@ except ImportError as e:
     vtk_error_msg = e
     vtkRenderer = None
     QVTKRenderWindowInteractor = None
-    
+
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
 except ImportError:
@@ -201,6 +201,8 @@ class MainGui(QMainWindow):
         self.actStopExperiment.setIcon(QIcon(getResource("stop.png")))
         self.actStopExperiment.setShortcut(QKeySequence("F6"))
         self.actStopExperiment.triggered.connect(self.stopExperiment)
+
+        self.visComboBox = QComboBox()
 
         # lastmeas dock
         self.lastMeasList = QListWidget(self)
@@ -395,6 +397,12 @@ class MainGui(QMainWindow):
         self.toolbarExp.addSeparator()
         self.toolbarExp.addAction(self.actStartExperiment)
         self.toolbarExp.addAction(self.actStopExperiment)
+        self.toolbarExp.addSeparator()
+        vSpacer = QWidget()
+        vSpacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.toolbarExp.addWidget(vSpacer)
+        self.toolbarExp.addSeparator()
+        self.toolbarExp.addWidget(self.visComboBox)
 
         self._currentExpListItem = None
         self._currentLastMeasItem = None
@@ -424,15 +432,15 @@ class MainGui(QMainWindow):
         self.splashScreen.finish(self)
 
     def visualizerChanged(self, idx):
-        self.animationLayout.removeWidget(self.visualizer.qWidget)
+        for i in reversed(range(self.animationLayout.count())):
+            self.animationLayout.itemAt(i).widget().setParent(None)
+
         visName = self.visComboBox.itemText(idx)
         availableVis = getRegisteredVisualizers()
 
         for aVis in availableVis:
             if aVis[1] == visName:
-                self.visualizer = aVis[0](QWidget(),
-                                          QVBoxLayout())
-                self.animationLayout.addWidget(self.visualizer.qWidget)
+                self.setVisualizer(aVis[0])
                 break
 
     def _getTcpMenu(self, settings):
@@ -1204,44 +1212,37 @@ class MainGui(QMainWindow):
                             break
             else:
                 self._logger.warning("No Visualization configured!")
+                self.visualizer = None
 
-        if len(used) == 1:
-            self._logger.info("loading visualizer '{}'".format(used[0][1]))
-            if issubclass(used[0][0], MplVisualizer):
-                self.visualizer = used[0][0](self.animationWidget,
-                                             self.animationLayout)
-                self.animationDock.addWidget(self.animationWidget)
-            elif issubclass(used[0][0], VtkVisualizer):
-                if vtk_available:
-                    # vtk window
-                    self.animationFrame = QFrame()
-                    self.vtkWidget = QVTKRenderWindowInteractor(self.animationFrame)
-                    self.animationLayout.addWidget(self.vtkWidget)
-                    self.animationFrame.setLayout(self.animationLayout)
-                    self.animationDock.addWidget(self.animationFrame, row=0)
-                    self.vtkRenderer = vtkRenderer()
-                    self.vtkWidget.GetRenderWindow().AddRenderer(self.vtkRenderer)
-                    self.visualizer = used[0][0](self.vtkRenderer)
-                    self.vtkWidget.Initialize()
-                else:
-                    self._logger.warning("visualizer depends on vtk which is "
-                                         "not available on this system!")
-        elif len(used) > 1:
-            self.visComboBox = QComboBox()
-            for vis in used:
-                self.visComboBox.addItem(vis[1])
-            self.visComboBox.currentIndexChanged.connect(self.visualizerChanged)
+        if not used:
+            return
 
-            self._logger.info("loading visualizer '{}'".format(used[0][1]))
-            self.visualizer = used[0][0](QWidget(),
-                                         QVBoxLayout())
+        for vis in used:
+            self.visComboBox.addItem(vis[1])
+        self.visComboBox.currentIndexChanged.connect(self.visualizerChanged)
+        self._logger.info("loading visualizer '{}'".format(used[0][1]))
+        self.setVisualizer(used[0][0])
 
-            self.animationLayout.addWidget(self.visComboBox)
-            self.animationLayout.addWidget(self.visualizer.qWidget)
-            self.animationWidget.setLayout(self.animationLayout)
+    def setVisualizer(self, vis):
+        if issubclass(vis, MplVisualizer):
+            self.visualizer = vis(self.animationWidget,
+                                  self.animationLayout)
             self.animationDock.addWidget(self.animationWidget)
-        else:
-            self.visualizer = None
+        elif issubclass(vis, VtkVisualizer):
+            if vtk_available:
+                # vtk window
+                self.animationFrame = QFrame()
+                self.vtkWidget = QVTKRenderWindowInteractor(self.animationFrame)
+                self.animationLayout.addWidget(self.vtkWidget)
+                self.animationFrame.setLayout(self.animationLayout)
+                self.animationDock.addWidget(self.animationFrame)
+                self.vtkRenderer = vtkRenderer()
+                self.vtkWidget.GetRenderWindow().AddRenderer(self.vtkRenderer)
+                self.visualizer = vis(self.vtkRenderer)
+                self.vtkWidget.Initialize()
+            else:
+                self._logger.warning("visualizer depends on vtk which is "
+                                     "not available on this system!")
 
     @pyqtSlot(QListWidgetItem)
     def experimentDclicked(self, item):
