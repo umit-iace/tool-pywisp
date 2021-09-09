@@ -20,12 +20,11 @@ class TwoPendulum(ExperimentModule):
     def __init__(self):
         ExperimentModule.__init__(self)
 
-    @staticmethod
     def handleFrame(self, frame):
         dataPoints = {}
         fid = frame.min_id
         if fid == 10:
-            data = struct.unpack('>Ldddd', frame.payload[:36])
+            data = struct.unpack('>L4d', frame.payload[:36])
             dataPoints['Time'] = data[0]
             dataPoints['DataPoints'] = {'x': data[1],
                                         'phi1': data[2],
