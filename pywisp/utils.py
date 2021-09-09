@@ -19,7 +19,19 @@ from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, Q
 from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
 
-__all__ = ["getResource", "packArrayToFrame", "CppBinding"]
+__all__ = ["createDir", "getResource", "packArrayToFrame", "CppBinding"]
+
+
+def createDir(dirName):
+    """
+    Checks if directory exists and create the directory if not.
+    :param dirName: directory name
+    :return: path of directory
+    """
+    path = os.getcwd() + os.path.sep + dirName
+    if not os.path.exists(path) or not os.path.isdir(path):
+        os.mkdir(path)
+    return path
 
 
 def getResource(resName, resType="icons"):

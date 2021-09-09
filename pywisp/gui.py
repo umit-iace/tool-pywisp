@@ -335,6 +335,9 @@ class MainGui(QMainWindow):
         self.optMenu.addAction(self.actTimerTime)
         self.actTimerTime.triggered.connect(self.setTimerTime)
 
+        self.actSaveAnimation = QAction("&Save Animation", self, checkable=True)
+        self.optMenu.addAction(self.actSaveAnimation)
+
         # experiment
         self.expMenu = self.menuBar().addMenu('&Experiment')
         self.connMenu = self.menuBar().addMenu('&Connections')
@@ -1044,6 +1047,9 @@ class MainGui(QMainWindow):
 
         self._logger.info("Experiment: {}".format(expName))
 
+        if self.visualizer is not None:
+            self.visualizer.setExpName(expName)
+
         self.actStartExperiment.setDisabled(True)
         self.actStopExperiment.setDisabled(False)
         self.actSendParameter.setDisabled(False)
@@ -1264,6 +1270,13 @@ class MainGui(QMainWindow):
             else:
                 self._logger.warning("visualizer depends on vtk which is "
                                      "not available on this system!")
+        else:
+            self._logger.warning("visualizer is not a subclass of MplVisualizer or VtkVisualizer")
+            return
+
+        self.visualizer.checkSaveAnimation(self.actSaveAnimation.isChecked())
+        self.actSaveAnimation.disconnect()
+        self.actSaveAnimation.toggled.connect(self.visualizer.checkSaveAnimation)
 
     @pyqtSlot(QListWidgetItem)
     def experimentDclicked(self, item):

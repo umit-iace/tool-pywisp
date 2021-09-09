@@ -5,6 +5,7 @@ from abc import ABCMeta, abstractmethod
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import *
+from pywisp.utils import createDir
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
@@ -40,6 +41,27 @@ class Visualizer(metaclass=ABCMeta):
     """
 
     def __init__(self):
+        self.frameCounter = 0
+        self.fileNameCounter = 0
+        self.timeStamp = 0
+        self.picturePath = None
+        self.expName = None
+        self.saveAnimation = False
+
+    def checkSaveAnimation(self, state):
+        self.saveAnimation = state
+
+        if self.saveAnimation:
+            self.frameCounter = 0
+            self.fileNameCounter = 0
+            self.timeStamp = '_' + time.strftime("%d_%m_%Y_%H_%M_%S") + '_'
+            self.picturePath = createDir('animationPictures')
+
+    def setExpName(self, name):
+        self.expName = name
+
+    @abstractmethod
+    def saveIfChecked(self):
         pass
 
     @abstractmethod
@@ -118,64 +140,21 @@ class MplVisualizer(Visualizer):
 
         self.canvas = FigureCanvas(self.fig)
         self.canvas.setParent(self.qWidget)
-        self.canvasMenu = QMenu(self.qWidget)
-        self.qActSaveAnimation = QAction('Save Animation', self.qWidget, checkable=True)
-        self.qActSaveAnimation.triggered.connect(self.saveAnimation)
-        self.canvasMenu.addAction(self.qActSaveAnimation)
-        self.canvas.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.canvas.customContextMenuRequested.connect(self.execCanvasMenu)
 
         self.axes = self.fig.add_subplot(111)
         self.qLayout.addWidget(self.canvas)
         self.qWidget.setLayout(self.qLayout)
-
-        self.frameCounter = 0
-        self.fileNameCounter = 0
-        self.timeStamp = 0
-        self.picturePath = None
-
-        self.timeStamps = list()
-
-    def saveAnimation(self):
-        """
-        Resets all animation counters and creates the animation directory and sets first time stamp, if animation is
-        started.
-        """
-        self.frameCounter = 0
-        self.fileNameCounter = 0
-        if self.qActSaveAnimation.isChecked():
-            self.timeStamp = time.ctime().replace(' ', '_') + '_'
-            self.timeStamps.append(self.timeStamp)
-            self.picturePath = self.createDir('animationPictures')
-
-    def execCanvasMenu(self, pos):
-        """
-        Shows the context menu at position
-        :param pos: local position of right click
-        """
-        self.canvasMenu.exec_(self.canvas.mapToGlobal(pos))
 
     def saveIfChecked(self):
         """
         Must be called after self.draw_idle() in implementation.
         :return:
         """
-        if self.qActSaveAnimation.isChecked():
-            fileName = self.picturePath + os.path.sep + self.timeStamp + "%04d" % self.fileNameCounter + '.png'
+        if self.saveAnimation:
+            fileName = self.picturePath + os.path.sep + self.expName + self.timeStamp + "%04d" % self.fileNameCounter + '.png'
             self.fig.savefig(fileName, format='png', dpi=self.dpi)
             self.fileNameCounter += 1
             self.frameCounter += 1
-
-    def createDir(self, dirName):
-        """
-        Checks if directory exists and create the directory if not.
-        :param dirName: directory name
-        :return: path of directory
-        """
-        path = os.getcwd() + os.path.sep + dirName
-        if not os.path.exists(path) or not os.path.isdir(path):
-            os.mkdir(path)
-        return path
 
     def update(self, dataPoints):
         pass
