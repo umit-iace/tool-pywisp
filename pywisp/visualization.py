@@ -51,14 +51,15 @@ class Visualizer(metaclass=ABCMeta):
     def checkSaveAnimation(self, state):
         self.saveAnimation = state
 
+    def startAnimation(self):
         if self.saveAnimation:
             self.frameCounter = 0
             self.fileNameCounter = 0
-            self.timeStamp = '_' + time.strftime("%d_%m_%Y_%H_%M_%S") + '_'
-            self.picturePath = createDir('animationPictures')
+            self.timeStamp = time.strftime("%d_%m_%Y_%H_%M_%S") + '_'
 
     def setExpName(self, name):
         self.expName = name
+        self.picturePath = createDir('ani_' + self.expName)
 
     @abstractmethod
     def saveIfChecked(self):
@@ -151,7 +152,7 @@ class MplVisualizer(Visualizer):
         :return:
         """
         if self.saveAnimation:
-            fileName = self.picturePath + os.path.sep + self.expName + self.timeStamp + "%04d" % self.fileNameCounter + '.png'
+            fileName = self.picturePath + os.path.sep + self.timeStamp + "%04d" % self.fileNameCounter + '.png'
             self.fig.savefig(fileName, format='png', dpi=self.dpi)
             self.fileNameCounter += 1
             self.frameCounter += 1

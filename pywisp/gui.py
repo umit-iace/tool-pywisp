@@ -1049,6 +1049,7 @@ class MainGui(QMainWindow):
 
         if self.visualizer is not None:
             self.visualizer.setExpName(expName)
+            self.visualizer.startAnimation()
 
         self.actStartExperiment.setDisabled(True)
         self.actStopExperiment.setDisabled(False)
