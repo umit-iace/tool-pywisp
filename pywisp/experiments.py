@@ -379,6 +379,7 @@ class ExperimentInteractor(QObject):
         """
         data = []
         self.runningExperiment = True
+        self.modSets = {}
         try:
             for row in range(self.targetModel.rowCount()):
                 index = self.targetModel.index(row, 0)
@@ -389,6 +390,7 @@ class ExperimentInteractor(QObject):
                 for module in getRegisteredExperimentModules():
                     if module[1] == moduleName:
                         settings = self.getSettings(parent)
+                        self.modSets[moduleName] = settings
                         vals = []
                         for key, val in settings.items():
                             if val is not None:
@@ -426,6 +428,40 @@ class ExperimentInteractor(QObject):
 
         data.append({'id': 1,
                      'msg': payload})
+        for _data in data:
+            self.sendData.emit(_data)
+
+    def sendChangedParameterExperiment(self):
+        """
+        Sends changed parameters of all modules that are registered in the target model to an experiment.
+        """
+        data = []
+        for row in range(self.targetModel.rowCount()):
+            index = self.targetModel.index(row, 0)
+
+            parent = index.model().itemFromIndex(index)
+            moduleName = parent.data(role=PropertyItem.RawDataRole)
+
+            for module in getRegisteredExperimentModules():
+                if module[1] == moduleName:
+                    settings = self.getSettings(parent)
+                    if self.modSets[moduleName] == settings:
+                        break
+                    vals = []
+                    for key, val in settings.items():
+                        if val is not None:
+                            vals.append(val)
+                    params = module[0].getParams(module[0], vals)
+                    if params and not None:
+                        if isinstance(params, list):
+                            for _params in params:
+                                _params['connection'] = module[0].connection
+                                data.append(_params)
+                        else:
+                            params['connection'] = module[0].connection
+                            data.append(params)
+                    break
+
         for _data in data:
             self.sendData.emit(_data)
 

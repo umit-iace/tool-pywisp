@@ -376,15 +376,21 @@ class MainGui(QMainWindow):
         self.actDisconnect.setShortcut(QKeySequence("F10"))
         self.actSendParameter = QAction('&Send parameter')
         self.actSendParameter.setEnabled(False)
-        self.actSendParameter.setShortcut(QKeySequence("F8"))
+        self.actSendParameter.setShortcut(QKeySequence("F7"))
         self.expMenu.addAction(self.actSendParameter)
         self.actSendParameter.triggered.connect(self.sendParameter)
+        self.actSendChangedParameter = QAction('&Send changed parameter')
+        self.actSendChangedParameter.setEnabled(False)
+        self.actSendChangedParameter.setShortcut(QKeySequence("F8"))
+        self.expMenu.addAction(self.actSendChangedParameter)
+        self.actSendChangedParameter.triggered.connect(self.sendChangedParameter)
         self.expMenu.addAction(self.actDisconnect)
         self.actDisconnect.triggered.connect(self.disconnect)
         self.expMenu.addSeparator()
         self.expMenu.addAction(self.actStartExperiment)
         self.expMenu.addAction(self.actStopExperiment)
         self.expMenu.addAction(self.actSendParameter)
+        self.expMenu.addAction(self.actSendChangedParameter)
 
         # toolbar
         self.toolbarExp = QToolBar("Experiment")
@@ -1041,6 +1047,7 @@ class MainGui(QMainWindow):
         self.actStartExperiment.setDisabled(True)
         self.actStopExperiment.setDisabled(False)
         self.actSendParameter.setDisabled(False)
+        self.actSendChangedParameter.setDisabled(False)
         if self._currentExperimentIndex is not None:
             self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.darkGreen))
             self.experimentList.repaint()
@@ -1090,6 +1097,7 @@ class MainGui(QMainWindow):
             self.actStartExperiment.setDisabled(False)
         self.actStopExperiment.setDisabled(True)
         self.actSendParameter.setDisabled(True)
+        self.actSendChangedParameter.setDisabled(True)
         for i in range(self.experimentList.count()):
             self.experimentList.item(i).setBackground(QBrush(Qt.white))
         self.experimentList.repaint()
@@ -1114,6 +1122,19 @@ class MainGui(QMainWindow):
         if self._currentExperimentIndex == self.experimentList.row(self._currentExpListItem) and \
                 "~current~" in self._currentLastMeasItem.text():
             self.exp.sendParameterExperiment()
+        else:
+            self._logger.warning("Selected Experiment '{}' doesn't match current running Experiment '{}'!".format(
+                self._currentExperimentName,
+                self._experiments[self.experimentList.row(self._currentExpListItem)]["Name"]))
+
+    def sendChangedParameter(self):
+        """
+        Sends changed parameters of the current experiment with `ExperimentInteractor`
+        function `sendChangedParameterExperiment`
+        """
+        if self._currentExperimentIndex == self.experimentList.row(self._currentExpListItem) and \
+                "~current~" in self._currentLastMeasItem.text():
+            self.exp.sendChangedParameterExperiment()
         else:
             self._logger.warning("Selected Experiment '{}' doesn't match current running Experiment '{}'!".format(
                 self._currentExperimentName,
@@ -1677,7 +1698,7 @@ class MainGui(QMainWindow):
     def remoteSendParamter(self, module, parameter, value):
         self.remoteSetParamter(module, parameter, value)
         if self.actSendParameter.isEnabled():
-            self.sendParameter()
+            self.sendChangedParameter()
 
     def remoteSetParamter(self, module, parameter, value):
         exp = deepcopy(self.exp.getExperiment())
