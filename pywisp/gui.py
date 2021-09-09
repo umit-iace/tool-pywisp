@@ -374,7 +374,7 @@ class MainGui(QMainWindow):
         self.actDisconnect.setEnabled(False)
         self.actDisconnect.setIcon(QIcon(getResource("disconnected.png")))
         self.actDisconnect.setShortcut(QKeySequence("F10"))
-        self.actSendParameter = QAction('&Send parameter')
+        self.actSendParameter = QAction('&Send all parameter')
         self.actSendParameter.setEnabled(False)
         self.actSendParameter.setShortcut(QKeySequence("F7"))
         self.expMenu.addAction(self.actSendParameter)
