@@ -137,12 +137,17 @@ class MplVisualizer(Visualizer):
         self.qWidget = qWidget
         self.qLayout = qLayout
         self.dpi = 100
-        self.fig = Figure((5.0, 4.0), facecolor='white', dpi=self.dpi)
+        self.fig = Figure((5.0, 4.0), dpi=self.dpi)
+
+        self.fig.patch.set_alpha(0)
 
         self.canvas = FigureCanvas(self.fig)
         self.canvas.setParent(self.qWidget)
 
         self.axes = self.fig.add_subplot(111)
+
+        self.canvas.setStyleSheet("background-color:transparent;")
+
         self.qLayout.addWidget(self.canvas)
         self.qWidget.setLayout(self.qLayout)
 
