@@ -447,6 +447,7 @@ class ExperimentInteractor(QObject):
                     settings = self.getSettings(parent)
                     if self.modSets[moduleName] == settings:
                         break
+                    self.modSets[moduleName] = settings
                     vals = []
                     for key, val in settings.items():
                         if val is not None:
@@ -479,7 +480,6 @@ class ExperimentInteractor(QObject):
             for module in getRegisteredExperimentModules():
                 if module[1] == moduleName:
                     settings = self.getSettings(parent)
-                    # TODO add update write to only send needed settings and not all
                     vals = []
                     for key, val in settings.items():
                         if val is not None:
