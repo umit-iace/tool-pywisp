@@ -1245,6 +1245,8 @@ class MainGui(QMainWindow):
         if not used:
             return
 
+        self.visComboBox.clear()
+        self.visComboBox.disconnect()
         for vis in used:
             self.visComboBox.addItem(vis[1])
         self.visComboBox.currentIndexChanged.connect(self.visualizerChanged)
