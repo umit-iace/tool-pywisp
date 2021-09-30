@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from PyQt5.QtCore import Qt, QRegExp, QSize, pyqtSignal, QRect
 from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator, QKeySequence, QFont, QPen, \
-    QPainter
+    QPainter, QTextCursor
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
     QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction, QShortcut, QStyledItemDelegate, QStyle
 from pyqtgraph import mkPen
@@ -140,6 +140,7 @@ class PlainTextLogger(logging.Handler):
                 self.cb.setTextColor(clr)
 
                 self.cb.append(msg)
+                self.cb.moveCursor(QTextCursor.End)
         else:
             logging.getLogger().error("No callback configured!")
 
