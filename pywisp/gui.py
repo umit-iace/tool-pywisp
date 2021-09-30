@@ -1662,6 +1662,7 @@ class MainGui(QMainWindow):
 
         if widget.valueReset != '':
             self.remoteSetParameter(widget.module, widget.parameter, widget.valueReset)
+            self.exp.updateSendParameter(widget.module, widget.parameter, widget.valueReset)
 
     def remoteSwitchSendParameter(self, widget):
         """
@@ -1728,6 +1729,7 @@ class MainGui(QMainWindow):
                     continue
                 exp[key][k] = value
                 self.exp.editExperiment(exp)
+
                 return
 
     def copyRemoteSource(self):

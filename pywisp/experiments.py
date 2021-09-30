@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import QItemDelegate, QTreeView
 
 from .experimentModules import ExperimentModuleException
 from .registry import *
+import copy as cp
 
 
 class ExperimentException(Exception):
@@ -137,6 +138,8 @@ class ExperimentInteractor(QObject):
         # create model
         self.targetModel = ExperimentModel(self)
         self.targetModel.itemChanged.connect(self.itemChanged)
+        # parameter change settings
+        self.modSets = {}
 
     def _addSettings(self, moduleName, parent):
         """
@@ -372,6 +375,10 @@ class ExperimentInteractor(QObject):
 
         return None
 
+    def updateSendParameter(self, module, parameter, value):
+        if module in self.modSets:
+            self.modSets[module][parameter] = value
+
     def runExperiment(self):
         """
         Sends all start parameters of all modules that are registered in the target model to start an experiment and
@@ -379,7 +386,6 @@ class ExperimentInteractor(QObject):
         """
         data = []
         self.runningExperiment = True
-        self.modSets = {}
         try:
             for row in range(self.targetModel.rowCount()):
                 index = self.targetModel.index(row, 0)
@@ -390,7 +396,7 @@ class ExperimentInteractor(QObject):
                 for module in getRegisteredExperimentModules():
                     if module[1] == moduleName:
                         settings = self.getSettings(parent)
-                        self.modSets[moduleName] = settings
+                        self.modSets[moduleName] = cp.copy(settings)
                         vals = []
                         for key, val in settings.items():
                             if val is not None:
@@ -447,7 +453,7 @@ class ExperimentInteractor(QObject):
                     settings = self.getSettings(parent)
                     if self.modSets[moduleName] == settings:
                         break
-                    self.modSets[moduleName] = settings
+                    self.modSets[moduleName] = cp.copy(settings)
                     vals = []
                     for key, val in settings.items():
                         if val is not None:
