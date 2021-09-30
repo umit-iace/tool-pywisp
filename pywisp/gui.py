@@ -1661,7 +1661,7 @@ class MainGui(QMainWindow):
         self.remoteSliderUpdate(widget, value, sliderMoved=False)
 
         if widget.valueReset != '':
-            self.remoteSetParamter(widget.module, widget.parameter, widget.valueReset)
+            self.remoteSetParameter(widget.module, widget.parameter, widget.valueReset)
 
     def remoteSwitchSendParameter(self, widget):
         """
@@ -1712,11 +1712,11 @@ class MainGui(QMainWindow):
             widget.label.setText(widget.widgetName + ": {:.3f}".format(value))
 
     def remoteSendParamter(self, module, parameter, value):
-        self.remoteSetParamter(module, parameter, value)
+        self.remoteSetParameter(module, parameter, value)
         if self.actSendParameter.isEnabled():
             self.sendChangedParameter()
 
-    def remoteSetParamter(self, module, parameter, value):
+    def remoteSetParameter(self, module, parameter, value):
         exp = deepcopy(self.exp.getExperiment())
         del exp['Name']
 
