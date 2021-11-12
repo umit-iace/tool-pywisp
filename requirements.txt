@@ -1,4 +1,6 @@
 cycler>=0.10.0
+pyparsing==2.4.7
+tomli>=1.2.2
 future>=0.16.0
 iso8601>=0.1.12
 kiwisolver>=1.0.1
