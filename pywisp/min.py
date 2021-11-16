@@ -582,6 +582,7 @@ class MINSerial:
                 self._logger.debug(
                     "Sending new frame id={} seq={} len={} payload={}".format(frame.min_id, frame.seq, len(frame.payload),
                                                                               bytes_to_hexstr(frame.payload)))
+                
                 self._transport_fifo_send(frame=frame)
                 self._sn_max = (self._sn_max + 1) & 0xff
             else:
