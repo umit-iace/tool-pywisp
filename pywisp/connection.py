@@ -292,7 +292,7 @@ class UdpConnection(Connection, QtCore.QThread):
         """
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            self.sock.bind((self.ip, int(self.port)))
+            self.sock.connect((self.ip, int(self.port)))
         except socket.error:
             self._logger.error("Connection to the server is not possible!")
             self.sock.close()
@@ -327,7 +327,7 @@ class UdpConnection(Connection, QtCore.QThread):
         :param frames: nothing
         """
         try:
-            data = self.sock.recvfrom(self.payloadLen + 1)
+            data = self.sock.recv(self.payloadLen + 1)
             if data and data != b'':
                 if len(data) != self.payloadLen + 1:
                     self._logger.error(
@@ -352,7 +352,7 @@ class UdpConnection(Connection, QtCore.QThread):
             if len(outputData) < self.payloadLen + 1:
                 for i in range(self.payloadLen + 1 - len(outputData)):
                     outputData += b'\x00'
-            self.sock.sendto(outputData, (self.ip, self.port))
+            self.sock.send(outputData)
         except Exception as e:
             self._logger.error("Writing to host not possible! {}".format(e))
             self.isConnected = False

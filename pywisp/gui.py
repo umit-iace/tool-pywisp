@@ -35,7 +35,7 @@ from PyQt5.QtWidgets import *
 from pyqtgraph import PlotWidget, TextItem
 from pyqtgraph.dockarea import *
 
-from .connection import SerialConnection, TcpConnection
+from .connection import SerialConnection, TcpConnection, UdpConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .utils import getResource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
@@ -357,7 +357,7 @@ class MainGui(QMainWindow):
                 if conn.settings['port'] == '':
                     self.setDefaultComPort(conn.settings, serialCnt)
                 serialCnt += 1
-            elif issubclass(conn, TcpConnection):
+            elif issubclass(conn, TcpConnection) or issubclass(conn, UdpConnection) :
                 actTcp = self.connMenu.addAction(conn.__name__)
                 actTcp.triggered.connect(lambda _, settings=conn.settings: self._getTcpMenu(settings))
             else:
