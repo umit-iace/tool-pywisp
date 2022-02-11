@@ -7,14 +7,16 @@ Copyright (c) 2014-2017 JK Energy Ltd.
 Licensed under MIT License.
 """
 import logging
+from abc import abstractmethod
 from binascii import crc32
 from random import SystemRandom
 from struct import pack
 from time import time
+import socket
 
 from serial import Serial, SerialException
 
-__all__ = ["MINFrame", "MINSerial", "MINConnectionError"]
+__all__ = ["MINFrame", "MINSerial", "MINUdp", "MINConnectionError"]
 
 randomizer = SystemRandom()
 
@@ -43,28 +45,22 @@ class MINFrame:
         self.last_sent_time = None  # type: int
 
 
-class MINSerial:
-    """
-    Handle MIN Transport. Runs as a polled system; typically will be subclassed to run in a threaded environment that puts thread locks
-    around API calls.
-    """
-
+class MinTransport:
     def _now_ms(self):
         now = int(time() * 1000.0)
         return now
 
-    def _serial_write(self, data):
-        self._logger.debug("_serial_write: {}".format(bytes_to_hexstr(data)))
-        self._serial.write(data)
+    @abstractmethod
+    def _write(self, data):
+        pass
 
-    def _serial_any(self):
-        return self._serial.in_waiting > 0
+    @abstractmethod
+    def _read_all(self):
+        pass
 
-    def _serial_read_all(self):
-        return self._serial.read_all()
-
-    def _serial_close(self):
-        self._serial.close()
+    @abstractmethod
+    def close(self):
+        pass
 
     ACK = 0xff
     RESET = 0xfe
@@ -84,7 +80,7 @@ class MINSerial:
     RECEIVING_CHECKSUM_0 = 8
     RECEIVING_EOF = 9
 
-    def __init__(self, port, baud=115200, window_size=16, rx_window_size=32, transport_fifo_size=100,
+    def __init__(self, window_size=16, rx_window_size=32, transport_fifo_size=100,
                  idle_timeout_ms=3000, ack_retransmit_timeout_ms=50, frame_retransmit_timeout_ms=100,
                  withTransport=True):
         """
@@ -98,13 +94,6 @@ class MINSerial:
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
         self._logger.setLevel(logging.ERROR)
-
-        try:
-            self._serial = Serial(port=port, baudrate=baud, timeout=0.1, write_timeout=1.0)
-            self._serial.reset_input_buffer()
-            self._serial.reset_output_buffer()
-        except SerialException:
-            raise MINConnectionError("Transport MIN cannot open port '{}'".format(port))
 
         self.withTransport = withTransport
 
@@ -167,7 +156,7 @@ class MINSerial:
     def _transport_fifo_send(self, frame: MINFrame):
         on_wire_bytes = self._on_wire_bytes(frame=frame)
         frame.last_sent_time = self._now_ms()
-        self._serial_write(on_wire_bytes)
+        self._write(on_wire_bytes)
 
     def _send_ack(self):
         # For a regular ACK we request no additional retransmits
@@ -176,20 +165,20 @@ class MINSerial:
         on_wire_bytes = self._on_wire_bytes(frame=ack_frame)
         self._last_sent_ack_time_ms = self._now_ms()
         self._logger.debug("Sending ACK, seq={}".format(ack_frame.seq))
-        self._serial_write(on_wire_bytes)
+        self._write(on_wire_bytes)
 
     def _send_nack(self, to: int):
         # For a NACK we send an ACK but also request some frame retransmits
         nack_frame = MINFrame(min_id=self.ACK, seq=self._rn, payload=bytes([to]), transport=True, ack_or_reset=True)
         on_wire_bytes = self._on_wire_bytes(frame=nack_frame)
         self._logger.debug("Sending NACK, seq={}, to={}".format(nack_frame.seq, to))
-        self._serial_write(on_wire_bytes)
+        self._write(on_wire_bytes)
 
     def _send_reset(self):
         self._logger.debug("Sending RESET")
         reset_frame = MINFrame(min_id=self.RESET, seq=0, payload=bytes(), transport=True, ack_or_reset=True)
         on_wire_bytes = self._on_wire_bytes(frame=reset_frame)
-        self._serial_write(on_wire_bytes)
+        self._write(on_wire_bytes)
 
     def _transport_fifo_reset(self):
         self._transport_fifo = []
@@ -237,7 +226,7 @@ class MINSerial:
         on_wire_bytes = self._on_wire_bytes(frame=frame)
         self._logger.info("Sending MIN frame, min_id={}, payload={}".format(min_id, bytes_to_hexstr(payload)))
         self._logger.debug("Sending MIN frame, on wire bytes={}".format(bytes_to_hexstr(on_wire_bytes)))
-        self._serial_write(on_wire_bytes)
+        self._write(on_wire_bytes)
 
     def queue_frame(self, min_id: int, payload: bytes):
         """
@@ -567,7 +556,7 @@ class MINSerial:
 
         self._rx_list = []
 
-        data = self._serial_read_all()
+        data = self._read_all()
         if data:
             self._rx_bytes(data=data)
 
@@ -580,7 +569,8 @@ class MINSerial:
                 self._last_sent_frame_ms = self._now_ms()
                 frame.last_sent_time = self._now_ms()
                 self._logger.debug(
-                    "Sending new frame id={} seq={} len={} payload={}".format(frame.min_id, frame.seq, len(frame.payload),
+                    "Sending new frame id={} seq={} len={} payload={}".format(frame.min_id, frame.seq,
+                                                                              len(frame.payload),
                                                                               bytes_to_hexstr(frame.payload)))
                 self._transport_fifo_send(frame=frame)
                 self._sn_max = (self._sn_max + 1) & 0xff
@@ -589,7 +579,8 @@ class MINSerial:
                 if window_size > 0 and remote_connected:
                     oldest_frame = self._find_oldest_frame()
                     if self._now_ms() - oldest_frame.last_sent_time > self.frame_retransmit_timeout_ms:
-                        self._logger.debug("Resending old frame id={} seq={}".format(oldest_frame.min_id, oldest_frame.seq))
+                        self._logger.debug(
+                            "Resending old frame id={} seq={}".format(oldest_frame.min_id, oldest_frame.seq))
                         self._transport_fifo_send(frame=oldest_frame)
 
             # Periodically transmit ACK
@@ -604,4 +595,90 @@ class MINSerial:
         return self._rx_list
 
     def close(self):
-        self._serial_close()
+        self._close
+
+
+class MINSerial(MinTransport):
+    """
+    Handle MIN Transport. Runs as a polled system; typically will be subclassed to run in a threaded environment that puts thread locks
+    around API calls.
+    """
+
+    def _write(self, data):
+        self._logger.debug("_serial_write: {}".format(bytes_to_hexstr(data)))
+        self._serial.write(data)
+
+    def _read_all(self):
+        return self._serial.read_all()
+
+    def _close(self):
+        self._serial.close()
+
+    def __init__(self, port, baud=115200, window_size=16, rx_window_size=32, transport_fifo_size=100,
+                 idle_timeout_ms=3000, ack_retransmit_timeout_ms=50, frame_retransmit_timeout_ms=100,
+                 withTransport=True):
+        """
+        :param window_size: Number of outstanding unacknowledged frames permitted to send
+        :param rx_window_size: Number of outstanding unacknowledged frames that can be received
+        :param transport_fifo_size: Maximum number of outstanding frames to send
+        :param idle_timeout_ms: Time before connection assumed to have been lost and retransmissions stopped
+        :param ack_retransmit_timeout_ms: Time before ACK frames are resent
+        :param frame_retransmit_timeout_ms: Time before frames are resent
+        """
+        super(MINSerial, self).__init__(window_size, rx_window_size, transport_fifo_size,
+                                        idle_timeout_ms, ack_retransmit_timeout_ms, frame_retransmit_timeout_ms,
+                                        withTransport)
+
+        try:
+            self._serial = Serial(port=port, baudrate=baud, timeout=0.1, write_timeout=1.0)
+            self._serial.reset_input_buffer()
+            self._serial.reset_output_buffer()
+        except SerialException:
+            raise MINConnectionError("Transport MIN cannot open port '{}'".format(port))
+
+
+class MINUdp(MinTransport):
+    """
+    Handle MIN Transport. Runs as a polled system; typically will be subclassed to run in a threaded environment that puts thread locks
+    around API calls.
+    """
+
+    def _write(self, data):
+        self._logger.debug("_write: {}".format(bytes_to_hexstr(data)))
+        self._socket.sendto(data, (self.ip, self.port))
+
+    def _read_all(self):
+        try:
+            data = self.sock.recvfrom(255)
+        except socket.error as e:
+            self._logger.error("Reading from host not possible! {}".format(e))
+            self.isConnected = False
+        return data
+
+    def _close(self):
+        self._socket.close()
+
+    def __init__(self, ip, port, timeOut, window_size=16, rx_window_size=32, transport_fifo_size=100,
+                 idle_timeout_ms=3000, ack_retransmit_timeout_ms=50, frame_retransmit_timeout_ms=100,
+                 withTransport=True):
+        """
+        :param window_size: Number of outstanding unacknowledged frames permitted to send
+        :param rx_window_size: Number of outstanding unacknowledged frames that can be received
+        :param transport_fifo_size: Maximum number of outstanding frames to send
+        :param idle_timeout_ms: Time before connection assumed to have been lost and retransmissions stopped
+        :param ack_retransmit_timeout_ms: Time before ACK frames are resent
+        :param frame_retransmit_timeout_ms: Time before frames are resent
+        """
+        super(MINUdp, self).__init__(window_size, rx_window_size, transport_fifo_size,
+                                     idle_timeout_ms, ack_retransmit_timeout_ms, frame_retransmit_timeout_ms,
+                                     withTransport)
+        self.ip = ip
+        self.port = port
+        self.timeOut = timeOut
+
+        try:
+            self._socket = Serial(port=port, baudrate=baud, timeout=0.1, write_timeout=1.0)
+            self._socket.bind((self.ip, int(self.port)))
+            self._socket.settimeout(self.timeOut)
+        except Exception:
+            raise MINConnectionError("Transport MIN cannot open port '{}'".format(port))
