@@ -645,14 +645,13 @@ class MINUdp(MinTransport):
 
     def _write(self, data):
         self._logger.debug("_write: {}".format(bytes_to_hexstr(data)))
-        self._socket.sendto(data, (self.ip, self.port))
+        self._socket.send(data)
 
     def _read_all(self):
         try:
-            data = self.sock.recvfrom(255)
-        except socket.error as e:
-            self._logger.error("Reading from host not possible! {}".format(e))
-            self.isConnected = False
+            data = self._socket.recv(2048)
+        except socket.timeout:
+            return None
         return data
 
     def _close(self):
@@ -677,8 +676,8 @@ class MINUdp(MinTransport):
         self.timeOut = timeOut
 
         try:
-            self._socket = Serial(port=port, baudrate=baud, timeout=0.1, write_timeout=1.0)
-            self._socket.bind((self.ip, int(self.port)))
-            self._socket.settimeout(self.timeOut)
+            self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self._socket.connect((self.ip, int(self.port)))
+            self._socket.settimeout(1)
         except Exception:
             raise MINConnectionError("Transport MIN cannot open port '{}'".format(port))

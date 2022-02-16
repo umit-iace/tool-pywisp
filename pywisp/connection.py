@@ -293,7 +293,7 @@ class UdpConnection(Connection, QtCore.QThread):
 
     def connect(self):
         try:
-            self.min = MINUdp(self.ip, self.port, withTransport=self.withTransport)
+            self.min = MINUdp(self.ip, self.port, timeOut=self.timeout, withTransport=self.withTransport)
         except Exception as e:
             self._logger.error('{0}'.format(e))
             return False
