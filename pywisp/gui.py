@@ -1080,10 +1080,6 @@ class MainGui(QMainWindow):
         self.lastMeasList.scrollToItem(item)
         self.copyLastMeas(item)
 
-        for conn, connInstance in self.connections.items():
-            if connInstance:
-                connInstance.doRead = True
-
         self.timer.start(int(self.config['TimerTime']))
         if self.config['HeartbeatTime']:
             self.heartbeatTimer.start(int(self.config['HeartbeatTime']))
@@ -1111,12 +1107,7 @@ class MainGui(QMainWindow):
         self.heartbeatTimer.stop()
         self.exp.stopExperiment()
 
-        time.sleep(1)
-
-        for conn, connInstance in self.connections.items():
-            if connInstance:
-                connInstance.doRead = False
-                connInstance.clear()
+        # time.sleep(1)
 
         self.guiTimer.stop()
 
@@ -1350,7 +1341,6 @@ class MainGui(QMainWindow):
         """
         for conn, _ in self.connections.items():
             connInstance = conn()
-            self.connections[conn] = connInstance
             if connInstance.connect():
                 self._logger.info("Connection for {} established!".format(conn.__name__))
                 self.actConnect.setEnabled(False)
@@ -1360,10 +1350,10 @@ class MainGui(QMainWindow):
                 self.actStopExperiment.setEnabled(False)
                 self.statusbarLabel.setText("Connected!")
                 connInstance.received.connect(lambda frame, conn=conn: self.updateData(frame, conn))
-                connInstance.start()
+                connInstance.finished.connect(self.disconnect)
+                self.connections[conn] = connInstance
                 self.isConnected = True
             else:
-                self.connections[conn] = None
                 self._logger.warning("No connection for {} established! Check your settings!".format(conn.__name__))
                 self.isConnected = False
                 return
@@ -1390,7 +1380,6 @@ class MainGui(QMainWindow):
         for conn, connInstance in self.connections.items():
             if connInstance:
                 connInstance.disconnect()
-                connInstance.received.disconnect()
                 self.connections[conn] = None
         self.actConnect.setEnabled(True)
         self.actDisconnect.setEnabled(False)
