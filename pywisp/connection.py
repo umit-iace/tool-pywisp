@@ -124,3 +124,42 @@ class Connection(QObject):
         coroutine.
         """
         pass
+
+
+class SerialConnection(Connection):
+    """
+    Simple Serial Connection
+    """
+
+    def __init__(self, port, baud):
+        self.serial = serial.Serial(timeout=0.01)
+        self.serial.baudrate = baud
+        self.serial.port = port
+        super().__init__()
+
+    def _connect(self):
+        try:
+            self.serial.open()
+        except Exception as e:
+            self._logger.error(f'cannot connect: {e}')
+            self.serial.close()
+            return False
+        return True
+
+    def _disconnect(self):
+        self.serial.close()
+
+    def _recv(self):
+        """
+        read data from serial port, push through min
+        """
+        data = self.serial.read(512)
+        self.Min.unpack(data)
+
+    def _send(self):
+        """
+        write data from min to the serial port
+        """
+        while True:
+            data = yield
+            self.serial.write(data)
