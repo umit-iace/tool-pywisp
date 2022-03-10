@@ -163,3 +163,52 @@ class SerialConnection(Connection):
         while True:
             data = yield
             self.serial.write(data)
+
+class SocketConnection(Connection):
+    """
+    Simple Socket based Connection
+    """
+    def __init__(self, socket, ip, port):
+        self.ip = ip
+        self.port = port
+        self.sock = socket
+        super().__init__()
+
+    def _connect(self):
+        try:
+            self.sock.connect((self.ip, int(self.port)))
+            self.sock.settimeout(0.01)
+        except socket.error:
+            self._logger.error("Connection to the server is not possible!")
+            self.sock.close()
+            return False
+        return True
+
+    def _disconnect(self):
+        self.sock.close()
+
+    def _recv(self):
+        data = self.sock.recv(512)
+        self.Min.unpack(data)
+
+    def _send(self):
+        while True:
+            data = yield
+            self.sock.sendall(data)
+
+class TcpConnection(SocketConnection):
+    """
+    Simple Tcp Connection
+    """
+    def __init__(self, ip, port):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        super().__init__(sock, ip, port)
+
+class UdpConnection(SocketConnection):
+    """
+    Simple Udp Connection
+    """
+    def __init__(self, ip, port):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        super().__init__(sock, ip, port)
+
