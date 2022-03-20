@@ -5,334 +5,210 @@ This module contains all classes and functions related to establishing a connect
 
 import logging
 import socket
-import struct
 import time
 from abc import abstractmethod
 
 import serial
 import serial.tools.list_ports
-from PyQt5 import QtCore
+from PyQt5.QtCore import QObject, QThread, pyqtSignal
 
-from . import MINSerial, MINUdp, MINFrame
+from . import Min
 
 __all__ = ["Connection", "UdpConnection", "TcpConnection", "SerialConnection"]
 
+class Frame:
+    def __init__(self, id, data):
+        self.min_id = id    # backwards compatibility
+        self.payload = data
 
-class Connection(object):
+class ConnReader(QObject):
+    """ Thread worker """
+    err = pyqtSignal(str)
+
+    def __init__(self, conn):
+        super().__init__()
+        self.conn = conn
+        self.stop = False
+
+    def run(self):
+        while not self.stop:
+            try:
+                self.conn._recv()
+            except Exception:
+                if not self.stop:
+                    self.err.emit("connection dropped")
+                break
+
+    def quit(self):
+        self.stop = True
+
+
+class Connection(QObject):
     """
     Base class for a connection, i.e. tcp or serial
     """
-    received = QtCore.pyqtSignal(object)
+    received = pyqtSignal(Frame)
+    finished = pyqtSignal()
 
     def __init__(self):
-        self.isConnected = False
+        super().__init__()
         self._logger = logging.getLogger(self.__class__.__name__)
-        self.doRead = False
+        self.Min = Min(self._send(), self.emitter())
+        thread = QThread()
+        worker = ConnReader(self)
+        worker.moveToThread(thread)
+        worker.err.connect(self.workerror)
+        thread.started.connect(worker.run)
+        thread.finished.connect(thread.deleteLater)
+        self.thread = thread
+        self.worker = worker
 
-    @abstractmethod
-    def connect(self):
-        pass
+    def workerror(self, err):
+        self.worker.deleteLater()
+        self.disconnect()
+        self._logger.error(err)
+        self.finished.emit()
 
-    @abstractmethod
-    def disconnect(self):
-        pass
+    def emitter(self):
+        """
+        send received frame to application
+        """
+        while True:
+            frame = yield
+            self.received.emit(Frame(frame[0], frame[1]))
 
-    @abstractmethod
-    def clear(self):
-        pass
-
-    @abstractmethod
-    def readData(self, frames):
-        pass
-
-    @abstractmethod
     def writeData(self, data):
-        pass
-
-
-class SerialConnection(Connection, QtCore.QThread):
-    """
-    A connection derived class for a serial interface connection implemented as a QThread
-    """
-
-    def __init__(self,
-                 port,
-                 baud,
-                 withTransport=True):
-        super(SerialConnection, self).__init__()
-        QtCore.QThread.__init__(self)
-
-        self.min = None
-        self.baud = baud
-        self.port = port
-        self.withTransport = withTransport
-        self.moveToThread(self)
-
-    def run(self):
         """
-        Endless loop of the thread
+        push application data through min
         """
-        while True and self.isConnected:
-            try:
-                frames = self.min.poll()
-            except:
-                self._logger.error('run: No Connection')
-                self.isConnected = False
-                self.min = None
-                return
-
-            if frames and self.doRead:
-                self.readData(frames)
-            else:
-                time.sleep(0.001)
+        try:
+            self.Min.pack(data['id'], data['msg'])
+        except Exception as e:
+            self._logger.error(f"cannot send data: {e}")
+            self.disconnect()
 
     def connect(self):
-        """
-        Checks if the given port is available and instantiates the min protocol
-        :return: True if successful connected, False otherwise.
-        """
-        ports = [
-            p.device
-            for p in serial.tools.list_ports.comports()
-        ]
-        if self.port not in ports:
-            self.isConnected = False
-            return False
-        else:
-            try:
-                self.min = MINSerial(self.port, self.baud, withTransport=self.withTransport)
-            except Exception as e:
-                self._logger.error('{0}'.format(e))
-                return False
-            self.isConnected = True
+        """ establish the connection """
+        if self._connect():
+            self.thread.start()
             return True
 
-    def disconnect(self):
-        """
-        Closes the min protocol and resets the connection
-        """
-        time.sleep(1)
-        self.isConnected = False
-        self._reset()
-        if self.min:
-            self.min.close()
-            del self.min
-
-    def clear(self):
-        self._reset(False)
-
-    def _reset(self, reset=True):
-        if reset and self.min is not None:
-            if self.withTransport:
-                self.min.transport_reset()
-            else:
-                self.min.reset()
-        time.sleep(0.1)
-
-    def readData(self, frames):
-        """
-        Reads and emits the data frame that comes over the serial interface.
-        :param frames: min frame from the other side
-        """
-        for frame in frames:
-            self.received.emit(frame)
-
-    def writeData(self, data):
-        """
-        Writes the given data frame to the min queue
-        :param data: dictionary that includes the min id and payload
-        """
-        if self.min:
-            if self.withTransport:
-                self.min.queue_frame(min_id=data['id'], payload=data['msg'])
-            else:
-                self.min.send_frame(min_id=data['id'], payload=data['msg'])
-
-
-class TcpConnection(Connection, QtCore.QThread):
-    """
-    A connection derived Class for a tcp client implemented as a QThread, which connects to a server
-    """
-    def __init__(self,
-                 ip,
-                 port,
-                 payloadLen=80,
-                 timeout=0.01):
-        super(TcpConnection, self).__init__()
-        QtCore.QThread.__init__(self)
-
-        self.ip = ip
-        self.port = port
-        self.sock = None
-        self.payloadLen = payloadLen
-        self.timeout = timeout
-        self.moveToThread(self)
 
     def disconnect(self):
-        self.isConnected = False
-        time.sleep(1)
-        if self.sock is not None:
-            self.sock.close()
-        self._reset()
+        """ close the connection, stop worker and thread """
+        self.worker.quit()
+        self._disconnect()
+        self.thread.quit()
 
-    def clear(self):
-        self._reset()
-
-    def _reset(self, ):
+    @abstractmethod
+    def _connect(self):
+        pass
+    @abstractmethod
+    def _disconnect(self):
         pass
 
-    def connect(self):
+    @abstractmethod
+    def _recv(self):
         """
-        Checks if the given port is available and instantiates the socket connection
-        :return: True if successful connected, False otherwise.
+        receive data from connection.
+        this runs in a threaded loop.
+        make sure this actually takes some time (e.q. w/ socket timeouts)
+        otherwise this will eat your cpu
         """
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        pass
+
+    @abstractmethod
+    def _send(self):
+        """
+        write data out to the connection.
+        coroutine.
+        """
+        pass
+
+
+class SerialConnection(Connection):
+    """
+    Simple Serial Connection
+    """
+
+    def __init__(self, port, baud):
+        self.serial = serial.Serial(timeout=0.01)
+        self.serial.baudrate = baud
+        self.serial.port = port
+        super().__init__()
+
+    def _connect(self):
+        try:
+            self.serial.open()
+        except Exception as e:
+            self._logger.error(f'cannot connect: {e}')
+            self.serial.close()
+            return False
+        return True
+
+    def _disconnect(self):
+        self.serial.close()
+
+    def _recv(self):
+        """
+        read data from serial port, push through min
+        """
+        data = self.serial.read(512)
+        self.Min.unpack(data)
+
+    def _send(self):
+        """
+        write data from min to the serial port
+        """
+        while True:
+            data = yield
+            self.serial.write(data)
+
+class SocketConnection(Connection):
+    """
+    Simple Socket based Connection
+    """
+    def __init__(self, socket, ip, port):
+        self.ip = ip
+        self.port = port
+        self.sock = socket
+        super().__init__()
+
+    def _connect(self):
         try:
             self.sock.connect((self.ip, int(self.port)))
+            self.sock.settimeout(0.01)
         except socket.error:
             self._logger.error("Connection to the server is not possible!")
             self.sock.close()
-            self.sock = None
             return False
-        self.isConnected = True
-        self.sock.settimeout(self.timeout)
         return True
 
-    def getIP(self):
-        """
-        Gets the IP address of host and returns it
-        :return: the IP address
-        """
-        hostname = socket.gethostname()
-        ip = socket.gethostbyname(hostname)
-        return ip
+    def _disconnect(self):
+        self.sock.close()
 
-    def run(self):
-        """
-        Endless loop of the thread
-        """
-        while self.isConnected:
-            if self.doRead:
-                self.readData(None)
-            else:
-                time.sleep(self.timeout)
+    def _recv(self):
+        data = self.sock.recv(512)
+        self.Min.unpack(data)
 
-    def readData(self, frames):
-        """
-        Reads a data frame from the socket connection, builds a min frame and emits it.
-        :param frames: nothing
-        """
-        try:
-            data = self.sock.recv(self.payloadLen + 1)
-            if data and data != b'':
-                if len(data) != self.payloadLen + 1:
-                    self._logger.error(
-                        "Length of data {} differs from payload length {}!".format(len(data), self.payloadLen + 1))
-                else:
-                    frame = MINFrame(data[0], data[1:], 0, False)
-                    self.received.emit(frame)
-        except socket.timeout:
-            # if nothing is to read, get on
-            pass
-        except socket.error as e:
-            self._logger.error("Reading from host not possible! {}".format(e))
-            self.isConnected = False
+    def _send(self):
+        while True:
+            data = yield
+            self.sock.sendall(data)
 
-    def writeData(self, data):
-        """
-        Writes a data frame to the socket connection
-        :param data: data frame to be sent
-        """
-        try:
-            outputData = struct.pack('>B', data['id']) + data['msg']
-            if len(outputData) < self.payloadLen + 1:
-                for i in range(self.payloadLen + 1 - len(outputData)):
-                    outputData += b'\x00'
-            self.sock.send(outputData)
-        except Exception as e:
-            self._logger.error("Writing to host not possible! {}".format(e))
-            self.isConnected = False
-
-
-class UdpConnection(Connection, QtCore.QThread):
+class TcpConnection(SocketConnection):
     """
-    A connection derived Class for a udp client implemented as a QThread, which sends and get messages from test rig
+    Simple Tcp Connection
     """
-    def __init__(self,
-                 ip,
-                 port,
-                 withTransport=False,
-                 timeout=0.01):
-        super(UdpConnection, self).__init__()
-        QtCore.QThread.__init__(self)
+    def __init__(self, ip, port):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        super().__init__(sock, ip, port)
 
-        self.ip = ip
-        self.port = port
-        self.withTransport = withTransport
-        self.timeout = timeout
-        self.moveToThread(self)
+class UdpConnection(SocketConnection):
+    """
+    Simple Udp Connection
+    """
+    def __init__(self, ip, port):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        super().__init__(sock, ip, port)
 
-    def disconnect(self):
-        time.sleep(1)
-        self.isConnected = False
-        self._reset()
-        if self.min:
-            self.min.close()
-            del self.min
-
-    def clear(self):
-        self._reset(False)
-
-    def _reset(self, reset=True):
-        if reset and self.min is not None:
-            if self.withTransport:
-                self.min.transport_reset()
-            else:
-                self.min.reset()
-        time.sleep(0.1)
-
-    def connect(self):
-        try:
-            self.min = MINUdp(self.ip, self.port, timeOut=self.timeout, withTransport=self.withTransport)
-        except Exception as e:
-            self._logger.error('{0}'.format(e))
-            return False
-        self.isConnected = True
-        return True
-
-    def run(self):
-        """
-        Endless loop of the thread
-        """
-        while True and self.isConnected:
-            try:
-                frames = self.min.poll()
-            except:
-                self._logger.error('run: No Connection')
-                self.isConnected = False
-                self.min = None
-                return
-
-            if frames and self.doRead:
-                self.readData(frames)
-            else:
-                time.sleep(0.001)
-
-    def readData(self, frames):
-        """
-        Reads a data frame from the socket connection, builds a min frame and emits it.
-        :param frames: nothing
-        """
-        for frame in frames:
-            self.received.emit(frame)
-
-    def writeData(self, data):
-        """
-        Writes a data frame to the socket connection
-        :param data: data frame to be sent
-        """
-        if self.min:
-            if self.withTransport:
-                self.min.queue_frame(min_id=data['id'], payload=data['msg'])
-            else:
-                self.min.send_frame(min_id=data['id'], payload=data['msg'])
