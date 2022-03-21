@@ -34,9 +34,11 @@ class ConnReader(QObject):
         while not self.stop:
             try:
                 self.conn._recv()
-            except Exception:
+            except TimeoutError:
+                pass
+            except Exception as e:
                 if not self.stop:
-                    self.err.emit("connection dropped")
+                    self.err.emit(f"connection dropped: {e}")
                 break
 
     def quit(self):
