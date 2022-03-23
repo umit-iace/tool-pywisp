@@ -5,7 +5,6 @@ This module contains all classes and functions related to establishing a connect
 
 import logging
 import socket
-import time
 from abc import abstractmethod
 
 import serial
