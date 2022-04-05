@@ -8,32 +8,30 @@ import socket
 from abc import abstractmethod
 
 import serial
-import serial.tools.list_ports
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
 
-from . import Min
+from .min import Packer, Unpacker, Frame, Bytewise
+from .utils import coroutine, pipe
 
 __all__ = ["Connection", "UdpConnection", "TcpConnection", "SerialConnection"]
 
-class Frame:
-    def __init__(self, id, data):
-        self.min_id = id    # backwards compatibility
-        self.payload = data
-
 class ConnReader(QObject):
-    """ Thread worker """
+    """ Thread worker receiving connection data """
     err = pyqtSignal(str)
 
-    def __init__(self, conn):
+    def __init__(self, conn, rx):
         super().__init__()
         self.conn = conn
         self.stop = False
+        self.rx = pipe(rx)
 
     def run(self):
         while not self.stop:
             try:
-                self.conn._recv()
+                data = self.conn._recv()
+                self.rx.send(data)
             except TimeoutError:
+                # intentionally empty
                 pass
             except Exception as e:
                 if not self.stop:
@@ -51,12 +49,12 @@ class Connection(QObject):
     received = pyqtSignal(Frame)
     finished = pyqtSignal()
 
-    def __init__(self):
+    def __init__(self, rx, tx):
         super().__init__()
         self._logger = logging.getLogger(self.__class__.__name__)
-        self.Min = Min(self._send(), self.emitter())
+        self.tx = pipe([tx, self._send])
         thread = QThread()
-        worker = ConnReader(self)
+        worker = ConnReader(self, [rx, self.emitter])
         worker.moveToThread(thread)
         worker.err.connect(self.workerror)
         thread.started.connect(worker.run)
@@ -70,20 +68,21 @@ class Connection(QObject):
         self._logger.error(err)
         self.finished.emit()
 
+    @coroutine
     def emitter(self):
         """
         send received frame to application
         """
         while True:
-            frame = yield
-            self.received.emit(Frame(frame[0], frame[1]))
+            id, payload = yield
+            self.received.emit(Frame(id, payload))
 
     def writeData(self, data):
         """
         push application data through min
         """
         try:
-            self.Min.pack(data['id'], data['msg'])
+            self.tx.send((data['id'], data['msg']))
         except Exception as e:
             self._logger.error(f"cannot send data: {e}")
             self.disconnect()
@@ -109,9 +108,9 @@ class Connection(QObject):
         pass
 
     @abstractmethod
-    def _recv(self):
+    def _recv(self) -> bytes:
         """
-        receive data from connection.
+        return data from connection.
         this runs in a threaded loop.
         make sure this actually takes some time (e.q. w/ socket timeouts)
         otherwise this will eat your cpu
@@ -119,11 +118,9 @@ class Connection(QObject):
         pass
 
     @abstractmethod
+    @coroutine
     def _send(self):
-        """
-        write data out to the connection.
-        coroutine.
-        """
+        """ write data out to the connection. coroutine. """
         pass
 
 
@@ -136,7 +133,7 @@ class SerialConnection(Connection):
         self.serial = serial.Serial(timeout=0.01)
         self.serial.baudrate = baud
         self.serial.port = port
-        super().__init__()
+        super().__init__(tx=Packer, rx = [Bytewise, Unpacker])
 
     def _connect(self):
         try:
@@ -151,16 +148,10 @@ class SerialConnection(Connection):
         self.serial.close()
 
     def _recv(self):
-        """
-        read data from serial port, push through min
-        """
-        data = self.serial.read(512)
-        self.Min.unpack(data)
+        return self.serial.read(512)
 
+    @coroutine
     def _send(self):
-        """
-        write data from min to the serial port
-        """
         while True:
             data = yield
             self.serial.write(data)
@@ -169,11 +160,11 @@ class SocketConnection(Connection):
     """
     Simple Socket based Connection
     """
-    def __init__(self, socket, ip, port):
+    def __init__(self, socket, ip, port, **kwargs):
         self.ip = ip
         self.port = port
         self.sock = socket
-        super().__init__()
+        super().__init__(**kwargs)
 
     def _connect(self):
         try:
@@ -189,9 +180,9 @@ class SocketConnection(Connection):
         self.sock.close()
 
     def _recv(self):
-        data = self.sock.recv(512)
-        self.Min.unpack(data)
+        return self.sock.recv(512)
 
+    @coroutine
     def _send(self):
         while True:
             data = yield
@@ -203,7 +194,24 @@ class TcpConnection(SocketConnection):
     """
     def __init__(self, ip, port):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        super().__init__(sock, ip, port)
+        @coroutine
+        def Sender(sink):
+            """ send 1 byte id + 80 byte payload """
+            while True:
+                id, data = (yield)
+                sink.send(bytes([id]) + data + bytes(80-len(data)))
+
+        @coroutine
+        def Receiver(sink):
+            """ receive 81 byte chunks -> (1 id + 80 payload) """
+            data = []
+            while True:
+                data.extend((yield))
+                while len(data) >= 81:
+                    f, data = data[:81], data[81:]
+                    sink.send( (f[0], bytes(f[1:])) )
+
+        super().__init__(sock, ip, port, tx=Sender, rx=Receiver)
 
 class UdpConnection(SocketConnection):
     """
