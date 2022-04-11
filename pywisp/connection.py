@@ -219,5 +219,5 @@ class UdpConnection(SocketConnection):
     """
     def __init__(self, ip, port):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        super().__init__(sock, ip, port)
+        super().__init__(sock, ip, port, tx=Packer, rx = [Bytewise, Unpacker])
 
