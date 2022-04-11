@@ -2,47 +2,45 @@
 from binascii import crc32
 from struct import pack as spack
 
-__all__ = ["Min"]
+from .utils import coroutine
 
 HDR = 0xaa
 STF = 0x55
 
+class Frame:
+    def __init__(self, id, data):
+        self.id = id
+        self.payload = data
+    @property
+    def min_id(self): # backwards compatibility
+        return self.id
+
+
+@coroutine
 def PackedPrinter():
     """ print packed data as coroutine. debug purposes only"""
     while True:
         f = yield
         print(f'packed {f}')
 
-def UnpackedPrinter():
+@coroutine
+def FramePrinter():
     """ print unpacked data as coroutine. debug purposes only"""
     while True:
         f = yield
-        print(f'unpacked id:{f[0]} data:{f[1]}')
+        print(f'unpacked {f.id=} {f.payload=}')
 
-class Min:
-    """
-    min-style packing and unpacking of data as coroutines
-    """
-    def __init__(self, packed, unpacked):
-        """
-        packed: min-packed data will be sent to this coroutine
-        unpacked: unpacked
-        """
-        self.u = Unpacker(unpacked)
-        self.p = Packer(packed)
-        next(packed)
-        next(unpacked)
-        next(self.p)
-        next(self.u)
-
-    def unpack(self, data):
+@coroutine
+def Bytewise(sink):
+    """ split received data into single bytes """
+    while True:
+        data = (yield)
         for d in data:
-            self.u.send(d)
+            sink.send(d)
 
-    def pack(self, id, data):
-        self.p.send((id,data))
-
-def Packer(receiver):
+@coroutine
+def Packer(sink):
+    """ pack received (id, data) for transmission on wire. coroutine """
     while True:
         id, data = (yield)
         assert(id < 64)
@@ -61,9 +59,11 @@ def Packer(receiver):
             else:
                 hdcnt = 0
         ret.append(STF)
-        receiver.send( bytes(ret) )
+        sink.send( bytes(ret) )
 
-def Unpacker(receiver):
+@coroutine
+def Unpacker(sink):
+    """ unpack received data from wire into Frame. coroutine """
     while True:
         if (yield)!= HDR:
             continue
@@ -90,4 +90,4 @@ def Unpacker(receiver):
         want = crc32(bytes([id, len])+pld)
         if spack('>I',want) != crc:
             continue
-        receiver.send( (id, bytes(pld) ))
+        sink.send( (id, bytes(pld) ))

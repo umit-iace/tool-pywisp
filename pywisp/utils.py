@@ -21,6 +21,34 @@ from pyqtgraph.dockarea import Dock
 
 __all__ = ["createDir", "getResource", "packArrayToFrame", "CppBinding"]
 
+def coroutine(func):
+    """ wrapper for starting coroutine upon creation """
+    def start(*args, **kwargs):
+        cr = func(*args, **kwargs)
+        next(cr)
+        return cr
+    return start
+
+def pipe(coros):
+    """ start a pipe of coroutines """
+    def flatten(lst):
+        """ flatten an arbitrarily nested list """
+        ret = []
+        if isinstance(lst, list):
+            for item in lst:
+                if isinstance(item, list):
+                    ret.extend(flatten(item))
+                else:
+                    ret.append(item)
+            return ret
+        else:
+            return lst
+    coros = flatten(coros)
+
+    ret = coros[-1]()
+    for coro in reversed(coros[:-1]):
+        ret = coro(ret)
+    return ret
 
 def createDir(dirName):
     """

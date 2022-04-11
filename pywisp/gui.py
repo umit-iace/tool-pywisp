@@ -1349,7 +1349,7 @@ class MainGui(QMainWindow):
                     self.actStartExperiment.setEnabled(True)
                 self.actStopExperiment.setEnabled(False)
                 self.statusbarLabel.setText("Connected!")
-                connInstance.received.connect(lambda frame, conn=conn: self.updateData(frame, conn))
+                connInstance.received.connect(lambda frame, conn=conn: self.updateData(frame, conn), type=Qt.DirectConnection)
                 connInstance.finished.connect(self.disconnect)
                 self.connections[conn] = connInstance
                 self.isConnected = True
