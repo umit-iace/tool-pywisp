@@ -43,6 +43,7 @@ from .utils import getResource, PlainTextLogger, DataPointBuffer, PlotChart, Exp
     ContextLineEditAction, TreeWidgetStyledItemDelegate
 
 from .visualization import MplVisualizer, VtkVisualizer
+from .resources.Controller import getController
 
 
 class MainGui(QMainWindow):
@@ -333,6 +334,10 @@ class MainGui(QMainWindow):
         self.optMenu.addAction(self.actTimerTime)
         self.actTimerTime.triggered.connect(self.setTimerTime)
 
+        self.actUseGamePad = QAction("&Use GamePad", self, checkable=True)
+        self.optMenu.addAction(self.actUseGamePad)
+        self.actUseGamePad.triggered.connect(self.useGamePad)
+
         self.actSaveAnimation = QAction("&Save Animation", self, checkable=True)
         self.optMenu.addAction(self.actSaveAnimation)
 
@@ -426,6 +431,8 @@ class MainGui(QMainWindow):
         self.stopExp.connect(self.exp.stopExperiment)
         self.exp.expFinished.connect(self.saveLastMeas)
         self.exp.expStop.connect(self.stopExperiment)
+
+        self.gamepad = None
 
         self.visualizer = None
 
@@ -549,6 +556,23 @@ class MainGui(QMainWindow):
         for exp in self._experiments:
             self._logger.debug("Add '{}' to experiment list".format(exp["Name"]))
             self.experimentList.addItem(exp["Name"])
+
+    def useGamePad(self):
+        if self.actUseGamePad.isChecked():
+            self.gamepad = getController()
+            if self.gamepad is not None:
+                print('Gamepad connected')
+                for wid in self.remoteWidgetLayout.list:
+                    if isinstance(wid, MovableSlider):
+                        wid.updateGamePad(self.gamepad)
+            else:
+                print('Gamepad not connected')
+        else:
+            self.gamepad.stop()
+            self.gamepad = None
+            for wid in self.remoteWidgetLayout.list:
+                if isinstance(wid, MovableSlider):
+                    wid.updateGamePad(self.gamepad)
 
     def setTimerTime(self):
         """

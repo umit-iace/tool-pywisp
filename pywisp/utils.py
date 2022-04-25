@@ -884,6 +884,12 @@ class MovableSlider(DoubleSlider, MovableWidget):
 
         self.updateData()
 
+    def updateGamePad(self, gamepad):
+        self.gamepad = gamepad
+        if gamepad is not None:
+            self.gamepad.btnTrigger.connect(lambda: self.setValue(self.value + float(self.stepSlider)))
+            self.gamepad.btnThumb2.connect(lambda: self.setValue(self.value - float(self.stepSlider)))
+
     def getData(self):
         data = dict()
 
