@@ -56,7 +56,7 @@ class MainGui(QMainWindow):
         super(MainGui, self).__init__(parent)
 
         QCoreApplication.setOrganizationName("IACE")
-        QCoreApplication.setOrganizationDomain("https://umit.at/iace")
+        QCoreApplication.setOrganizationDomain("https://umit-tirol.at/iace")
         QCoreApplication.setApplicationVersion(
             pkg_resources.require("PyWisp")[0].version)
         QCoreApplication.setApplicationName(globals()["__package__"])

@@ -5,7 +5,7 @@ Credits
 Development Lead
 ----------------
 
-* Jens Wurm <jens.wurm@umit.at>
+* Jens Wurm <jens.wurm@umit-tirol.at>
 
 Contributors
 ------------
@@ -13,3 +13,4 @@ Contributors
 * Thomas Gruber
 * Jonathan Halmen
 * Florian Alber
+* Simon Bachler

@@ -19,7 +19,7 @@ from .utils import *
 from .visualization import *
 
 __author__ = 'IACE'
-__email__ = 'jens.wurm@umit.at'
+__email__ = 'jens.wurm@umit-tirol.at'
 __version__ = '1.0'
 
 # configure logging
