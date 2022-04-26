@@ -567,6 +567,7 @@ class MainGui(QMainWindow):
                         wid.updateGamePad(self.gamepad)
             else:
                 print('Gamepad not connected')
+                self.actUseGamePad.setChecked(False)
         else:
             self.gamepad.stop()
             self.gamepad = None
