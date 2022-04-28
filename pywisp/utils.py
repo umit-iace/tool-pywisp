@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, Q
     QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction, QShortcut, QStyledItemDelegate, QStyle
 from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
+from .resources.Controller import EVENT_ABB
 
 __all__ = ["createDir", "getResource", "packArrayToFrame", "CppBinding"]
 
@@ -653,6 +654,7 @@ class RemoteWidgetEdit(QDialog):
             msg['stepSlider'] = self.stepSliderText.text()
             msg['shortcutPlus'] = self.shortcutFieldPlus.getKeySequence()
             msg['shortcutMinus'] = self.shortcutFieldMinus.getKeySequence()
+            msg['shortcut-Gp'] = None
 
         return msg
 
@@ -768,23 +770,45 @@ class MovableWidget(object):
     def updateData(self):
         pass
 
+    def updateGamePad(self, gamepad):
+        pass
+
 
 class MovablePushButton(QPushButton, MovableWidget):
-    def __init__(self, name, valueOn, valueReset, shortcutKey, **kwargs):
+    def __init__(self, name, valueOn, valueReset, shortcutKey, shortcutKeyGp, **kwargs):
         MovableWidget.__init__(self, name)
         QPushButton.__init__(self, name=name)
+
+        self._logger = logging.getLogger(self.__class__.__name__)
+
         self.valueOn = valueOn
         self.valueReset = valueReset
 
         self.parameter = kwargs.get('parameter', None)
         self.module = kwargs.get('module', None)
 
+        self.shortcutKeyGp = shortcutKeyGp
         self.shortcut = QShortcut(self)
         self.shortcut.setKey(shortcutKey)
         self.shortcut.setAutoRepeat(False)
         self.shortcut.activated.connect(lambda: self.animateClick())
 
         self.updateData()
+
+    def updateGamePad(self, gamepad):
+        self.gamepad = gamepad
+        ctrlDict = dict(EVENT_ABB)
+        if gamepad is not None:
+            if self.shortcutKeyGp:
+                try:
+                    name = list(ctrlDict.keys())[list(ctrlDict.values()).index(self.shortcutKeyGp)]
+                    if 'Absolute' in name:
+                        self._logger.error("{} is an absulute button!".format(self.shortcutKeyGp))
+                    else:
+                        name = 'btn' + self.shortcutKeyGp
+                        getattr(self.gamepad, name).connect(lambda: self.click())
+                except ValueError:
+                    self._logger.error("{} is not a valid gamepad button!".format(self.shortcutPlusKeyGp))
 
     def getData(self):
         data = dict()
@@ -859,10 +883,13 @@ class DoubleSlider(QSlider):
 
 
 class MovableSlider(DoubleSlider, MovableWidget):
-    def __init__(self, name, minSlider, maxSlider, stepSlider, label, shortcutPlusKey, shortcutMinusKey, startValue
-                 , **kwargs):
+    def __init__(self, name, minSlider, maxSlider, stepSlider, label,
+                 shortcutPlusKey, shortcutMinusKey, shortcutKeyGp,
+                 startValue, **kwargs):
         MovableWidget.__init__(self, name, label)
         DoubleSlider.__init__(self, Qt.Horizontal, name=name)
+
+        self._logger = logging.getLogger(self.__class__.__name__)
 
         self.parameter = kwargs.get('parameter', None)
         self.module = kwargs.get('module', None)
@@ -871,6 +898,7 @@ class MovableSlider(DoubleSlider, MovableWidget):
         self.maxSlider = maxSlider
         self.stepSlider = stepSlider
         self.label = label
+        self.shortcutKeyGp = shortcutKeyGp
 
         self.shortcutPlus = QShortcut(self)
         self.shortcutPlus.setKey(shortcutPlusKey)
@@ -886,9 +914,18 @@ class MovableSlider(DoubleSlider, MovableWidget):
 
     def updateGamePad(self, gamepad):
         self.gamepad = gamepad
+        ctrlDict = dict(EVENT_ABB)
         if gamepad is not None:
-            self.gamepad.absX.connect(lambda: self.setValue(self.value + float(self.stepSlider)))
-            self.gamepad.btnN.connect(lambda: self.setValue(self.value - float(self.stepSlider)))
+            if self.shortcutKeyGp:
+                try:
+                    name = list(ctrlDict.keys())[list(ctrlDict.values()).index(self.shortcutKeyGp)]
+                    if 'Absolute' in name:
+                        name = 'abs' + self.shortcutKeyGp
+                        getattr(self.gamepad, name).connect(lambda dir: self.setValue(self.value + dir * float(self.stepSlider)))
+                    else:
+                        self._logger.error("{} is not an absulute button!".format(self.shortcutKeyGp))
+                except ValueError:
+                    self._logger.error("{} is not a valid gamepad button!".format(self.shortcutPlusKeyGp))
 
     def getData(self):
         data = dict()
@@ -919,6 +956,8 @@ class MovableSwitch(QPushButton, MovableWidget):
     def __init__(self, name, valueOn, valueOff, shortcutKey, **kwargs):
         MovableWidget.__init__(self, name)
         QPushButton.__init__(self, name=name)
+
+        self._logger = logging.getLogger(self.__class__.__name__)
 
         self.parameter = kwargs.get('parameter', None)
         self.module = kwargs.get('module', None)

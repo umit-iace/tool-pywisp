@@ -2,7 +2,7 @@
 import time
 
 from PyQt5.QtCore import QThread, pyqtSignal
-
+import logging
 from .inputs import devices
 
 # TODO reconnect doesn't work very well
@@ -11,9 +11,13 @@ EVENT_ABB = (
     ('Absolute-ABS_HAT0X', 'HX'),
     ('Absolute-ABS_HAT0Y', 'HY'),
 
-    # A-PAD
+    # A-PAD left
     ('Absolute-ABS_X', 'X'),
     ('Absolute-ABS_Y', 'Y'),
+
+    # A-PAD right
+    ('Absolute-ABS_Z', 'Z'),
+    ('Absolute-ABS_RZ', 'RZ'),
 
     # Face Buttons
     ('Key-BTN_TRIGGER', 'N'),
@@ -34,10 +38,12 @@ EVENT_ABB = (
 
 
 class GamePad(QThread):
-    absHX = pyqtSignal()
-    absHY = pyqtSignal()
-    absX = pyqtSignal()
-    absY = pyqtSignal()
+    absHX = pyqtSignal(int)
+    absHY = pyqtSignal(int)
+    absX = pyqtSignal(int)
+    absY = pyqtSignal(int)
+    absZ = pyqtSignal(int)
+    absRZ = pyqtSignal(int)
     btnN = pyqtSignal()
     btnE = pyqtSignal()
     btnS = pyqtSignal()
@@ -51,6 +57,9 @@ class GamePad(QThread):
 
     def __init__(self):
         super().__init__()
+
+        self._logger = logging.getLogger(self.__class__.__name__)
+
         self.btnState = {}
         self.oldBtnState = {}
         self.absState = {}
@@ -75,6 +84,7 @@ class GamePad(QThread):
         try:
             abbv = self.abbrevs[key]
         except KeyError:
+            self._logger.error("The event {} of type {} is not supported!".format(event.code, event.ev_type))
             print(event.ev_type, event.code)
             return
 
@@ -94,9 +104,9 @@ class GamePad(QThread):
 
     def outputAbsEvent(self):
         for key, value in self.absState.items():
-            if self.absState[key] != 127:
+            if self.absState[key] != 128:
                 sig = getattr(self, 'abs' + key)
-                sig.emit()
+                sig.emit(1 if self.absState[key] > 127 else -1)
 
     def run(self):
         while True:

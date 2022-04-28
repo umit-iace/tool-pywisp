@@ -27,6 +27,7 @@
       valueOn: '99.99'
       widgetType: PushButton
       shortcut: P
+      shortcut-Gp: 'N'
     SwitchExample:
       Module: Test
       Parameter: Value2
@@ -43,6 +44,7 @@
       widgetType: Slider
       shortcutPlus: H
       shortcutMinus: G
+      shortcut-Gp: 'X'
 
   Visu:
     MplExampleVisualizer:

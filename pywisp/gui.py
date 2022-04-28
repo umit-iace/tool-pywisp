@@ -561,12 +561,11 @@ class MainGui(QMainWindow):
         if self.actUseGamePad.isChecked():
             self.gamepad = getController()
             if self.gamepad is not None:
-                print('Gamepad connected')
+                self._logger.info('Gamepad connected')
                 for wid in self.remoteWidgetLayout.list:
-                    if isinstance(wid, MovableSlider):
-                        wid.updateGamePad(self.gamepad)
+                    wid.updateGamePad(self.gamepad)
             else:
-                print('Gamepad not connected')
+                self._logger.info('Gamepad not connected')
                 self.actUseGamePad.setChecked(False)
         else:
             self.gamepad.stop()
@@ -1620,7 +1619,8 @@ class MainGui(QMainWindow):
         if config['widgetType'] == "PushButton":
             if 'valueReset' not in config:
                 config['valueReset'] = ''
-            widget = MovablePushButton(config['name'], config['valueOn'], config['valueReset'], config['shortcut'],
+            widget = MovablePushButton(config['name'], config['valueOn'], config['valueReset'],
+                                       config['shortcut'], config['shortcut-Gp'],
                                        module=config['Module'], parameter=config['Parameter'])
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
@@ -1645,7 +1645,8 @@ class MainGui(QMainWindow):
             sliderLabel.setFont(labelFont)
             self.remoteWidgetLayout.addWidget(sliderLabel)
             widget = MovableSlider(config['name'], config['minSlider'], config['maxSlider'], config['stepSlider'],
-                                   sliderLabel, config['shortcutPlus'], config['shortcutMinus'],
+                                   sliderLabel,
+                                   config['shortcutPlus'], config['shortcutMinus'], config['shortcut-Gp'],
                                    exp[config['Module']][config['Parameter']], module=config['Module'],
                                    parameter=config['Parameter'])
             widget.setFixedHeight(30)
