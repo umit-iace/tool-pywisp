@@ -20,7 +20,20 @@ from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
 from .resources.Controller import EVENT_ABB
 
-__all__ = ["createDir", "getResource", "packArrayToFrame", "CppBinding"]
+__all__ = ["createDir", "getResource", "packArrayToFrame", "CppBinding", "coroutine", "pipe"]
+
+def flatten(lst):
+    """ flatten an arbitrarily nested list """
+    ret = []
+    if isinstance(lst, list):
+        for item in lst:
+            if isinstance(item, list):
+                ret.extend(flatten(item))
+            else:
+                ret.append(item)
+        return ret
+    else:
+        return lst
 
 def coroutine(func):
     """ wrapper for starting coroutine upon creation """
@@ -32,18 +45,6 @@ def coroutine(func):
 
 def pipe(coros):
     """ start a pipe of coroutines """
-    def flatten(lst):
-        """ flatten an arbitrarily nested list """
-        ret = []
-        if isinstance(lst, list):
-            for item in lst:
-                if isinstance(item, list):
-                    ret.extend(flatten(item))
-                else:
-                    ret.append(item)
-            return ret
-        else:
-            return lst
     coros = flatten(coros)
 
     ret = coros[-1]()
