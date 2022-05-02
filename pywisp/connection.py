@@ -173,16 +173,17 @@ class SocketConnection(Connection):
     Simple Socket based Connection
     """
 
-    def __init__(self, socket, ip, port, **kwargs):
+    def __init__(self, socket, ip, port, timeout=0.01, **kwargs):
         self.ip = ip
         self.port = port
         self.sock = socket
+        self.timeout = timeout
         super().__init__(**kwargs)
 
     def _connect(self):
         try:
             self.sock.connect((self.ip, int(self.port)))
-            self.sock.settimeout(0.01)
+            self.sock.settimeout(self.timeout)
         except socket.error:
             self._logger.error("Connection to the server is not possible!")
             self.sock.close()
@@ -207,7 +208,7 @@ class TcpConnection(SocketConnection):
     Simple Tcp Connection
     """
 
-    def __init__(self, ip, port, maxPayload=80):
+    def __init__(self, ip, port, maxPayload=80, **kwargs):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         @coroutine
@@ -227,7 +228,7 @@ class TcpConnection(SocketConnection):
                     f, data = data[:maxPayload + 1], data[maxPayload + 1:]
                     sink.send((f[0], bytes(f[1:])))
 
-        super().__init__(sock, ip, port, tx=Sender, rx=Receiver)
+        super().__init__(sock, ip, port, tx=Sender, rx=Receiver, **kwargs)
 
 
 class UdpConnection(SocketConnection):
@@ -235,6 +236,6 @@ class UdpConnection(SocketConnection):
     Simple Udp Connection
     """
 
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, **kwargs):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        super().__init__(sock, ip, port, tx=Packer, rx=[Bytewise, Unpacker])
+        super().__init__(sock, ip, port, tx=Packer, rx=[Bytewise, Unpacker], **kwargs)
