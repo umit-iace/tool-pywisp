@@ -194,7 +194,7 @@ class SocketConnection(Connection):
         self.sock.close()
 
     def _recv(self):
-        return self.sock.recv(512)
+        return self.sock.recv(5120)
 
     @coroutine
     def _send(self):
