@@ -18,9 +18,10 @@ from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, Q
     QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction, QShortcut, QStyledItemDelegate, QStyle
 from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
-from .resources.Controller import EVENT_ABB
+from .resources.Controller import EVENT_ABB_LINUX
 
 __all__ = ["createDir", "getResource", "packArrayToFrame", "CppBinding", "coroutine", "pipe"]
+
 
 def flatten(lst):
     """ flatten an arbitrarily nested list """
@@ -35,13 +36,17 @@ def flatten(lst):
     else:
         return lst
 
+
 def coroutine(func):
     """ wrapper for starting coroutine upon creation """
+
     def start(*args, **kwargs):
         cr = func(*args, **kwargs)
         next(cr)
         return cr
+
     return start
+
 
 def pipe(coros):
     """ start a pipe of coroutines """
@@ -51,6 +56,7 @@ def pipe(coros):
     for coro in reversed(coros[:-1]):
         ret = coro(ret)
     return ret
+
 
 def createDir(dirName):
     """
@@ -131,7 +137,7 @@ def packArrayToFrame(id, data, frameLen, dataLenFloat, dataLenInt):
         else:
             outList = [len(data)]
             outList += [float(data[i * frameLenFloat + j]) for j in range(frameLenFloat - 1) if
-                       i * frameLenFloat + j < len(data)]
+                        i * frameLenFloat + j < len(data)]
             fmtStr = getFormatedStructString(dataLenFloat, dataLenInt, len(outList) - 1)
             payload = struct.pack(fmtStr, *outList)
         dataPoints += [{'id': id,
@@ -502,7 +508,7 @@ class RemoteWidgetEdit(QDialog):
         self.valueOffText = None
         self.valueOnText = None
         self.valueText = None
-        self.valueResetText =None
+        self.valueResetText = None
         self.shortcutField = None
         self.shortcutFieldPlus = None
         self.shortcutFieldMinus = None
@@ -798,13 +804,16 @@ class MovablePushButton(QPushButton, MovableWidget):
 
     def updateGamePad(self, gamepad):
         self.gamepad = gamepad
-        ctrlDict = dict(EVENT_ABB)
+        if WIN:
+            ctrlDict = dict(EVENT_ABB_LINUX)
+        else:
+            ctrlDict = dict(EVENT_ABB_LINUX)
         if gamepad is not None:
             if self.shortcutKeyGp:
                 try:
                     name = list(ctrlDict.keys())[list(ctrlDict.values()).index(self.shortcutKeyGp)]
                     if 'Absolute' in name:
-                        self._logger.error("{} is an absulute button!".format(self.shortcutKeyGp))
+                        self._logger.error("{} is an absolute button!".format(self.shortcutKeyGp))
                     else:
                         name = 'btn' + self.shortcutKeyGp
                         getattr(self.gamepad, name).connect(lambda: self.click())
@@ -915,14 +924,18 @@ class MovableSlider(DoubleSlider, MovableWidget):
 
     def updateGamePad(self, gamepad):
         self.gamepad = gamepad
-        ctrlDict = dict(EVENT_ABB)
+        if WIN:
+            ctrlDict = dict(EVENT_ABB_LINUX)
+        else:
+            ctrlDict = dict(EVENT_ABB_LINUX)
         if gamepad is not None:
             if self.shortcutKeyGp:
                 try:
                     name = list(ctrlDict.keys())[list(ctrlDict.values()).index(self.shortcutKeyGp)]
                     if 'Absolute' in name:
                         name = 'abs' + self.shortcutKeyGp
-                        getattr(self.gamepad, name).connect(lambda dir: self.setValue(self.value + dir * float(self.stepSlider)))
+                        getattr(self.gamepad, name).connect(
+                            lambda dir: self.setValue(self.value + dir * float(self.stepSlider)))
                     else:
                         self._logger.error("{} is not an absulute button!".format(self.shortcutKeyGp))
                 except ValueError:
@@ -1285,7 +1298,7 @@ class CppBinding:
         if os.name == 'nt':
             cmd = ['cmake', '-A', 'x64', '-S', '.', '-B', self.buildDir]
         else:
-            cmd = ['cmake',  '-S', '.', '-B', self.buildDir]
+            cmd = ['cmake', '-S', '.', '-B', self.buildDir]
         result = subprocess.run(cmd, cwd=self.modulePath)
 
         if result.returncode != 0:

@@ -15,6 +15,7 @@ from .utils import coroutine, pipe
 
 __all__ = ["Connection", "UdpConnection", "TcpConnection", "SerialConnection"]
 
+
 class ConnReader(QObject):
     """ Thread worker receiving connection data """
     err = pyqtSignal(str)
@@ -31,6 +32,9 @@ class ConnReader(QObject):
                 data = self.conn._recv()
                 self.rx.send(data)
             except TimeoutError:
+                # intentionally empty
+                pass
+            except socket.timeout:
                 # intentionally empty
                 pass
             except Exception as e:
@@ -83,6 +87,8 @@ class Connection(QObject):
         """
         try:
             self.tx.send((data['id'], data['msg']))
+        except TimeoutError:
+            pass
         except Exception as e:
             self._logger.error(f"cannot send data: {e}")
             self.disconnect()
@@ -93,7 +99,6 @@ class Connection(QObject):
             self.thread.start()
             return True
 
-
     def disconnect(self):
         """ close the connection, stop worker and thread """
         self.worker.quit()
@@ -103,6 +108,7 @@ class Connection(QObject):
     @abstractmethod
     def _connect(self):
         pass
+
     @abstractmethod
     def _disconnect(self):
         pass
@@ -133,7 +139,7 @@ class SerialConnection(Connection):
         self.serial = serial.Serial(timeout=0.01)
         self.serial.baudrate = baud
         self.serial.port = port
-        super().__init__(tx=Packer, rx = [Bytewise, Unpacker])
+        super().__init__(tx=Packer, rx=[Bytewise, Unpacker])
 
     def _connect(self):
         try:
@@ -156,10 +162,12 @@ class SerialConnection(Connection):
             data = yield
             self.serial.write(data)
 
+
 class SocketConnection(Connection):
     """
     Simple Socket based Connection
     """
+
     def __init__(self, socket, ip, port, **kwargs):
         self.ip = ip
         self.port = port
@@ -188,18 +196,21 @@ class SocketConnection(Connection):
             data = yield
             self.sock.sendall(data)
 
+
 class TcpConnection(SocketConnection):
     """
     Simple Tcp Connection
     """
-    def __init__(self, ip, port):
+
+    def __init__(self, ip, port, maxPayload=80):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
         @coroutine
         def Sender(sink):
             """ send 1 byte id + 80 byte payload """
             while True:
                 id, data = (yield)
-                sink.send(bytes([id]) + data + bytes(80-len(data)))
+                sink.send(bytes([id]) + data + bytes(maxPayload - len(data)))
 
         @coroutine
         def Receiver(sink):
@@ -207,17 +218,18 @@ class TcpConnection(SocketConnection):
             data = []
             while True:
                 data.extend((yield))
-                while len(data) >= 81:
-                    f, data = data[:81], data[81:]
-                    sink.send( (f[0], bytes(f[1:])) )
+                while len(data) >= maxPayload + 1:
+                    f, data = data[:maxPayload + 1], data[maxPayload + 1:]
+                    sink.send((f[0], bytes(f[1:])))
 
         super().__init__(sock, ip, port, tx=Sender, rx=Receiver)
+
 
 class UdpConnection(SocketConnection):
     """
     Simple Udp Connection
     """
+
     def __init__(self, ip, port):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        super().__init__(sock, ip, port, tx=Packer, rx = [Bytewise, Unpacker])
-
+        super().__init__(sock, ip, port, tx=Packer, rx=[Bytewise, Unpacker])

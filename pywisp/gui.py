@@ -1619,6 +1619,8 @@ class MainGui(QMainWindow):
         if config['widgetType'] == "PushButton":
             if 'valueReset' not in config:
                 config['valueReset'] = ''
+            if 'shortcut-Gp' not in config:
+                config['shortcut-Gp'] = None
             widget = MovablePushButton(config['name'], config['valueOn'], config['valueReset'],
                                        config['shortcut'], config['shortcut-Gp'],
                                        module=config['Module'], parameter=config['Parameter'])
@@ -1638,6 +1640,8 @@ class MainGui(QMainWindow):
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
         elif config['widgetType'] == "Slider":
+            if 'shortcut-Gp' not in config:
+                config['shortcut-Gp'] = None
             sliderLabel = QLabel()
             sliderLabel.setFixedHeight(15)
             labelFont = sliderLabel.font()
