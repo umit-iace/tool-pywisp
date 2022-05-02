@@ -3,10 +3,10 @@ import time
 
 from PyQt5.QtCore import QThread, pyqtSignal
 import logging
-from .inputs import devices
+from .inputs import devices, WIN
 
 # TODO reconnect doesn't work very well
-EVENT_ABB = (
+EVENT_ABB_LINUX = (
     # D-PAD, aka HAT
     ('Absolute-ABS_HAT0X', 'HX'),
     ('Absolute-ABS_HAT0Y', 'HY'),
@@ -63,7 +63,7 @@ class GamePad(QThread):
         self.btnState = {}
         self.oldBtnState = {}
         self.absState = {}
-        self.abbrevs = dict(EVENT_ABB)
+        self.abbrevs = dict(EVENT_ABB_LINUX)
         for key, value in self.abbrevs.items():
             if key.startswith('Absolute'):
                 self.absState[value] = 127
@@ -81,6 +81,7 @@ class GamePad(QThread):
         if event.ev_type == 'Misc':
             return
         key = event.ev_type + '-' + event.code
+        print(key)
         try:
             abbv = self.abbrevs[key]
         except KeyError:
@@ -110,6 +111,8 @@ class GamePad(QThread):
 
     def run(self):
         while True:
+            if WIN:
+                devices.gamepads[0].__check_state()
             events = devices.gamepads[0]._do_iter()
             if events is not None:
                 for event in events:

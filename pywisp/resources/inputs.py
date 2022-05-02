@@ -3679,6 +3679,7 @@ def get_gamepad():
         raise UnpluggedError("No gamepad found.")
     return gamepad.read()
 
+
 def rescan_devices():
     global devices
     devices = DeviceManager()
