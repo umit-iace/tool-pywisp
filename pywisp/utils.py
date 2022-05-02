@@ -19,6 +19,7 @@ from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, Q
 from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
 from .resources.Controller import EVENT_ABB_LINUX
+from .resources.inputs import WIN
 
 __all__ = ["createDir", "getResource", "packArrayToFrame", "CppBinding", "coroutine", "pipe"]
 

@@ -32,8 +32,8 @@ EVENT_ABB_LINUX = (
     ('Key-BTN_PINKIE', 'TR'),
 
     # Middle buttons
-    ('Key-BTN_BASE3', 'SELECT'),
-    ('Key-BTN_BASE4', 'START'),
+    ('Key-BTN_BASE3', 'Select'),
+    ('Key-BTN_BASE4', 'Start'),
 )
 
 
