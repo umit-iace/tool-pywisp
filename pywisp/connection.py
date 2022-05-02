@@ -65,6 +65,7 @@ class Connection(QObject):
         thread.finished.connect(thread.deleteLater)
         self.thread = thread
         self.worker = worker
+        self.connected = False
 
     def workerror(self, err):
         self.worker.deleteLater()
@@ -85,6 +86,8 @@ class Connection(QObject):
         """
         push application data through min
         """
+        if not self.connected:
+            return
         try:
             self.tx.send((data['id'], data['msg']))
         except TimeoutError:
@@ -97,10 +100,12 @@ class Connection(QObject):
         """ establish the connection """
         if self._connect():
             self.thread.start()
+            self.connected = True
             return True
 
     def disconnect(self):
         """ close the connection, stop worker and thread """
+        self.connected = False
         self.worker.quit()
         self._disconnect()
         self.thread.quit()
