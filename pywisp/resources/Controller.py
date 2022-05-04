@@ -81,7 +81,6 @@ class GamePad(QThread):
         if event.ev_type == 'Misc':
             return
         key = event.ev_type + '-' + event.code
-        print(key)
         try:
             abbv = self.abbrevs[key]
         except KeyError:
