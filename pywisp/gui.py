@@ -558,6 +558,13 @@ class MainGui(QMainWindow):
             self.experimentList.addItem(exp["Name"])
 
     def useGamePad(self):
+        if self.gamepad is not None:
+            self.gamepad.stop()
+            self.gamepad = None
+            for wid in self.remoteWidgetLayout.list:
+                if isinstance(wid, MovableSlider):
+                    wid.updateGamePad(self.gamepad)
+
         if self.actUseGamePad.isChecked():
             self.gamepad = getController()
             if self.gamepad is not None:
@@ -567,12 +574,6 @@ class MainGui(QMainWindow):
             else:
                 self._logger.info('Gamepad not connected')
                 self.actUseGamePad.setChecked(False)
-        else:
-            self.gamepad.stop()
-            self.gamepad = None
-            for wid in self.remoteWidgetLayout.list:
-                if isinstance(wid, MovableSlider):
-                    wid.updateGamePad(self.gamepad)
 
     def setTimerTime(self):
         """
@@ -1322,6 +1323,8 @@ class MainGui(QMainWindow):
                 if not self.actStopExperiment.isEnabled():
                     self.actStartExperiment.setDisabled(False)
             self.selectedExp = True
+
+            self.useGamePad()
 
     def _applyExperimentByIdx(self, index=0):
         """

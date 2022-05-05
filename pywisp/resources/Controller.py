@@ -5,7 +5,6 @@ from PyQt5.QtCore import QThread, pyqtSignal
 import logging
 from .inputs import devices, WIN
 
-# TODO reconnect doesn't work very well
 EVENT_ABB_LINUX = (
     # D-PAD, aka HAT
     ('Absolute-ABS_HAT0X', 'HX'),
@@ -71,9 +70,12 @@ class GamePad(QThread):
                 self.btnState[value] = 0
                 self.oldBtnState[value] = 0
         self.lastTime = 0
+        self.runFlag = True
 
     def stop(self):
-        self.terminate()
+        self.runFlag = False
+        self.quit()
+        self.wait()
 
     def processEvent(self, event):
         if event.ev_type == 'Sync':
@@ -109,7 +111,7 @@ class GamePad(QThread):
                 sig.emit(1 if self.absState[key] > 127 else -1)
 
     def run(self):
-        while True:
+        while self.runFlag:
             if WIN:
                 devices.gamepads[0].__check_state()
             events = devices.gamepads[0]._do_iter()
@@ -121,6 +123,8 @@ class GamePad(QThread):
             if (curTime - self.lastTime) > 100000:
                 self.lastTime = curTime
                 self.outputAbsEvent()
+
+            time.sleep(0.001)
 
 
 def getController():
