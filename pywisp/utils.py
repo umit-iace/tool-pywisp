@@ -968,7 +968,7 @@ class MovableSlider(DoubleSlider, MovableWidget):
 
 
 class MovableSwitch(QPushButton, MovableWidget):
-    def __init__(self, name, valueOn, valueOff, shortcutKey, **kwargs):
+    def __init__(self, name, valueOn, valueOff, shortcutKey, shortcutKeyGp, **kwargs):
         MovableWidget.__init__(self, name)
         QPushButton.__init__(self, name=name)
 
@@ -980,6 +980,7 @@ class MovableSwitch(QPushButton, MovableWidget):
         self.valueOn = valueOn
         self.valueOff = valueOff
 
+        self.shortcutKeyGp = shortcutKeyGp
         self.shortcut = QShortcut(self)
         self.shortcut.setKey(shortcutKey)
         self.shortcut.setAutoRepeat(False)
@@ -1005,6 +1006,24 @@ class MovableSwitch(QPushButton, MovableWidget):
     def updateData(self):
         self.setChecked(False)
         self.setText(self.widgetName + '\n' + self.valueOn)
+
+    def updateGamePad(self, gamepad):
+        self.gamepad = gamepad
+        if WIN:
+            ctrlDict = dict(EVENT_ABB_LINUX)
+        else:
+            ctrlDict = dict(EVENT_ABB_LINUX)
+        if gamepad is not None:
+            if self.shortcutKeyGp:
+                try:
+                    name = list(ctrlDict.keys())[list(ctrlDict.values()).index(self.shortcutKeyGp)]
+                    if 'Absolute' in name:
+                        self._logger.error("{} is an absolute button!".format(self.shortcutKeyGp))
+                    else:
+                        name = 'btn' + self.shortcutKeyGp
+                        getattr(self.gamepad, name).connect(lambda: self.click())
+                except ValueError:
+                    self._logger.error("{} is not a valid gamepad button!".format(self.shortcutPlusKeyGp))
 
 
 class ShortcutCreator(QLineEdit):

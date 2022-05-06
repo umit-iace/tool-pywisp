@@ -1634,7 +1634,8 @@ class MainGui(QMainWindow):
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
         elif config['widgetType'] == "Switch":
-            widget = MovableSwitch(config['name'], config['valueOn'], config['valueOff'], config['shortcut'],
+            widget = MovableSwitch(config['name'], config['valueOn'], config['valueOff'],
+                                   config['shortcut'], config['shortcut-Gp'],
                                    module=config['Module'], parameter=config['Parameter'])
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
