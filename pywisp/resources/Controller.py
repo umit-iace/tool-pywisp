@@ -34,41 +34,41 @@ EVENT_ABB_LINUX = (
     ('Key-BTN_BASE3', 'Select'),
     ('Key-BTN_BASE4', 'Start'),
 
-    # TODO: joystick buttons missing
+    # TODO: joystick buttons (L3 & R3) missing
 )
 
 EVENT_ABB_WIN = (
     # D-PAD, aka HAT
-    ('', 'HX'),
-    ('', 'HY'),
+    ('Absolute-ABS_HAT0X', 'HX'),
+    ('Absolute-ABS_HAT0Y', 'HY'),
 
     # A-PAD left
-    ('', 'X'),
-    ('', 'Y'),
+    ('Absolute-ABS_X', 'X'),
+    ('Absolute-ABS_Y', 'Y'),
 
     # A-PAD right
-    ('ABS_RY', 'Z'),
-    ('ABS_RX', 'RZ'),
+    ('Absolute-ABS_RY', 'Z'),
+    ('Absolute-ABS_RX', 'RZ'),
 
     # Face Buttons
-    ('BTN_NORTH', 'N'),
-    ('BTN_EAST', 'E'),
-    ('BTN_SOUTH', 'S'),
-    ('BTN_WEST', 'W'),
+    ('Key-BTN_NORTH', 'N'),
+    ('Key-BTN_EAST', 'E'),
+    ('Key-BTN_SOUTH', 'S'),
+    ('Key-BTN_WEST', 'W'),
 
     # Shoulder buttons
-    ('', 'THL'),
-    ('', 'THR'),
-    ('BTN_TL', 'TL'),
-    ('BTN_TL', 'TR'),
+    # ('Absolute-ABS_Z', 'THL'), # diese beiden verursachen fehler bei start, nicht implementiert
+    # ('Absolute-ABS_RZ', 'THR'),
+    ('Key-BTN_TL', 'TL'),
+    ('Key-BTN_TR', 'TR'),
 
     # Middle buttons
-    ('BTN_START', 'Select'),
-    ('BTN_SELECT', 'Start'),
+    ('Key-BTN_START', 'Select'),
+    ('Key-BTN_SELECT', 'Start'),
 
     # joystick buttons
-    ('BTN_THUMBL', 'L3'),
-    ('BTN_THUMBR', 'R3'),
+    # ('Key-BTN_THUMBL', 'L3'),
+    # ('Key-BTN_THUMBR', 'R3'),
 )
 
 
@@ -98,7 +98,7 @@ class GamePad(QThread):
         self.btnState = {}
         self.oldBtnState = {}
         self.absState = {}
-        self.abbrevs = dict(EVENT_ABB_LINUX)
+        self.abbrevs = dict(EVENT_ABB_WIN)  # TODO: auto change between linux to widows
         for key, value in self.abbrevs.items():
             if key.startswith('Absolute'):
                 self.absState[value] = 127
@@ -121,9 +121,10 @@ class GamePad(QThread):
         key = event.ev_type + '-' + event.code
         try:
             abbv = self.abbrevs[key]
+            print("Success ", event.ev_type + '-' + event.code)
         except KeyError:
             self._logger.error("The event {} of type {} is not supported!".format(event.code, event.ev_type))
-            print(event.ev_type, event.code)
+            print(event.ev_type + '-' + event.code)
             return
 
         if event.ev_type == 'Key':
