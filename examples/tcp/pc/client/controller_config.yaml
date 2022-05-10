@@ -1,0 +1,36 @@
+# config controller keys for different controllers in PyWisp package
+# when using other controllers, keys can be different and can be overwritten here
+version: 1
+overwrite_existing_keys: true
+
+# NOTE: every event key consists of a event.ev_type and event.code separated by a "-"
+# example: if ev_type is "Absolute" and code is "ABS_X", then the key is "Absolute-ABS_X"
+# "add_your_key_here" is default, hence corresponding key will not be overwritten
+
+d_pad:
+  horizontal_key: "add_your_key_here" 
+  vertical_key: "add_your_key_here" 
+
+left_joystick:
+  horizontal_key: "add_your_key_here" 
+  vertical_key: "add_your_key_here" 
+
+right_joystick:
+  horizontal_key: "add_your_key_here" 
+  vertical_key: "add_your_key_here" 
+
+face_buttons:
+  north: "add_your_key_here" 
+  east: "add_your_key_here" 
+  south: "add_your_key_here" 
+  west: "add_your_key_here" 
+
+shoulder_buttons:
+  L1: "add_your_key_here" 
+  L2: "add_your_key_here" 
+  R1: "add_your_key_here" 
+  R2: "add_your_key_here" 
+
+middle_buttons:
+  select: "add_your_key_here" 
+  start: "add_your_key_here" 
