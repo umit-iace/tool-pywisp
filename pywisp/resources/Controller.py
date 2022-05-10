@@ -4,6 +4,7 @@ import time
 from PyQt5.QtCore import QThread, pyqtSignal
 import logging
 from .inputs import devices, WIN
+import yaml
 
 EVENT_ABB_LINUX = (
     # D-PAD, aka HAT
@@ -34,7 +35,7 @@ EVENT_ABB_LINUX = (
     ('Key-BTN_BASE3', 'Select'),
     ('Key-BTN_BASE4', 'Start'),
 
-    # TODO: joystick buttons (L3 & R3) missing
+    # TODO: implement joystick buttons (L3 & R3)
 )
 
 EVENT_ABB_WIN = (
@@ -57,7 +58,7 @@ EVENT_ABB_WIN = (
     ('Key-BTN_WEST', 'W'),
 
     # Shoulder buttons
-    # ('Absolute-ABS_Z', 'THL'), # diese beiden verursachen fehler bei start, nicht implementiert
+    # ('Absolute-ABS_Z', 'THL'), # TODO: diese beiden verursachen fehler, da ev_type absolute
     # ('Absolute-ABS_RZ', 'THR'),
     ('Key-BTN_TL', 'TL'),
     ('Key-BTN_TR', 'TR'),
@@ -99,6 +100,7 @@ class GamePad(QThread):
         self.oldBtnState = {}
         self.absState = {}
         self.abbrevs = dict(EVENT_ABB_WIN)  # TODO: auto change between linux to widows
+        self.configureAbbrevs()
         for key, value in self.abbrevs.items():
             if key.startswith('Absolute'):
                 self.absState[value] = 127
@@ -107,6 +109,69 @@ class GamePad(QThread):
                 self.oldBtnState[value] = 0
         self.lastTime = 0
         self.runFlag = True
+
+    def configureAbbrevs(self):
+        # read config file
+        with open('controller_config.yaml') as f:
+            configData = yaml.load(f, Loader=yaml.FullLoader)
+        # add/overwrite new keys if necessary
+        print(self.abbrevs)
+        if configData["overwrite_existing_keys"]:
+            # d-pad
+            if configData["d_pad"]["horizontal_key"] != "add_your_key_here":
+                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "HX"}
+                self.abbrevs[configData["d_pad"]["horizontal_key"]] = "HX"
+            if configData["d_pad"]["vertical_key"] != "add_your_key_here":
+                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "HY"}
+                self.abbrevs[configData["d_pad"]["vertical_key"]] = "HY"
+            # left joystick
+            if configData["left_joystick"]["horizontal_key"] != "add_your_key_here":
+                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "X"}
+                self.abbrevs[configData["left_joystick"]["horizontal_key"]] = "X"
+            if configData["left_joystick"]["vertical_key"] != "add_your_key_here":
+                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "Y"}
+                self.abbrevs[configData["left_joystick"]["vertical_key"]] = "Y"
+            # right joystick
+            if configData["right_joystick"]["horizontal_key"] != "add_your_key_here":
+                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "RZ"}
+                self.abbrevs[configData["right_joystick"]["horizontal_key"]] = "RZ"
+            if configData["right_joystick"]["vertical_key"] != "add_your_key_here":
+                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "Z"}
+                self.abbrevs[configData["right_joystick"]["vertical_key"]] = "Z"
+            # face buttons
+            if configData["face_buttons"]["north"] != "add_your_key_here":
+                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "N"}
+                self.abbrevs[configData["face_buttons"]["north"]] = "N"
+            if configData["face_buttons"]["east"] != "add_your_key_here":
+                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "E"}
+                self.abbrevs[configData["face_buttons"]["east"]] = "E"
+            if configData["face_buttons"]["south"] != "add_your_key_here":
+                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "S"}
+                self.abbrevs[configData["face_buttons"]["south"]] = "S"
+            if configData["face_buttons"]["west"] != "add_your_key_here":
+                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "W"}
+                self.abbrevs[configData["face_buttons"]["west"]] = "W"
+            # shoulder buttons
+            if configData["shoulder_buttons"]["L1"] != "add_your_key_here":
+                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "TL"}
+                self.abbrevs[configData["shoulder_buttons"]["L1"]] = "TL"
+            if configData["shoulder_buttons"]["L2"] != "add_your_key_here":
+                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "THL"}
+                self.abbrevs[configData["shoulder_buttons"]["L2"]] = "THL"
+            if configData["shoulder_buttons"]["R1"] != "add_your_key_here":
+                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "TR"}
+                self.abbrevs[configData["shoulder_buttons"]["R1"]] = "TR"
+            if configData["shoulder_buttons"]["R2"] != "add_your_key_here":
+                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "THR"}
+                self.abbrevs[configData["shoulder_buttons"]["R2"]] = "THR"
+            # middle buttons
+            if configData["middle_buttons"]["start"] != "add_your_key_here":
+                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "Start"}
+                self.abbrevs[configData["middle_buttons"]["start"]] = "Start"
+            if configData["middle_buttons"]["select"] != "add_your_key_here":
+                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "Select"}
+                self.abbrevs[configData["middle_buttons"]["select"]] = "Select"
+        print(self.abbrevs)
 
     def stop(self):
         self.runFlag = False
@@ -121,7 +186,6 @@ class GamePad(QThread):
         key = event.ev_type + '-' + event.code
         try:
             abbv = self.abbrevs[key]
-            print("Success ", event.ev_type + '-' + event.code)
         except KeyError:
             self._logger.error("The event {} of type {} is not supported!".format(event.code, event.ev_type))
             print(event.ev_type + '-' + event.code)
