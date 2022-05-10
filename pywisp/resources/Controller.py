@@ -33,6 +33,42 @@ EVENT_ABB_LINUX = (
     # Middle buttons
     ('Key-BTN_BASE3', 'Select'),
     ('Key-BTN_BASE4', 'Start'),
+
+    # TODO: joystick buttons missing
+)
+
+EVENT_ABB_WIN = (
+    # D-PAD, aka HAT
+    ('', 'HX'),
+    ('', 'HY'),
+
+    # A-PAD left
+    ('', 'X'),
+    ('', 'Y'),
+
+    # A-PAD right
+    ('ABS_RY', 'Z'),
+    ('ABS_RX', 'RZ'),
+
+    # Face Buttons
+    ('BTN_NORTH', 'N'),
+    ('BTN_EAST', 'E'),
+    ('BTN_SOUTH', 'S'),
+    ('BTN_WEST', 'W'),
+
+    # Shoulder buttons
+    ('', 'THL'),
+    ('', 'THR'),
+    ('BTN_TL', 'TL'),
+    ('BTN_TL', 'TR'),
+
+    # Middle buttons
+    ('BTN_START', 'Select'),
+    ('BTN_SELECT', 'Start'),
+
+    # joystick buttons
+    ('BTN_THUMBL', 'L3'),
+    ('BTN_THUMBR', 'R3'),
 )
 
 
