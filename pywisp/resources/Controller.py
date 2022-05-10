@@ -16,8 +16,8 @@ EVENT_ABB_LINUX = (
     ('Absolute-ABS_Y', 'Y'),
 
     # A-PAD right
-    ('Absolute-ABS_Z', 'Z'),
     ('Absolute-ABS_RZ', 'RZ'),
+    ('Absolute-ABS_Z', 'Z'),
 
     # Face Buttons
     ('Key-BTN_TRIGGER', 'N'),
@@ -48,8 +48,8 @@ EVENT_ABB_WIN = (
     ('Absolute-ABS_Y', 'Y'),
 
     # A-PAD right
-    ('Absolute-ABS_RY', 'Z'),
     ('Absolute-ABS_RX', 'RZ'),
+    ('Absolute-ABS_RY', 'Z'),
 
     # Face Buttons
     ('Key-BTN_NORTH', 'N'),
@@ -114,64 +114,38 @@ class GamePad(QThread):
         # read config file
         with open('controller_config.yaml') as f:
             configData = yaml.load(f, Loader=yaml.FullLoader)
-        # add/overwrite new keys if necessary
-        print(self.abbrevs)
+        # overwrite new keys with config file
         if configData["overwrite_existing_keys"]:
             # d-pad
-            if configData["d_pad"]["horizontal_key"] != "add_your_key_here":
-                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "HX"}
-                self.abbrevs[configData["d_pad"]["horizontal_key"]] = "HX"
-            if configData["d_pad"]["vertical_key"] != "add_your_key_here":
-                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "HY"}
-                self.abbrevs[configData["d_pad"]["vertical_key"]] = "HY"
+            self.overwriteAbbrev(configData["d_pad"]["horizontal_key"], "HX")
+            self.overwriteAbbrev(configData["d_pad"]["vertical_key"], "HY")
             # left joystick
-            if configData["left_joystick"]["horizontal_key"] != "add_your_key_here":
-                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "X"}
-                self.abbrevs[configData["left_joystick"]["horizontal_key"]] = "X"
-            if configData["left_joystick"]["vertical_key"] != "add_your_key_here":
-                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "Y"}
-                self.abbrevs[configData["left_joystick"]["vertical_key"]] = "Y"
+            self.overwriteAbbrev(configData["left_joystick"]["horizontal_key"], "X")
+            self.overwriteAbbrev(configData["left_joystick"]["vertical_key"], "Y")
             # right joystick
-            if configData["right_joystick"]["horizontal_key"] != "add_your_key_here":
-                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "RZ"}
-                self.abbrevs[configData["right_joystick"]["horizontal_key"]] = "RZ"
-            if configData["right_joystick"]["vertical_key"] != "add_your_key_here":
-                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "Z"}
-                self.abbrevs[configData["right_joystick"]["vertical_key"]] = "Z"
+            self.overwriteAbbrev(configData["right_joystick"]["horizontal_key"], "RZ")
+            self.overwriteAbbrev(configData["right_joystick"]["vertical_key"], "Z")
             # face buttons
-            if configData["face_buttons"]["north"] != "add_your_key_here":
-                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "N"}
-                self.abbrevs[configData["face_buttons"]["north"]] = "N"
-            if configData["face_buttons"]["east"] != "add_your_key_here":
-                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "E"}
-                self.abbrevs[configData["face_buttons"]["east"]] = "E"
-            if configData["face_buttons"]["south"] != "add_your_key_here":
-                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "S"}
-                self.abbrevs[configData["face_buttons"]["south"]] = "S"
-            if configData["face_buttons"]["west"] != "add_your_key_here":
-                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "W"}
-                self.abbrevs[configData["face_buttons"]["west"]] = "W"
+            self.overwriteAbbrev(configData["face_buttons"]["north"], "N")
+            self.overwriteAbbrev(configData["face_buttons"]["east"], "E")
+            self.overwriteAbbrev(configData["face_buttons"]["south"], "S")
+            self.overwriteAbbrev(configData["face_buttons"]["west"], "W")
             # shoulder buttons
-            if configData["shoulder_buttons"]["L1"] != "add_your_key_here":
-                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "TL"}
-                self.abbrevs[configData["shoulder_buttons"]["L1"]] = "TL"
-            if configData["shoulder_buttons"]["L2"] != "add_your_key_here":
-                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "THL"}
-                self.abbrevs[configData["shoulder_buttons"]["L2"]] = "THL"
-            if configData["shoulder_buttons"]["R1"] != "add_your_key_here":
-                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "TR"}
-                self.abbrevs[configData["shoulder_buttons"]["R1"]] = "TR"
-            if configData["shoulder_buttons"]["R2"] != "add_your_key_here":
-                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "THR"}
-                self.abbrevs[configData["shoulder_buttons"]["R2"]] = "THR"
+            self.overwriteAbbrev(configData["shoulder_buttons"]["L1"], "TL")
+            self.overwriteAbbrev(configData["shoulder_buttons"]["L2"], "THL")
+            self.overwriteAbbrev(configData["shoulder_buttons"]["R1"], "TR")
+            self.overwriteAbbrev(configData["shoulder_buttons"]["R2"], "THR")
             # middle buttons
-            if configData["middle_buttons"]["start"] != "add_your_key_here":
-                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "Start"}
-                self.abbrevs[configData["middle_buttons"]["start"]] = "Start"
-            if configData["middle_buttons"]["select"] != "add_your_key_here":
-                self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != "Select"}
-                self.abbrevs[configData["middle_buttons"]["select"]] = "Select"
-        print(self.abbrevs)
+            self.overwriteAbbrev(configData["middle_buttons"]["select"], "Select")
+            self.overwriteAbbrev(configData["middle_buttons"]["start"], "Start")
+
+    def overwriteAbbrev(self, abbrevKey, abbrevValue):
+        # only overwrite if necessary (key is not default value)
+        if abbrevKey != "add_your_key_here":
+            # delete existing key
+            self.abbrevs = {key: val for key, val in self.abbrevs.items() if val != abbrevValue}
+            # add new key from config file
+            self.abbrevs[abbrevKey] = abbrevValue
 
     def stop(self):
         self.runFlag = False
