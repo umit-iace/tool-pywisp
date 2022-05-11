@@ -35,6 +35,39 @@ EVENT_ABB_LINUX = (
     ('Key-BTN_BASE4', 'Start'),
 )
 
+EVENT_ABB_WIN = (
+    # D-PAD, aka HAT
+    ('Absolute-ABS_HAT0X', 'HX'),
+    ('Absolute-ABS_HAT0Y', 'HY'),
+
+    # A-PAD left
+    ('Absolute-ABS_X', 'X'),
+    ('Absolute-ABS_Y', 'Y'),
+
+    # A-PAD right
+    ('Absolute-ABS_RX', 'RZ'),
+    ('Absolute-ABS_RY', 'Z'),
+
+    # Face Buttons
+    ('Key-BTN_NORTH', 'N'),
+    ('Key-BTN_EAST', 'E'),
+    ('Key-BTN_SOUTH', 'S'),
+    ('Key-BTN_WEST', 'W'),
+
+    # Shoulder buttons
+    # ('Absolute-ABS_Z', 'THL'), # TODO: diese beiden verursachen fehler, da ev_type absolute
+    # ('Absolute-ABS_RZ', 'THR'),
+    ('Key-BTN_TL', 'TL'),
+    ('Key-BTN_TR', 'TR'),
+
+    # Middle buttons
+    ('Key-BTN_START', 'Select'),
+    ('Key-BTN_SELECT', 'Start'),
+
+    # joystick buttons
+    # ('Key-BTN_THUMBL', 'L3'),
+    # ('Key-BTN_THUMBR', 'R3'),
+)
 
 class GamePad(QThread):
     absHX = pyqtSignal(int)
@@ -62,7 +95,10 @@ class GamePad(QThread):
         self.btnState = {}
         self.oldBtnState = {}
         self.absState = {}
-        self.abbrevs = dict(EVENT_ABB_LINUX)
+        if WIN:
+            self.abbrevs = dict(EVENT_ABB_WIN)
+        else:
+            self.abbrevs = dict(EVENT_ABB_LINUX)
         for key, value in self.abbrevs.items():
             if key.startswith('Absolute'):
                 self.absState[value] = 127
