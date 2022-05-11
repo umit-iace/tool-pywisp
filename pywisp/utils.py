@@ -18,8 +18,6 @@ from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, Q
     QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction, QShortcut, QStyledItemDelegate, QStyle
 from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
-from .resources.Controller import EVENT_ABB_LINUX, EVENT_ABB_WIN
-from .resources.inputs import WIN
 
 __all__ = ["createDir", "getResource", "packArrayToFrame", "CppBinding", "coroutine", "pipe"]
 
@@ -805,10 +803,7 @@ class MovablePushButton(QPushButton, MovableWidget):
 
     def updateGamePad(self, gamepad):
         self.gamepad = gamepad
-        if WIN:
-            ctrlDict = dict(EVENT_ABB_WIN)
-        else:
-            ctrlDict = dict(EVENT_ABB_LINUX)
+        ctrlDict = self.gamepad.getAbbrevs()
         if gamepad is not None:
             if self.shortcutKeyGp:
                 try:
@@ -925,10 +920,7 @@ class MovableSlider(DoubleSlider, MovableWidget):
 
     def updateGamePad(self, gamepad):
         self.gamepad = gamepad
-        if WIN:
-            ctrlDict = dict(EVENT_ABB_WIN)
-        else:
-            ctrlDict = dict(EVENT_ABB_LINUX)
+        ctrlDict = self.gamepad.getAbbrevs()
         if gamepad is not None:
             if self.shortcutKeyGp:
                 try:
@@ -1009,10 +1001,7 @@ class MovableSwitch(QPushButton, MovableWidget):
 
     def updateGamePad(self, gamepad):
         self.gamepad = gamepad
-        if WIN:
-            ctrlDict = dict(EVENT_ABB_WIN)
-        else:
-            ctrlDict = dict(EVENT_ABB_LINUX)
+        ctrlDict = self.gamepad.getAbbrevs()
         if gamepad is not None:
             if self.shortcutKeyGp:
                 try:

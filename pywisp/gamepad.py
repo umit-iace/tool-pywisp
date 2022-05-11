@@ -1,73 +1,14 @@
 # -*- coding: utf-8 -*-
+import logging
+import os
 import time
 
+import yaml
 from PyQt5.QtCore import QThread, pyqtSignal
-import logging
+
 from .inputs import devices, WIN
+from .utils import getResource
 
-EVENT_ABB_LINUX = (
-    # D-PAD, aka HAT
-    ('Absolute-ABS_HAT0X', 'HX'),
-    ('Absolute-ABS_HAT0Y', 'HY'),
-
-    # A-PAD left
-    ('Absolute-ABS_X', 'X'),
-    ('Absolute-ABS_Y', 'Y'),
-
-    # A-PAD right
-    ('Absolute-ABS_Z', 'Z'),
-    ('Absolute-ABS_RZ', 'RZ'),
-
-    # Face Buttons
-    ('Key-BTN_TRIGGER', 'N'),
-    ('Key-BTN_THUMB', 'E'),
-    ('Key-BTN_THUMB2', 'S'),
-    ('Key-BTN_TOP', 'W'),
-
-    # Shoulder buttons
-    ('Key-BTN_BASE', 'THL'),
-    ('Key-BTN_BASE2', 'THR'),
-    ('Key-BTN_TOP2', 'TL'),
-    ('Key-BTN_PINKIE', 'TR'),
-
-    # Middle buttons
-    ('Key-BTN_BASE3', 'Select'),
-    ('Key-BTN_BASE4', 'Start'),
-)
-
-EVENT_ABB_WIN = (
-    # D-PAD, aka HAT
-    ('Absolute-ABS_HAT0X', 'HX'),
-    ('Absolute-ABS_HAT0Y', 'HY'),
-
-    # A-PAD left
-    ('Absolute-ABS_X', 'X'),
-    ('Absolute-ABS_Y', 'Y'),
-
-    # A-PAD right
-    ('Absolute-ABS_RX', 'RZ'),
-    ('Absolute-ABS_RY', 'Z'),
-
-    # Face Buttons
-    ('Key-BTN_NORTH', 'N'),
-    ('Key-BTN_EAST', 'E'),
-    ('Key-BTN_SOUTH', 'S'),
-    ('Key-BTN_WEST', 'W'),
-
-    # Shoulder buttons
-    # ('Absolute-ABS_Z', 'THL'), # TODO: diese beiden verursachen fehler, da ev_type absolute
-    # ('Absolute-ABS_RZ', 'THR'),
-    ('Key-BTN_TL', 'TL'),
-    ('Key-BTN_TR', 'TR'),
-
-    # Middle buttons
-    ('Key-BTN_START', 'Select'),
-    ('Key-BTN_SELECT', 'Start'),
-
-    # joystick buttons
-    # ('Key-BTN_THUMBL', 'L3'),
-    # ('Key-BTN_THUMBR', 'R3'),
-)
 
 class GamePad(QThread):
     absHX = pyqtSignal(int)
@@ -95,10 +36,7 @@ class GamePad(QThread):
         self.btnState = {}
         self.oldBtnState = {}
         self.absState = {}
-        if WIN:
-            self.abbrevs = dict(EVENT_ABB_WIN)
-        else:
-            self.abbrevs = dict(EVENT_ABB_LINUX)
+        self.abbrevs = self.configureAbbrevs()
         for key, value in self.abbrevs.items():
             if key.startswith('Absolute'):
                 self.absState[value] = 127
@@ -107,6 +45,34 @@ class GamePad(QThread):
                 self.oldBtnState[value] = 0
         self.lastTime = 0
         self.runFlag = True
+
+    def getAbbrevs(self):
+        return self.abbrevs
+
+    def configureAbbrevs(self):
+        # read config file
+        runPath = os.getcwd()
+        if WIN:
+            fileName = os.path.join(runPath, 'gpWin.yaml')
+            if os.path.exists(fileName):
+                configFileName = fileName
+            else:
+                configFileName = getResource('gpPS4-WinDefault.yaml', '')
+        else:
+            fileName = os.path.join(runPath, 'gpLinux.yaml')
+            if os.path.exists(fileName):
+                configFileName = fileName
+            else:
+                configFileName = getResource('gpPS4-LinuxDefault.yaml', '')
+
+        with open(configFileName, 'r') as f:
+            configData = yaml.load(f, Loader=yaml.FullLoader)
+
+        abbrevs = {}
+        for item in configData.items():
+            for key in item[1].items():
+                abbrevs[key[1]] = key[0]
+        return abbrevs
 
     def stop(self):
         self.runFlag = False
@@ -123,7 +89,7 @@ class GamePad(QThread):
             abbv = self.abbrevs[key]
         except KeyError:
             self._logger.error("The event {} of type {} is not supported!".format(event.code, event.ev_type))
-            print(event.ev_type, event.code)
+            print(event.ev_type + '-' + event.code)
             return
 
         if event.ev_type == 'Key':
@@ -163,7 +129,7 @@ class GamePad(QThread):
             time.sleep(0.001)
 
 
-def getController():
+def getGamepad():
     """
     Detects if a gamepad is connected. Sets the input to gamepad if detected
 

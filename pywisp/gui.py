@@ -43,7 +43,7 @@ from .utils import getResource, PlainTextLogger, DataPointBuffer, PlotChart, Exp
     ContextLineEditAction, TreeWidgetStyledItemDelegate
 
 from .visualization import MplVisualizer, VtkVisualizer
-from .resources.Controller import getController
+from .gamepad import getGamepad
 
 
 class MainGui(QMainWindow):
@@ -566,7 +566,7 @@ class MainGui(QMainWindow):
                     wid.updateGamePad(self.gamepad)
 
         if self.actUseGamePad.isChecked():
-            self.gamepad = getController()
+            self.gamepad = getGamepad()
             if self.gamepad is not None:
                 self._logger.info('Gamepad connected')
                 for wid in self.remoteWidgetLayout.list:

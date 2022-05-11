@@ -1,0 +1,27 @@
+dPad:
+  HX: "Absolute-ABS_HAT0X"
+  HY: "Absolute-ABS_HAT0Y"
+
+leftJoystick:
+  X: "Absolute-ABS_X"
+  Y: "Absolute-ABS_Y"
+
+rightJoystick:
+  RZ: "Absolute-ABS_RZ"
+  Z: "Absolute-ABS_Z"
+
+faceButtons:
+  N: "Key-BTN_TRIGGER"
+  E: "Key-BTN_THUMB"
+  S: "Key-BTN_THUMB2"
+  W: "Key-BTN_TOP"
+
+shoulderButtons:
+  THL: "Key-BTN_BASE"
+  THR: "Key-BTN_BASE2"
+  TL: "Key-BTN_TOP2"
+  TR: "Key-BTN_PINKIE"
+
+middleButtons:
+  Select: "Key-BTN_BASE3"
+  Start: "Key-BTN_BASE4"
