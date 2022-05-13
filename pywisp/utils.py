@@ -804,7 +804,6 @@ class MovablePushButton(QPushButton, MovableWidget):
 
 
 class DoubleSlider(QSlider):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -827,28 +826,12 @@ class DoubleSlider(QSlider):
     def setValue(self, value):
         super().setValue(int(round((value - self._minValue) / self._stepSize, 8)))
 
-    def setMinimum(self, value):
-        if value > self._maxValue:
-            raise ValueError("Minimum limit cannot be higher than maximum")
-
-        self._minValue = value
+    def setConfig(self, min, max, step):
+        self._minValue = min
+        self._maxValue = max
+        self._stepSize = step
         super().setMinimum(0)
         super().setMaximum(int((self._maxValue - self._minValue) / self._stepSize))
-
-    def setMaximum(self, value):
-        if value < self._minValue:
-            raise ValueError("Minimum limit cannot be higher than maximum")
-
-        self._maxValue = value
-        super().setMinimum(0)
-        super().setMaximum(int((self._maxValue - self._minValue) / self._stepSize))
-
-    def setTickInterval(self, p_int):
-        self._stepSize = p_int
-
-        super().setMinimum(0)
-        super().setMaximum(int((self._maxValue - self._minValue) / self._stepSize))
-
         super().setTickInterval(1)
 
     def minimum(self):
@@ -900,9 +883,7 @@ class MovableSlider(DoubleSlider, MovableWidget):
         return data
 
     def updateData(self):
-        self.setMinimum(float(self.minSlider))
-        self.setMaximum(float(self.maxSlider))
-        self.setTickInterval(float(self.stepSlider))
+        self.setConfig(float(self.minSlider), float(self.maxSlider), float(self.stepSlider))
         self.setPageStep(1)
         self.setSingleStep(1)
         self.setValue(float(self.startValue))
