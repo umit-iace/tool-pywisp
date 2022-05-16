@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import ctypes
 import logging
 import os
 import time
@@ -34,13 +35,17 @@ class GamePad(QThread):
         self._logger = logging.getLogger(self.__class__.__name__)
 
         self.btnState = {}
-        self.stickResolution = 2**15
+        # TODO test, maybe both c_short
+        if WIN:
+            self.stickResolution = 256 ** ctypes.sizeof(ctypes.c_short)
+        else:
+            self.stickResolution = 256 ** ctypes.sizeof(ctypes.c_ubyte)
         self.oldBtnState = {}
         self.absState = {}
         self.abbrevs = self.configureAbbrevs()
         for key, value in self.abbrevs.items():
             if key.startswith('Absolute'):
-                self.absState[value] = 0
+                self.absState[value] = int(self.stickResolution / 2)
             if key.startswith('Key'):
                 self.btnState[value] = 0
                 self.oldBtnState[value] = 0
@@ -111,7 +116,7 @@ class GamePad(QThread):
         # sends number between -1 and 1 for abs values
         for key, value in self.absState.items():
             sig = getattr(self, 'abs' + key)
-            sig.emit(self.absState[key]/self.stickResolution)
+            sig.emit(self.absState[key] / self.stickResolution)
 
     def run(self):
         while self.runFlag:

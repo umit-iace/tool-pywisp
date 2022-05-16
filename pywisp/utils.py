@@ -858,7 +858,7 @@ class DoubleSlider(QSlider):
         super().setValue(int(round((value - self._minValue) / self._stepSize, 8)))
 
     def setAbsVal(self, value):
-        super().setValue(value)
+        super().setValue(int(value))
 
     def setMinimum(self, value):
         if value > self._maxValue:
@@ -930,8 +930,11 @@ class MovableSlider(DoubleSlider, MovableWidget):
                     name = list(ctrlDict.keys())[list(ctrlDict.values()).index(self.shortcutKeyGp)]
                     if 'Absolute' in name:
                         name = 'abs' + self.shortcutKeyGp
-                        getattr(self.gamepad, name).connect(
-                            lambda absVal: self.setAbsVal(absVal*((float(self.maxSlider)-float(self.minSlider))/2)))
+                        getattr(self.gamepad, name).connect(lambda absVal: self.setAbsVal(absVal *
+                                                                                          ((self.maxSlider -
+                                                                                            self.minSlider)) +
+                                                                                          self.minSlider)
+                                                            )
                     else:
                         self._logger.error("{} is not an absolute button!".format(self.shortcutKeyGp))
                 except ValueError:
