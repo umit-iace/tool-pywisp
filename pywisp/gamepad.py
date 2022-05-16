@@ -11,12 +11,12 @@ from .utils import getResource
 
 
 class GamePad(QThread):
-    absHX = pyqtSignal(int)
-    absHY = pyqtSignal(int)
-    absX = pyqtSignal(int)
-    absY = pyqtSignal(int)
-    absZ = pyqtSignal(int)
-    absRZ = pyqtSignal(int)
+    absHX = pyqtSignal(float)
+    absHY = pyqtSignal(float)
+    absX = pyqtSignal(float)
+    absY = pyqtSignal(float)
+    absZ = pyqtSignal(float)
+    absRZ = pyqtSignal(float)
     btnN = pyqtSignal()
     btnE = pyqtSignal()
     btnS = pyqtSignal()
@@ -34,12 +34,13 @@ class GamePad(QThread):
         self._logger = logging.getLogger(self.__class__.__name__)
 
         self.btnState = {}
+        self.stickResolution = 2**15
         self.oldBtnState = {}
         self.absState = {}
         self.abbrevs = self.configureAbbrevs()
         for key, value in self.abbrevs.items():
             if key.startswith('Absolute'):
-                self.absState[value] = 127
+                self.absState[value] = 0
             if key.startswith('Key'):
                 self.btnState[value] = 0
                 self.oldBtnState[value] = 0
@@ -107,10 +108,10 @@ class GamePad(QThread):
                 return
 
     def outputAbsEvent(self):
+        # sends number between -1 and 1 for abs values
         for key, value in self.absState.items():
-            if self.absState[key] != 128:
-                sig = getattr(self, 'abs' + key)
-                sig.emit(1 if self.absState[key] > 127 else -1)
+            sig = getattr(self, 'abs' + key)
+            sig.emit(self.absState[key]/self.stickResolution)
 
     def run(self):
         while self.runFlag:
