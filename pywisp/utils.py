@@ -1005,7 +1005,7 @@ class MovableSwitch(QPushButton, MovableWidget):
     def updateGamePad(self, gamepad):
         self.gamepad = gamepad
         if gamepad is not None:
-            ctrlDict = self.gamepad.getAbbrevs() # TODO: hier änderung
+            ctrlDict = self.gamepad.getAbbrevs()
             if self.shortcutKeyGp:
                 try:
                     name = list(ctrlDict.keys())[list(ctrlDict.values()).index(self.shortcutKeyGp)]
