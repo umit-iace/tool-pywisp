@@ -834,7 +834,6 @@ class MovablePushButton(QPushButton, MovableWidget):
 
 
 class DoubleSlider(QSlider):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -861,17 +860,11 @@ class DoubleSlider(QSlider):
         self.setValue(value)
 
     def setMinimum(self, value):
-        if value > self._maxValue:
-            raise ValueError("Minimum limit cannot be higher than maximum")
-
         self._minValue = value
         super().setMinimum(0)
         super().setMaximum(int((self._maxValue - self._minValue) / self._stepSize))
 
     def setMaximum(self, value):
-        if value < self._minValue:
-            raise ValueError("Minimum limit cannot be higher than maximum")
-
         self._maxValue = value
         super().setMinimum(0)
         super().setMaximum(int((self._maxValue - self._minValue) / self._stepSize))
