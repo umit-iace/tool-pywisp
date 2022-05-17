@@ -910,11 +910,11 @@ class MovableSlider(DoubleSlider, MovableWidget):
                     name = list(ctrlDict.keys())[list(ctrlDict.values()).index(self.shortcutKeyGp)]
                     if 'Absolute' in name:
                         name = 'abs' + self.shortcutKeyGp
-                        getattr(self.gamepad, name).connect(lambda absVal: self.setAbsVal(absVal *
-                                                                                          ((float(self.maxSlider) -
-                                                                                            float(self.minSlider))) +
-                                                                                          float(self.minSlider))
-                                                            )
+                        getattr(self.gamepad, name).connect(lambda absVal:
+                                                            self.setValue(absVal *
+                                                                          ((float(self.maxSlider) -
+                                                                            float(self.minSlider))) +
+                                                                          float(self.minSlider)))
                     else:
                         self._logger.error("{} is not an absolute button!".format(self.shortcutKeyGp))
                 except ValueError:
