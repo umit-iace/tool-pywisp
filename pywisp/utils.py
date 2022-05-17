@@ -856,25 +856,12 @@ class DoubleSlider(QSlider):
     def setValue(self, value):
         super().setValue(int(round((value - self._minValue) / self._stepSize, 8)))
 
-    def setAbsVal(self, value):
-        self.setValue(value)
-
-    def setMinimum(self, value):
-        self._minValue = value
+    def setConfig(self, min, max, step):
+        self._minValue = min
+        self._maxValue = max
+        self._stepSize = step
         super().setMinimum(0)
         super().setMaximum(int((self._maxValue - self._minValue) / self._stepSize))
-
-    def setMaximum(self, value):
-        self._maxValue = value
-        super().setMinimum(0)
-        super().setMaximum(int((self._maxValue - self._minValue) / self._stepSize))
-
-    def setTickInterval(self, p_int):
-        self._stepSize = p_int
-
-        super().setMinimum(0)
-        super().setMaximum(int((self._maxValue - self._minValue) / self._stepSize))
-
         super().setTickInterval(1)
 
     def minimum(self):
@@ -949,9 +936,7 @@ class MovableSlider(DoubleSlider, MovableWidget):
         return data
 
     def updateData(self):
-        self.setMinimum(float(self.minSlider))
-        self.setMaximum(float(self.maxSlider))
-        self.setTickInterval(float(self.stepSlider))
+        self.setConfig(float(self.minSlider), float(self.maxSlider), float(self.stepSlider))
         self.setPageStep(1)
         self.setSingleStep(1)
         self.setValue(float(self.startValue))
