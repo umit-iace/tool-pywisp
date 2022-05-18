@@ -116,13 +116,10 @@ class GamePad(QThread):
                 return
 
     def outputAbsEvent(self):
-        # sends number between -1 and 1 for abs values
+        # sends number between -0.5 and 0.5 for abs values
         for key, value in self.absState.items():
             sig = getattr(self, 'abs' + key)
-            if WIN:
-                sig.emit(self.absState[key] / self.stickResolution * 2)
-            else:
-                sig.emit(self.absState[key] / self.stickResolution)
+            sig.emit(self.absState[key] / self.stickResolution)
 
     def run(self):
         while self.runFlag:
