@@ -7,7 +7,7 @@ import time
 import yaml
 from PyQt5.QtCore import QThread, pyqtSignal
 
-from .inputs import devices, WIN
+from .inputs import WIN, rescan_devices
 from .utils import getResource
 
 
@@ -29,11 +29,12 @@ class GamePad(QThread):
     btnStart = pyqtSignal()
     btnSelect = pyqtSignal()
 
-    def __init__(self):
+    def __init__(self, devices):
         super().__init__()
 
         self._logger = logging.getLogger(self.__class__.__name__)
 
+        self.devices = devices
         self.btnState = {}
         if WIN:
             self.stickResolution = 256 ** ctypes.sizeof(ctypes.c_short)
@@ -126,8 +127,8 @@ class GamePad(QThread):
     def run(self):
         while self.runFlag:
             if WIN:
-                devices.gamepads[0].__check_state()
-            events = devices.gamepads[0]._do_iter()
+                self.devices.gamepads[0].__check_state()
+            events = self.devices.gamepads[0]._do_iter()
             if events is not None:
                 for event in events:
                     self.processEvent(event)
@@ -146,8 +147,9 @@ def getGamepad():
 
     :return: gamepad or keyboard thread
     """
+    devices = rescan_devices()
     if any(["GamePad" in des for des in [it[0] for it in [dir(dev) for dev in devices]]]):
-        ctrl = GamePad()
+        ctrl = GamePad(devices)
         ctrl.setTerminationEnabled(True)
         ctrl.start()
 

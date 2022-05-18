@@ -3683,3 +3683,4 @@ def get_gamepad():
 def rescan_devices():
     global devices
     devices = DeviceManager()
+    return devices
