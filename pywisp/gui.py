@@ -43,7 +43,8 @@ from .utils import getResource, PlainTextLogger, DataPointBuffer, PlotChart, Exp
     ContextLineEditAction, TreeWidgetStyledItemDelegate
 
 from .visualization import MplVisualizer, VtkVisualizer
-from .gamepad import getGamepad
+from .gamepad import getGamepadByIndex
+from .gamepad import getAllGamepads
 
 
 class MainGui(QMainWindow):
@@ -328,16 +329,23 @@ class MainGui(QMainWindow):
         self.viewMenu.addAction(self.actShowCoords)
         self.actShowCoords.changed.connect(self.updateShowCoordsSetting)
 
-        # options
+        self.gamepad = None
+        self.selectedGamepadIndex = None
+
+        ### options
         self.optMenu = self.menuBar().addMenu('&Options')
+        # timer
         self.actTimerTime = QAction("&Timer time", self)
         self.optMenu.addAction(self.actTimerTime)
         self.actTimerTime.triggered.connect(self.setTimerTime)
-
-        self.actUseGamePad = QAction("&Use GamePad", self, checkable=True)
-        self.optMenu.addAction(self.actUseGamePad)
-        self.actUseGamePad.triggered.connect(self.useGamePad)
-
+        # detect gamepad
+        self.actDetectGamePad = QAction("&Detect Gamepads", self)
+        self.optMenu.addAction(self.actDetectGamePad)
+        self.actDetectGamePad.triggered.connect(self.detectGamepads)
+        # select gamepad
+        self.gamepadMenu = self.optMenu.addMenu('&Select Gamepad')
+        self.detectGamepads()
+        # animation
         self.actSaveAnimation = QAction("&Save Animation", self, checkable=True)
         self.optMenu.addAction(self.actSaveAnimation)
 
@@ -431,8 +439,6 @@ class MainGui(QMainWindow):
         self.stopExp.connect(self.exp.stopExperiment)
         self.exp.expFinished.connect(self.saveLastMeas)
         self.exp.expStop.connect(self.stopExperiment)
-
-        self.gamepad = None
 
         self.visualizer = None
 
@@ -557,23 +563,47 @@ class MainGui(QMainWindow):
             self._logger.debug("Add '{}' to experiment list".format(exp["Name"]))
             self.experimentList.addItem(exp["Name"])
 
-    def useGamePad(self):
+    def detectGamepads(self):
+        # anonymous functoin to
+        def setGamepad(index):
+            def fn():
+                self.selectGamepad(index)
+            return fn
+
+        # detect all available Gamepads
+        self.detectedGamepads = getAllGamepads()
+
+        # TODO: test deletion gamepadMenu items
+        self.gamepadMenu.clear()
+
+        # build gamepadMenu items # TODO: selectGamepad bekommt immer den letzten übergeben
+        for index, gamepad in enumerate(self.detectedGamepads):
+            selectGamepadAction = QAction(gamepad.name, self)
+            selectGamepadAction.setCheckable(True)
+            self.gamepadMenu.addAction(selectGamepadAction)
+            selectGamepadAction.triggered.connect(setGamepad(index))
+            selectGamepadAction.setChecked(self.selectedGamepadIndex == index)
+
+    def selectGamepad(self, index):
+        # stop existing gamepad
         if self.gamepad is not None:
             self.gamepad.stop()
             self.gamepad = None
+            self.selectedGamepadIndex = None
             for wid in self.remoteWidgetLayout.list:
                 if isinstance(wid, MovableSlider):
                     wid.updateGamePad(self.gamepad)
-
-        if self.actUseGamePad.isChecked():
-            self.gamepad = getGamepad()
-            if self.gamepad is not None:
-                self._logger.info('Gamepad connected')
-                for wid in self.remoteWidgetLayout.list:
-                    wid.updateGamePad(self.gamepad)
-            else:
-                self._logger.info('Gamepad not connected')
-                self.actUseGamePad.setChecked(False)
+        # construct new gamepad
+        self.gamepad = getGamepadByIndex(index)
+        # check if construction succeeded
+        if self.gamepad is not None:
+            self._logger.info('Gamepad connected')
+            self.selectedGamepadIndex = index
+            self.detectGamepads()
+            for wid in self.remoteWidgetLayout.list:
+                wid.updateGamePad(self.gamepad)
+        else:
+            self._logger.info('Gamepad not connected')
 
     def setTimerTime(self):
         """
@@ -1324,7 +1354,26 @@ class MainGui(QMainWindow):
                     self.actStartExperiment.setDisabled(False)
             self.selectedExp = True
 
-            self.useGamePad()
+        # use gamepad
+        # stop existing gamepad
+        if self.gamepad is not None:
+            self.gamepad.stop()
+            self.gamepad = None
+            for wid in self.remoteWidgetLayout.list:
+                if isinstance(wid, MovableSlider):
+                    wid.updateGamePad(self.gamepad)
+        # construct new gamepad
+        if self.selectedGamepadIndex is not None:
+            self.gamepad = getGamepadByIndex(self.selectedGamepadIndex)
+            # check if construction succeeded
+            if self.gamepad is not None:
+                self._logger.info('Gamepad connected')
+                for wid in self.remoteWidgetLayout.list:
+                    wid.updateGamePad(self.gamepad)
+            else:
+                self._logger.info('Gamepad not connected')
+
+
 
     def _applyExperimentByIdx(self, index=0):
         """

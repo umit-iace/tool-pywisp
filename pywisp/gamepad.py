@@ -29,10 +29,11 @@ class GamePad(QThread):
     btnStart = pyqtSignal()
     btnSelect = pyqtSignal()
 
-    def __init__(self):
+    def __init__(self, indexOfController):
         super().__init__()
 
         self._logger = logging.getLogger(self.__class__.__name__)
+        self.indexOfController = indexOfController
 
         self.btnState = {}
         if WIN:
@@ -126,8 +127,8 @@ class GamePad(QThread):
     def run(self):
         while self.runFlag:
             if WIN:
-                devices.gamepads[0].__check_state()
-            events = devices.gamepads[0]._do_iter()
+                devices.gamepads[self.indexOfController].__check_state()
+            events = devices.gamepads[self.indexOfController]._do_iter()
             if events is not None:
                 for event in events:
                     self.processEvent(event)
@@ -140,17 +141,27 @@ class GamePad(QThread):
             time.sleep(0.001)
 
 
-def getGamepad():
+def getGamepadByIndex(index):
     """
     Detects if a gamepad is connected. Sets the input to gamepad if detected
 
     :return: gamepad or keyboard thread
     """
-    if any(["GamePad" in des for des in [it[0] for it in [dir(dev) for dev in devices]]]):
-        ctrl = GamePad()
+    if devices.gamepads[index] is None:
+        return None
+    else:
+        ctrl = GamePad(index)
         ctrl.setTerminationEnabled(True)
         ctrl.start()
-
         return ctrl
+
+def getAllGamepads():
+    """
+    Detects all connected gamepads.
+
+    :return: list of detected Gamepads or "None" if empy
+    """
+    if any(["GamePad" in des for des in [it[0] for it in [dir(dev) for dev in devices]]]):
+        return devices.gamepads #TODO: inputs erkennt nicht während laufzeit, dass neue devices dazugekommen sind
     else:
         return None
