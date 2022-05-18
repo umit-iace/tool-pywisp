@@ -872,7 +872,7 @@ class DoubleSlider(QSlider):
 
 
 class MovableSlider(DoubleSlider, MovableWidget):
-    def __init__(self, name, minSlider, maxSlider, stepSlider, label,
+    def __init__(self, name, minSlider, maxSlider, invertSlider, stepSlider, label,
                  shortcutPlusKey, shortcutMinusKey, shortcutKeyGp,
                  startValue, **kwargs):
         MovableWidget.__init__(self, name, label)
@@ -887,6 +887,7 @@ class MovableSlider(DoubleSlider, MovableWidget):
         self.maxSlider = maxSlider
         self.stepSlider = stepSlider
         self.label = label
+        self.invertSlider = invertSlider
         self.shortcutKeyGp = shortcutKeyGp
 
         self.shortcutPlus = QShortcut(self)
@@ -910,10 +911,16 @@ class MovableSlider(DoubleSlider, MovableWidget):
                     name = list(ctrlDict.keys())[list(ctrlDict.values()).index(self.shortcutKeyGp)]
                     if 'Absolute' in name:
                         name = 'abs' + self.shortcutKeyGp
-                        getattr(self.gamepad, name).connect(lambda absVal:
-                                                            self.setValue(absVal *
-                                                                          ((float(self.maxSlider) -
-                                                                            float(self.minSlider)))))
+                        if self.invertSlider is None or self.invertSlider == False:
+                            getattr(self.gamepad, name).connect(lambda absVal:
+                                                                self.setValue(absVal *
+                                                                              ((float(self.maxSlider) -
+                                                                                float(self.minSlider)))))
+                        else:
+                            getattr(self.gamepad, name).connect(lambda absVal:
+                                                                self.setValue(-absVal *
+                                                                              ((float(self.maxSlider) -
+                                                                                float(self.minSlider)))))
                     else:
                         self._logger.error("{} is not an absolute button!".format(self.shortcutKeyGp))
                 except ValueError:

@@ -43,7 +43,8 @@ from .utils import getResource, PlainTextLogger, DataPointBuffer, PlotChart, Exp
     ContextLineEditAction, TreeWidgetStyledItemDelegate
 
 from .visualization import MplVisualizer, VtkVisualizer
-from .gamepad import getGamepad
+from .gamepad import getGamepadByIndex
+from .gamepad import getAllGamepads
 
 
 class MainGui(QMainWindow):
@@ -328,16 +329,19 @@ class MainGui(QMainWindow):
         self.viewMenu.addAction(self.actShowCoords)
         self.actShowCoords.changed.connect(self.updateShowCoordsSetting)
 
-        # options
+        self.gamepad = None
+        self.selectedGamepadIndex = None
+
+        ### options
         self.optMenu = self.menuBar().addMenu('&Options')
+        # timer
         self.actTimerTime = QAction("&Timer time", self)
         self.optMenu.addAction(self.actTimerTime)
         self.actTimerTime.triggered.connect(self.setTimerTime)
-
-        self.actUseGamePad = QAction("&Use GamePad", self, checkable=True)
-        self.optMenu.addAction(self.actUseGamePad)
-        self.actUseGamePad.triggered.connect(self.useGamePad)
-
+        # select gamepad
+        self.gamepadMenu = self.optMenu.addMenu('&Select Gamepad')
+        self.gamepadMenu.aboutToShow.connect(lambda: self.detectGamepads())
+        # animation
         self.actSaveAnimation = QAction("&Save Animation", self, checkable=True)
         self.optMenu.addAction(self.actSaveAnimation)
 
@@ -431,8 +435,6 @@ class MainGui(QMainWindow):
         self.stopExp.connect(self.exp.stopExperiment)
         self.exp.expFinished.connect(self.saveLastMeas)
         self.exp.expStop.connect(self.stopExperiment)
-
-        self.gamepad = None
 
         self.visualizer = None
 
@@ -557,23 +559,49 @@ class MainGui(QMainWindow):
             self._logger.debug("Add '{}' to experiment list".format(exp["Name"]))
             self.experimentList.addItem(exp["Name"])
 
-    def useGamePad(self):
+    def detectGamepads(self):
+        # anonymous functoin to
+        def setGamepad(detectedDevices, index):
+            def fn():
+                self.selectGamepad(detectedDevices, index)
+            return fn
+
+        # clear menu bar
+        self.gamepadMenu.clear()
+
+        # detect all available Gamepads
+        detectedDevices = getAllGamepads()
+
+        if detectedDevices is None:
+            return
+
+        # build gamepadMenu items
+        for index, gamepad in enumerate(detectedDevices.gamepads):
+            selectGamepadAction = QAction(gamepad.name, self)
+            selectGamepadAction.setCheckable(True)
+            self.gamepadMenu.addAction(selectGamepadAction)
+            selectGamepadAction.triggered.connect(setGamepad(detectedDevices, index))
+            selectGamepadAction.setChecked(self.selectedGamepadIndex == index)
+
+    def selectGamepad(self, detectedDevices, index):
+        # stop existing gamepad
         if self.gamepad is not None:
             self.gamepad.stop()
             self.gamepad = None
+            self.selectedGamepadIndex = None
             for wid in self.remoteWidgetLayout.list:
                 if isinstance(wid, MovableSlider):
                     wid.updateGamePad(self.gamepad)
-
-        if self.actUseGamePad.isChecked():
-            self.gamepad = getGamepad()
-            if self.gamepad is not None:
-                self._logger.info('Gamepad connected')
-                for wid in self.remoteWidgetLayout.list:
-                    wid.updateGamePad(self.gamepad)
-            else:
-                self._logger.info('Gamepad not connected')
-                self.actUseGamePad.setChecked(False)
+        # construct new gamepad
+        self.gamepad = getGamepadByIndex(detectedDevices, index)
+        # check if construction succeeded
+        if self.gamepad is not None:
+            self._logger.info('Gamepad connected')
+            self.selectedGamepadIndex = index
+            for wid in self.remoteWidgetLayout.list:
+                wid.updateGamePad(self.gamepad)
+        else:
+            self._logger.info('Gamepad not connected')
 
     def setTimerTime(self):
         """
@@ -1324,7 +1352,26 @@ class MainGui(QMainWindow):
                     self.actStartExperiment.setDisabled(False)
             self.selectedExp = True
 
-            self.useGamePad()
+        # use gamepad
+        # stop existing gamepad
+        if self.gamepad is not None:
+            self.gamepad.stop()
+            self.gamepad = None
+            for wid in self.remoteWidgetLayout.list:
+                if isinstance(wid, MovableSlider):
+                    wid.updateGamePad(self.gamepad)
+        # construct new gamepad
+        if self.selectedGamepadIndex is not None:
+            self.gamepad = getGamepadByIndex(self.selectedGamepadIndex)
+            # check if construction succeeded
+            if self.gamepad is not None:
+                self._logger.info('Gamepad connected')
+                for wid in self.remoteWidgetLayout.list:
+                    wid.updateGamePad(self.gamepad)
+            else:
+                self._logger.info('Gamepad not connected')
+
+
 
     def _applyExperimentByIdx(self, index=0):
         """
@@ -1648,13 +1695,15 @@ class MainGui(QMainWindow):
         elif config['widgetType'] == "Slider":
             if 'shortcut-Gp' not in config:
                 config['shortcut-Gp'] = None
+            if 'invertSlider' not in config:
+                config['invertSlider'] = False
             sliderLabel = QLabel()
             sliderLabel.setFixedHeight(15)
             labelFont = sliderLabel.font()
             labelFont.setPointSize(8)
             sliderLabel.setFont(labelFont)
             self.remoteWidgetLayout.addWidget(sliderLabel)
-            widget = MovableSlider(config['name'], config['minSlider'], config['maxSlider'], config['stepSlider'],
+            widget = MovableSlider(config['name'], config['minSlider'], config['maxSlider'], config['invertSlider'], config['stepSlider'],
                                    sliderLabel,
                                    config['shortcutPlus'], config['shortcutMinus'], config['shortcut-Gp'],
                                    exp[config['Module']][config['Parameter']], module=config['Module'],

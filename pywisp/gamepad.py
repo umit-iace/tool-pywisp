@@ -29,10 +29,11 @@ class GamePad(QThread):
     btnStart = pyqtSignal()
     btnSelect = pyqtSignal()
 
-    def __init__(self, devices):
+    def __init__(self, devices, indexOfController):
         super().__init__()
 
         self._logger = logging.getLogger(self.__class__.__name__)
+        self.indexOfController = indexOfController
 
         self.devices = devices
         self.btnState = {}
@@ -116,19 +117,21 @@ class GamePad(QThread):
                 return
 
     def outputAbsEvent(self):
-        # sends number between -1 and 1 for abs values
+        # sends number between -0.5 and 0.5 for abs values
         for key, value in self.absState.items():
             sig = getattr(self, 'abs' + key)
-            if WIN:
-                sig.emit(self.absState[key] / self.stickResolution * 2)
-            else:
-                sig.emit(self.absState[key] / self.stickResolution)
+            sig.emit(self.absState[key] / self.stickResolution)
 
     def run(self):
         while self.runFlag:
             if WIN:
-                self.devices.gamepads[0].__check_state()
-            events = self.devices.gamepads[0]._do_iter()
+                self.devices.gamepads[self.indexOfController].__check_state()
+            try:
+                events = self.devices.gamepads[self.indexOfController]._do_iter()
+            except OSError:
+                self.runFlag = False
+                return
+
             if events is not None:
                 for event in events:
                     self.processEvent(event)
@@ -141,18 +144,29 @@ class GamePad(QThread):
             time.sleep(0.001)
 
 
-def getGamepad():
+def getGamepadByIndex(devices, index):
     """
     Detects if a gamepad is connected. Sets the input to gamepad if detected
 
     :return: gamepad or keyboard thread
     """
-    devices = rescan_devices()
-    if any(["GamePad" in des for des in [it[0] for it in [dir(dev) for dev in devices]]]):
-        ctrl = GamePad(devices)
+    if devices.gamepads[index] is None:
+        return None
+    else:
+        ctrl = GamePad(devices, index)
         ctrl.setTerminationEnabled(True)
         ctrl.start()
-
         return ctrl
+
+
+def getAllGamepads():
+    """
+    Detects all connected gamepads.
+
+    :return: list of detected Gamepads or "None" if empy
+    """
+    devices = rescan_devices()
+    if any(["GamePad" in des for des in [it[0] for it in [dir(dev) for dev in devices]]]):
+        return devices
     else:
         return None
