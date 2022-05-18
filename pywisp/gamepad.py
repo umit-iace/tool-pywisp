@@ -162,6 +162,6 @@ def getAllGamepads():
     :return: list of detected Gamepads or "None" if empy
     """
     if any(["GamePad" in des for des in [it[0] for it in [dir(dev) for dev in devices]]]):
-        return devices.gamepads #TODO: inputs erkennt nicht während laufzeit, dass neue devices dazugekommen sind
+        return devices.gamepads #TODO: inputs erkennt während laufzeit nicht, dass neue devices dazugekommen sind
     else:
         return None

@@ -573,10 +573,10 @@ class MainGui(QMainWindow):
         # detect all available Gamepads
         self.detectedGamepads = getAllGamepads()
 
-        # TODO: test deletion gamepadMenu items
+        # clear menu bar
         self.gamepadMenu.clear()
 
-        # build gamepadMenu items # TODO: selectGamepad bekommt immer den letzten übergeben
+        # build gamepadMenu items
         for index, gamepad in enumerate(self.detectedGamepads):
             selectGamepadAction = QAction(gamepad.name, self)
             selectGamepadAction.setCheckable(True)
@@ -1697,13 +1697,15 @@ class MainGui(QMainWindow):
         elif config['widgetType'] == "Slider":
             if 'shortcut-Gp' not in config:
                 config['shortcut-Gp'] = None
+            if 'invertSlider' not in config:
+                config['invertSlider'] = False
             sliderLabel = QLabel()
             sliderLabel.setFixedHeight(15)
             labelFont = sliderLabel.font()
             labelFont.setPointSize(8)
             sliderLabel.setFont(labelFont)
             self.remoteWidgetLayout.addWidget(sliderLabel)
-            widget = MovableSlider(config['name'], config['minSlider'], config['maxSlider'], config['stepSlider'],
+            widget = MovableSlider(config['name'], config['minSlider'], config['maxSlider'], config['invertSlider'], config['stepSlider'],
                                    sliderLabel,
                                    config['shortcutPlus'], config['shortcutMinus'], config['shortcut-Gp'],
                                    exp[config['Module']][config['Parameter']], module=config['Module'],
