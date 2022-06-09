@@ -120,7 +120,7 @@ class GamePad(QThread):
         # sends number between -0.5 and 0.5 for abs values
         for key, value in self.absState.items():
             sig = getattr(self, 'abs' + key)
-            sig.emit(self.absState[key] / self.stickResolution)
+            sig.emit(round(self.absState[key] / self.stickResolution, 3)) # BUGFIX: damit maximalwerte am slider erreicht werden können
 
     def run(self):
         while self.runFlag:
