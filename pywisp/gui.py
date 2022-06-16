@@ -43,6 +43,8 @@ from .utils import getResource, PlainTextLogger, DataPointBuffer, PlotChart, Exp
     ContextLineEditAction, TreeWidgetStyledItemDelegate
 
 from .visualization import MplVisualizer, VtkVisualizer
+from .gamepad import getGamepadByIndex
+from .gamepad import getAllGamepads
 
 
 class MainGui(QMainWindow):
@@ -327,12 +329,19 @@ class MainGui(QMainWindow):
         self.viewMenu.addAction(self.actShowCoords)
         self.actShowCoords.changed.connect(self.updateShowCoordsSetting)
 
-        # options
+        self.gamepad = None
+        self.selectedGamepadIndex = None
+
+        ### options
         self.optMenu = self.menuBar().addMenu('&Options')
+        # timer
         self.actTimerTime = QAction("&Timer time", self)
         self.optMenu.addAction(self.actTimerTime)
         self.actTimerTime.triggered.connect(self.setTimerTime)
-
+        # select gamepad
+        self.gamepadMenu = self.optMenu.addMenu('&Select Gamepad')
+        self.gamepadMenu.aboutToShow.connect(lambda: self.detectGamepads())
+        # animation
         self.actSaveAnimation = QAction("&Save Animation", self, checkable=True)
         self.optMenu.addAction(self.actSaveAnimation)
 
@@ -549,6 +558,50 @@ class MainGui(QMainWindow):
         for exp in self._experiments:
             self._logger.debug("Add '{}' to experiment list".format(exp["Name"]))
             self.experimentList.addItem(exp["Name"])
+
+    def detectGamepads(self):
+        # anonymous functoin to
+        def setGamepad(detectedDevices, index):
+            def fn():
+                self.selectGamepad(detectedDevices, index)
+            return fn
+
+        # clear menu bar
+        self.gamepadMenu.clear()
+
+        # detect all available Gamepads
+        detectedDevices = getAllGamepads()
+
+        if detectedDevices is None:
+            return
+
+        # build gamepadMenu items
+        for index, gamepad in enumerate(detectedDevices.gamepads):
+            selectGamepadAction = QAction(gamepad.name, self)
+            selectGamepadAction.setCheckable(True)
+            self.gamepadMenu.addAction(selectGamepadAction)
+            selectGamepadAction.triggered.connect(setGamepad(detectedDevices, index))
+            selectGamepadAction.setChecked(self.selectedGamepadIndex == index)
+
+    def selectGamepad(self, detectedDevices, index):
+        # stop existing gamepad
+        if self.gamepad is not None:
+            self.gamepad.stop()
+            self.gamepad = None
+            self.selectedGamepadIndex = None
+            for wid in self.remoteWidgetLayout.list:
+                if isinstance(wid, MovableSlider):
+                    wid.updateGamePad(self.gamepad)
+        # construct new gamepad
+        self.gamepad = getGamepadByIndex(detectedDevices, index)
+        # check if construction succeeded
+        if self.gamepad is not None:
+            self._logger.info('Gamepad connected')
+            self.selectedGamepadIndex = index
+            for wid in self.remoteWidgetLayout.list:
+                wid.updateGamePad(self.gamepad)
+        else:
+            self._logger.info('Gamepad not connected')
 
     def setTimerTime(self):
         """
@@ -1299,6 +1352,27 @@ class MainGui(QMainWindow):
                     self.actStartExperiment.setDisabled(False)
             self.selectedExp = True
 
+        # use gamepad
+        # stop existing gamepad
+        if self.gamepad is not None:
+            self.gamepad.stop()
+            self.gamepad = None
+            for wid in self.remoteWidgetLayout.list:
+                if isinstance(wid, MovableSlider):
+                    wid.updateGamePad(self.gamepad)
+        # construct new gamepad
+        if self.selectedGamepadIndex is not None:
+            self.gamepad = getGamepadByIndex(self.selectedGamepadIndex)
+            # check if construction succeeded
+            if self.gamepad is not None:
+                self._logger.info('Gamepad connected')
+                for wid in self.remoteWidgetLayout.list:
+                    wid.updateGamePad(self.gamepad)
+            else:
+                self._logger.info('Gamepad not connected')
+
+
+
     def _applyExperimentByIdx(self, index=0):
         """
         Applies the given experiment.
@@ -1349,7 +1423,7 @@ class MainGui(QMainWindow):
                     self.actStartExperiment.setEnabled(True)
                 self.actStopExperiment.setEnabled(False)
                 self.statusbarLabel.setText("Connected!")
-                connInstance.received.connect(lambda frame, conn=conn: self.updateData(frame, conn), type=Qt.DirectConnection)
+                connInstance.received.connect(lambda frame, conn=conn: self.updateData(frame, conn))
                 connInstance.finished.connect(self.disconnect)
                 self.connections[conn] = connInstance
                 self.isConnected = True
@@ -1595,7 +1669,10 @@ class MainGui(QMainWindow):
         if config['widgetType'] == "PushButton":
             if 'valueReset' not in config:
                 config['valueReset'] = ''
-            widget = MovablePushButton(config['name'], config['valueOn'], config['valueReset'], config['shortcut'],
+            if 'shortcut-Gp' not in config:
+                config['shortcut-Gp'] = None
+            widget = MovablePushButton(config['name'], config['valueOn'], config['valueReset'],
+                                       config['shortcut'], config['shortcut-Gp'],
                                        module=config['Module'], parameter=config['Parameter'])
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
@@ -1604,7 +1681,10 @@ class MainGui(QMainWindow):
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
         elif config['widgetType'] == "Switch":
-            widget = MovableSwitch(config['name'], config['valueOn'], config['valueOff'], config['shortcut'],
+            if 'shortcut-Gp' not in config:
+                config['shortcut-Gp'] = None
+            widget = MovableSwitch(config['name'], config['valueOn'], config['valueOff'],
+                                   config['shortcut'], config['shortcut-Gp'],
                                    module=config['Module'], parameter=config['Parameter'])
             widget.setFixedHeight(40)
             widget.setFixedWidth(100)
@@ -1613,14 +1693,19 @@ class MainGui(QMainWindow):
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
         elif config['widgetType'] == "Slider":
+            if 'shortcut-Gp' not in config:
+                config['shortcut-Gp'] = None
+            if 'invertSlider' not in config:
+                config['invertSlider'] = False
             sliderLabel = QLabel()
             sliderLabel.setFixedHeight(15)
             labelFont = sliderLabel.font()
             labelFont.setPointSize(8)
             sliderLabel.setFont(labelFont)
             self.remoteWidgetLayout.addWidget(sliderLabel)
-            widget = MovableSlider(config['name'], config['minSlider'], config['maxSlider'], config['stepSlider'],
-                                   sliderLabel, config['shortcutPlus'], config['shortcutMinus'],
+            widget = MovableSlider(config['name'], config['minSlider'], config['maxSlider'], config['invertSlider'], config['stepSlider'],
+                                   sliderLabel,
+                                   config['shortcutPlus'], config['shortcutMinus'], config['shortcut-Gp'],
                                    exp[config['Module']][config['Parameter']], module=config['Module'],
                                    parameter=config['Parameter'])
             widget.setFixedHeight(30)

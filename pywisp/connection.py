@@ -34,6 +34,9 @@ class ConnReader(QObject):
             except TimeoutError:
                 # intentionally empty
                 pass
+            except socket.timeout:
+                # intentionally empty
+                pass
             except Exception as e:
                 if not self.stop:
                     self.err.emit(f"connection dropped: {e}")
@@ -62,6 +65,7 @@ class Connection(QObject):
         thread.finished.connect(thread.deleteLater)
         self.thread = thread
         self.worker = worker
+        self.connected = False
 
     def workerror(self, err):
         self.worker.deleteLater()
@@ -82,8 +86,12 @@ class Connection(QObject):
         """
         push application data through min
         """
+        if not self.connected:
+            return
         try:
             self.tx.send((data['id'], data['msg']))
+        except TimeoutError:
+            pass
         except Exception as e:
             self._logger.error(f"cannot send data: {e}")
             self.disconnect()
@@ -92,10 +100,12 @@ class Connection(QObject):
         """ establish the connection """
         if self._connect():
             self.thread.start()
+            self.connected = True
             return True
 
     def disconnect(self):
         """ close the connection, stop worker and thread """
+        self.connected = False
         self.worker.quit()
         self._disconnect()
         self.thread.quit()
@@ -163,16 +173,17 @@ class SocketConnection(Connection):
     Simple Socket based Connection
     """
 
-    def __init__(self, socket, ip, port, **kwargs):
+    def __init__(self, socket, ip, port, timeout=0.01, **kwargs):
         self.ip = ip
         self.port = port
         self.sock = socket
+        self.timeout = timeout
         super().__init__(**kwargs)
 
     def _connect(self):
         try:
             self.sock.connect((self.ip, int(self.port)))
-            self.sock.settimeout(0.01)
+            self.sock.settimeout(self.timeout)
         except socket.error:
             self._logger.error("Connection to the server is not possible!")
             self.sock.close()
@@ -183,7 +194,7 @@ class SocketConnection(Connection):
         self.sock.close()
 
     def _recv(self):
-        return self.sock.recv(512)
+        return self.sock.recv(5120)
 
     @coroutine
     def _send(self):
@@ -197,7 +208,7 @@ class TcpConnection(SocketConnection):
     Simple Tcp Connection
     """
 
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, maxPayload=80, **kwargs):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         @coroutine
@@ -205,7 +216,7 @@ class TcpConnection(SocketConnection):
             """ send 1 byte id + 80 byte payload """
             while True:
                 id, data = (yield)
-                sink.send(bytes([id]) + data + bytes(80 - len(data)))
+                sink.send(bytes([id]) + data + bytes(maxPayload - len(data)))
 
         @coroutine
         def Receiver(sink):
@@ -213,11 +224,11 @@ class TcpConnection(SocketConnection):
             data = []
             while True:
                 data.extend((yield))
-                while len(data) >= 81:
-                    f, data = data[:81], data[81:]
+                while len(data) >= maxPayload + 1:
+                    f, data = data[:maxPayload + 1], data[maxPayload + 1:]
                     sink.send((f[0], bytes(f[1:])))
 
-        super().__init__(sock, ip, port, tx=Sender, rx=Receiver)
+        super().__init__(sock, ip, port, tx=Sender, rx=Receiver, **kwargs)
 
 
 class UdpConnection(SocketConnection):
@@ -225,6 +236,6 @@ class UdpConnection(SocketConnection):
     Simple Udp Connection
     """
 
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, **kwargs):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        super().__init__(sock, ip, port, tx=Packer, rx=[Bytewise, Unpacker])
+        super().__init__(sock, ip, port, tx=Packer, rx=[Bytewise, Unpacker], **kwargs)

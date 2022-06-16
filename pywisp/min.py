@@ -28,7 +28,7 @@ def FramePrinter():
     """ print unpacked data as coroutine. debug purposes only"""
     while True:
         f = yield
-        print(f'unpacked {f.id=} {f.payload=}')
+        print(f'unpacked {f.id} {f.payload}')
 
 @coroutine
 def Bytewise(sink):

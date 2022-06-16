@@ -19,6 +19,7 @@ Contents:
   transport/index
   examples/index
   modules/index
+  gamepad/index
   contributing
   authors
 

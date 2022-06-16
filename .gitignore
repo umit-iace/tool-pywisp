@@ -104,3 +104,5 @@ Makefile
 *.cmake
 
 server
+
+sh.exe.stackdump
