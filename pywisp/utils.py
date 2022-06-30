@@ -917,7 +917,7 @@ class MovableSlider(DoubleSlider, MovableWidget):
                                                                 self.setValue(absVal * sliderDim))
                         else:
                             getattr(self.gamepad, name).connect(lambda absVal:
-                                                                self.setValue(-absVal *sliderDim))
+                                                                self.setValue(-absVal * sliderDim))
                     else:
                         self._logger.error("{} is not an absolute button!".format(self.shortcutKeyGp))
                 except ValueError:

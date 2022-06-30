@@ -46,10 +46,7 @@ class GamePad(QThread):
         self.abbrevs = self.configureAbbrevs()
         for key, value in self.abbrevs.items():
             if key.startswith('Absolute'):
-                if WIN:
-                    self.absState[value] = 0
-                else:
-                    self.absState[value] = int(self.stickResolution / 2)
+                self.absState[value] = 0
             if key.startswith('Key'):
                 self.btnState[value] = 0
                 self.oldBtnState[value] = 0
@@ -120,7 +117,11 @@ class GamePad(QThread):
         # sends number between -0.5 and 0.5 for abs values
         for key, value in self.absState.items():
             sig = getattr(self, 'abs' + key)
-            sig.emit(round(self.absState[key] / self.stickResolution, 3))
+            if WIN:
+                keyValue = round(self.absState[key] / self.stickResolution, 3)
+            else:
+                keyValue = round(self.absState[key] / self.stickResolution, 3) - 0.5
+            sig.emit(keyValue)
 
     def run(self):
         while self.runFlag:
