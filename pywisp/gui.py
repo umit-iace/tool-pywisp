@@ -129,9 +129,12 @@ class MainGui(QMainWindow):
         self.statusBar.addPermanentWidget(self.statusbarLabel, 1)
         self.guiStartTime = 0.0
         self.guiTimer = QTimer()
-        # set most precise timer type
-        self.guiTimer.setTimerType(0)
-        self.guiTimer.timeout.connect(self.updateGuiTimeLabel)
+        self.guiTimer.setTimerType(Qt.PreciseTimer)
+        self.guiTimer.timeout.connect(
+            lambda: self.guiTimeLabel.setText(
+                f"GUI time={timeString(time.time()-self.guiStartTime)}"
+            )
+        )
         self.guiTimeLabel = QLabel("GUI time=00:00:00")
         self.statusBar.addPermanentWidget(self.guiTimeLabel, 1)
         self.expTimeLabel = QLabel("Exp time=00:00:00")
@@ -1139,7 +1142,6 @@ class MainGui(QMainWindow):
         self.exp.runExperiment()
 
         self.guiStartTime = time.time()
-        self.updateGuiTimeLabel()
         self.guiTimer.start(1000)
 
     @pyqtSlot()
@@ -1488,7 +1490,7 @@ class MainGui(QMainWindow):
             if key in names:
                 value.addValue(time, dataPoints[key])
 
-        time_text = "Exp time={:02d}:{:02d}:{:02d}".format(int(time // 3600), int(time // 60), int(time % 60))
+        time_text = "Exp time={}".format(timeString(time))
         self.expTimeLabel.setText(time_text)
 
     def updateDataPlots(self):
@@ -1826,8 +1828,10 @@ class MainGui(QMainWindow):
         elif action == saveAction:
             self.copyRemoteSource()
 
-    def updateGuiTimeLabel(self):
-        elapsedSeconds = time.time() - self.guiStartTime
-        time_text = "GUI time={:02d}:{:02d}:{:02d}".format(int(elapsedSeconds // 3600), int(elapsedSeconds // 60),
-                                                           int(elapsedSeconds % 60))
-        self.guiTimeLabel.setText(time_text)
+def timeString(seconds):
+    return "{:02d}:{:02d}:{:02d}".format(
+            int(seconds // 3600),
+            int(seconds % 3600 // 60),
+            int(seconds % 60),
+        )
+
