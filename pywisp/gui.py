@@ -1135,7 +1135,7 @@ class MainGui(QMainWindow):
         self.lastMeasList.scrollToItem(item)
         self.copyLastMeas(item)
 
-        self.timer.start(int(self.config['TimerTime']))
+        self.timer.start(max(int(self.config['TimerTime']), 40)) # ~25 fps should be plenty
         if self.config['HeartbeatTime']:
             self.heartbeatTimer.start(int(self.config['HeartbeatTime']))
         self.exp.runExperiment()
