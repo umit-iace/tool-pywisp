@@ -24,7 +24,7 @@ class TwoPendulum(ExperimentModule):
         dataPoints = {}
         fid = frame.min_id
         if fid == 10:
-            data = struct.unpack('>L4d', frame.payload[:36])
+            data = struct.unpack('<L4d', frame.payload[:36])
             dataPoints['Time'] = data[0]
             dataPoints['DataPoints'] = {'x': data[1],
                                         'phi1': data[2],
