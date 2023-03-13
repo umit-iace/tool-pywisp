@@ -53,7 +53,7 @@ class Connection(QObject):
     received = pyqtSignal(Frame)
     finished = pyqtSignal()
 
-    def __init__(self, rx, tx):
+    def __init__(self, rx, tx, *args, **kwargs):
         super().__init__()
         self._logger = logging.getLogger(self.__class__.__name__)
         self.tx = pipe([tx, self._send])
@@ -109,6 +109,7 @@ class Connection(QObject):
         self.worker.quit()
         self._disconnect()
         self.thread.quit()
+        self.finished.emit()
 
     @abstractmethod
     def _connect(self):
@@ -182,8 +183,8 @@ class SocketConnection(Connection):
 
     def _connect(self):
         try:
-            self.sock.connect((self.ip, int(self.port)))
             self.sock.settimeout(self.timeout)
+            self.sock.connect((self.ip, int(self.port)))
         except socket.error:
             self._logger.error("Connection to the server is not possible!")
             self.sock.close()
@@ -194,7 +195,7 @@ class SocketConnection(Connection):
         self.sock.close()
 
     def _recv(self):
-        return self.sock.recv(5120)
+        return self.sock.recv(512*4)
 
     @coroutine
     def _send(self):
