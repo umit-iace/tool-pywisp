@@ -463,7 +463,7 @@ class MainGui(QMainWindow):
 
     def _getTcpMenu(self, settings):
         # ip and port
-        ip, port, ok = DataTcpIpDialog.getData(ip=settings['ip'], port=settings['port'])
+        ip, port, ok = DataTcpIpDialog.getData(parent=self,ip=settings['ip'], port=settings['port'])
 
         if ok:
             settings['ip'] = ip
@@ -610,7 +610,7 @@ class MainGui(QMainWindow):
         Sets the timer time in settings with a dialog.
         """
         self._settings.beginGroup('plot')
-        timerTime, ok = DataIntDialog.getData(title="Timer Time", min=2, max=10000, unit='ms',
+        timerTime, ok = DataIntDialog.getData(parent=self,title="Timer Time", min=2, max=10000, unit='ms',
                                               current=self.config['TimerTime'])
 
         if ok:
