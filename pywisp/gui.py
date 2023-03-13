@@ -35,12 +35,12 @@ from PyQt5.QtWidgets import *
 from pyqtgraph import PlotWidget, TextItem
 from pyqtgraph.dockarea import *
 
-from .connection import SerialConnection, TcpConnection, UdpConnection
+from .connection import SerialConnection, TcpConnection, UdpConnection, IACEConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .utils import getResource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
     DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, PinnedDock, \
-    ContextLineEditAction, TreeWidgetStyledItemDelegate
+    ContextLineEditAction, TreeWidgetStyledItemDelegate, IACEConnDialog
 
 from .visualization import MplVisualizer, VtkVisualizer
 from .gamepad import getGamepadByIndex
@@ -369,6 +369,9 @@ class MainGui(QMainWindow):
                 if conn.settings['port'] == '':
                     self.setDefaultComPort(conn.settings, serialCnt)
                 serialCnt += 1
+            elif issubclass(conn, IACEConnection):
+                actTcp = self.connMenu.addAction(conn.__name__)
+                actTcp.triggered.connect(lambda _, settings=conn.settings: self._getIACEMenu(settings))
             elif issubclass(conn, TcpConnection) or issubclass(conn, UdpConnection) :
                 actTcp = self.connMenu.addAction(conn.__name__)
                 actTcp.triggered.connect(lambda _, settings=conn.settings: self._getTcpMenu(settings))
@@ -460,6 +463,14 @@ class MainGui(QMainWindow):
         available = getRegisteredVisualizers()
 
         self.setVisualizer(available[visName])
+
+    def _getIACEMenu(self, settings):
+        data = IACEConnDialog.getData(parent=self,**settings)
+        if data:
+            ip, port = data
+            print(f"got {ip=} from Dialog")
+            settings['ip'] = ip
+            settings['port'] = port
 
     def _getTcpMenu(self, settings):
         # ip and port
