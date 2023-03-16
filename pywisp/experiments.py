@@ -161,11 +161,8 @@ class ExperimentInteractor(QObject):
         :param moduleName: the given experiment module name
         :return: settings of module or raise an exception if module is unknown
         """
-        for module in getRegisteredExperimentModules():
-            if module[1] == moduleName:
-                return module[0].publicSettings
-
-        raise ExperimentException("_readSettings(): No module called {} found!".format(moduleName))
+        modules = getRegisteredExperimentModules()
+        return modules[moduleName].publicSettings
 
     def _readDataPoints(self, moduleName):
         """
@@ -173,11 +170,8 @@ class ExperimentInteractor(QObject):
         :param moduleName: the given experiment module name
         :return: data points of module or raise an exception if module is unknown
         """
-        for module in getRegisteredExperimentModules():
-            if module[1] == moduleName:
-                return module[0].dataPoints
-
-        raise ExperimentException("_readDataPoints(): No module called {} found!".format(moduleName))
+        modules = getRegisteredExperimentModules()
+        return modules[moduleName].dataPoints
 
     def itemChanged(self, item):
         """
@@ -367,17 +361,12 @@ class ExperimentInteractor(QObject):
             self._logger.warn("rig missed heartbeat! disconnecting...")
             self.missedbeat.emit()
             return None
-        for row in range(self.targetModel.rowCount()):
-            index = self.targetModel.index(row, 0)
-
-            parent = index.model().itemFromIndex(index)
-            moduleName = parent.data(role=PropertyItem.RawDataRole)
-
-            for module in getRegisteredExperimentModules():
-                if module[1] == moduleName and module[0].connection == connection.__name__:
-                    dataPoints = module[0].handleFrame(module[0], frame)
-                    if dataPoints is not None:
-                        return dataPoints
+        for mod, _, _ in self.activeModules():
+            if mod.connection != connection:
+                continue
+            dataPoints = mod.handleFrame(mod,frame)
+            if dataPoints:
+                return dataPoints
 
         return None
 
@@ -393,41 +382,17 @@ class ExperimentInteractor(QObject):
         data = []
         self.runningExperiment = True
         try:
-            for row in range(self.targetModel.rowCount()):
-                index = self.targetModel.index(row, 0)
+            for mod, name, settings in self.activeModules():
 
-                parent = index.model().itemFromIndex(index)
-                moduleName = parent.data(role=PropertyItem.RawDataRole)
+                self.modSets[name] = cp.copy(settings)
+                vals = list(settings.values())
 
-                for module in getRegisteredExperimentModules():
-                    if module[1] == moduleName:
-                        settings = self.getSettings(parent)
-                        self.modSets[moduleName] = cp.copy(settings)
-                        vals = []
-                        for key, val in settings.items():
-                            if val is not None:
-                                vals.append(val)
+                startParams = mod.getStartParams(mod,vals)
+                data.extend(self.paramsToConnData(startParams, mod.connection))
 
-                        startParams = module[0].getStartParams(module[0], vals)
-                        if startParams is not None:
-                            if isinstance(startParams, list):
-                                for _startParams in startParams:
-                                    _startParams['connection'] = module[0].connection
-                                    data.append(_startParams)
-                            else:
-                                startParams['connection'] = module[0].connection
-                                data.append(startParams)
+                params = mod.getParams(mod,vals)
+                data.extend(self.paramsToConnData(params, mod.connection))
 
-                        params = module[0].getParams(module[0], vals)
-                        if params and not None:
-                            if isinstance(params, list):
-                                for _params in params:
-                                    _params['connection'] = module[0].connection
-                                    data.append(_params)
-                            else:
-                                params['connection'] = module[0].connection
-                                data.append(params)
-                        break
         except ExperimentModuleException as eme:
             self._logger.error(eme)
             self.runningExperiment = False
@@ -448,32 +413,15 @@ class ExperimentInteractor(QObject):
         Sends changed parameters of all modules that are registered in the target model to an experiment.
         """
         data = []
-        for row in range(self.targetModel.rowCount()):
-            index = self.targetModel.index(row, 0)
+        for mod, name, settings in self.activeModules():
 
-            parent = index.model().itemFromIndex(index)
-            moduleName = parent.data(role=PropertyItem.RawDataRole)
-
-            for module in getRegisteredExperimentModules():
-                if module[1] == moduleName:
-                    settings = self.getSettings(parent)
-                    if self.modSets[moduleName] == settings:
-                        break
-                    self.modSets[moduleName] = cp.copy(settings)
-                    vals = []
-                    for key, val in settings.items():
-                        if val is not None:
-                            vals.append(val)
-                    params = module[0].getParams(module[0], vals)
-                    if params and not None:
-                        if isinstance(params, list):
-                            for _params in params:
-                                _params['connection'] = module[0].connection
-                                data.append(_params)
-                        else:
-                            params['connection'] = module[0].connection
-                            data.append(params)
-                    break
+            if self.modSets[name] == settings:
+                print('continuing')
+                continue
+            self.modSets[name] = cp.copy(settings)
+            vals = list(settings.values())
+            params = mod.getParams(mod,vals)
+            data.extend(self.paramsToConnData(params, mod.connection))
 
         for _data in data:
             self.sendData.emit(_data)
@@ -483,29 +431,11 @@ class ExperimentInteractor(QObject):
         Sends all parameters of all modules that are registered in the target model to an experiment.
         """
         data = []
-        for row in range(self.targetModel.rowCount()):
-            index = self.targetModel.index(row, 0)
+        for mod, name, settings in self.activeModules():
 
-            parent = index.model().itemFromIndex(index)
-            moduleName = parent.data(role=PropertyItem.RawDataRole)
-
-            for module in getRegisteredExperimentModules():
-                if module[1] == moduleName:
-                    settings = self.getSettings(parent)
-                    vals = []
-                    for key, val in settings.items():
-                        if val is not None:
-                            vals.append(val)
-                    params = module[0].getParams(module[0], vals)
-                    if params and not None:
-                        if isinstance(params, list):
-                            for _params in params:
-                                _params['connection'] = module[0].connection
-                                data.append(_params)
-                        else:
-                            params['connection'] = module[0].connection
-                            data.append(params)
-                    break
+            vals = list(settings.values())
+            params = mod.getParams(mod,vals)
+            data.extend(self.paramsToConnData(params, mod.connection))
 
         for _data in data:
             self.sendData.emit(_data)
@@ -521,30 +451,12 @@ class ExperimentInteractor(QObject):
             return
 
         self.runningExperiment = False
-        for row in range(self.targetModel.rowCount()):
-            index = self.targetModel.index(row, 0)
+        for mod, name, settings in self.activeModules():
 
-            parent = index.model().itemFromIndex(index)
-            moduleName = parent.data(role=PropertyItem.RawDataRole)
+            vals = list(settings.values())
 
-            for module in getRegisteredExperimentModules():
-                if module[1] == moduleName:
-                    settings = self.getSettings(parent)
-                    vals = []
-                    for key, val in settings.items():
-                        if val is not None:
-                            vals.append(val)
-
-                    stopParams = module[0].getStopParams(module[0], vals)
-                    if stopParams is not None:
-                        if isinstance(stopParams, list):
-                            for _stopParams in stopParams:
-                                _stopParams['connection'] = module[0].connection
-                                data.append(_stopParams)
-                        else:
-                            stopParams['connection'] = module[0].connection
-                            data.append(stopParams)
-                    break
+            stopParams = mod.getStopParams(mod,vals)
+            data.extend(self.paramsToConnData(stopParams, mod.connection))
 
         # stop experiment
         if broadcast:
@@ -564,15 +476,27 @@ class ExperimentInteractor(QObject):
         """
         exp = {'Name': self.targetModel.getName()}
 
-        for row in range(self.targetModel.rowCount()):
-            index = self.targetModel.index(row, 0)
-
-            parent = index.model().itemFromIndex(index)
-            moduleName = parent.data(role=PropertyItem.RawDataRole)
-
-            for module in getRegisteredExperimentModules():
-                if module[1] == moduleName:
-                    exp[moduleName] = self.getSettings(parent)
-                    break
+        for _, name, settings in self.activeModules():
+            exp[name] = settings
 
         return exp
+
+    def activeModules(self):
+        for row in range(self.targetModel.rowCount()):
+            index = self.targetModel.index(row, 0)
+            parent = index.model().itemFromIndex(index)
+            settings = self.getSettings(parent)
+            name = parent.data(role=PropertyItem.RawDataRole)
+            mod = getRegisteredExperimentModules()[name]
+            yield mod, name, settings
+
+    def paramsToConnData(self, params, conn):
+            if not params:
+                return []
+            data = []
+            if not isinstance(params, list):
+                params = [params]
+            for p in params:
+                p['connection'] = conn
+                data.append(p)
+            return data
