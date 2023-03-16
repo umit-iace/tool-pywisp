@@ -354,7 +354,7 @@ class MainGui(QMainWindow):
 
         availableConns = getRegisteredConnections()
         if availableConns:
-            for cls, name in availableConns:
+            for name, cls in availableConns.items():
                 self._logger.info("Found Connection: {}".format(name))
                 self.connections[cls] = {}
         else:
@@ -457,12 +457,9 @@ class MainGui(QMainWindow):
             self.animationLayout.itemAt(i).widget().setParent(None)
 
         visName = self.visComboBox.itemText(idx)
-        availableVis = getRegisteredVisualizers()
+        available = getRegisteredVisualizers()
 
-        for aVis in availableVis:
-            if aVis[1] == visName:
-                self.setVisualizer(aVis[0])
-                break
+        self.setVisualizer(available[visName])
 
     def _getTcpMenu(self, settings):
         # ip and port
@@ -1280,10 +1277,7 @@ class MainGui(QMainWindow):
         if availableVis and 'Visu' in self._experiments[idx]:
             if self._experiments[idx]['Visu'] is not None:
                 for vis in self._experiments[idx]['Visu']:
-                    for avis in availableVis:
-                        if vis == avis[1]:
-                            used.append(avis)
-                            break
+                    used.append(availableVis[vis])
             else:
                 self._logger.warning("No Visualization configured!")
                 self.visualizer = None
@@ -1294,10 +1288,10 @@ class MainGui(QMainWindow):
         self.visComboBox.clear()
         self.visComboBox.disconnect()
         for vis in used:
-            self.visComboBox.addItem(vis[1])
+            self.visComboBox.addItem(vis.__name__)
         self.visComboBox.currentIndexChanged.connect(self.visualizerChanged)
-        self._logger.info("loading visualizer '{}'".format(used[0][1]))
-        self.setVisualizer(used[0][0])
+        self._logger.info("loading visualizer '{}'".format(used[0].__name__))
+        self.setVisualizer(used[0])
 
     def setVisualizer(self, vis):
         if issubclass(vis, MplVisualizer):
@@ -1427,7 +1421,7 @@ class MainGui(QMainWindow):
                     self.actStartExperiment.setEnabled(True)
                 self.actStopExperiment.setEnabled(False)
                 self.statusbarLabel.setText("Connected!")
-                connInstance.received.connect(lambda frame, conn=conn: self.updateData(frame, conn))
+                connInstance.received.connect(lambda frame, conn=conn: self.updateData(frame, conn.__name__))
                 connInstance.finished.connect(self.disconnect)
                 self.connections[conn] = connInstance
                 self.isConnected = True
