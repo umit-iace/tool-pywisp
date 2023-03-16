@@ -35,7 +35,7 @@ from PyQt5.QtWidgets import *
 from pyqtgraph import PlotWidget, TextItem
 from pyqtgraph.dockarea import *
 
-from .connection import SerialConnection, TcpConnection, UdpConnection, IACEConnection
+from .connection import SerialConnection, SocketConnection, IACEConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .utils import getResource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
@@ -355,26 +355,27 @@ class MainGui(QMainWindow):
         availableConns = getRegisteredConnections()
         if availableConns:
             for name, cls in availableConns.items():
-                self._logger.info("Found Connection: {}".format(name))
-                self.connections[cls] = {}
+                self._logger.info(f"Found Connection: {name}")
+                self.connections[name] = {'cls':cls}
         else:
             self._logger.error("No Connections found, return!")
             # return
 
         serialCnt = 0
-        for conn, connInstance in self.connections.items():
-            if issubclass(conn, SerialConnection):
-                serialMenu = self.connMenu.addMenu(conn.__name__)
-                self._getSerialMenu(serialMenu, conn.settings)
-                if conn.settings['port'] == '':
-                    self.setDefaultComPort(conn.settings, serialCnt)
+        for name, conn in self.connections.items():
+            cls = conn['cls']
+            if issubclass(cls, SerialConnection):
+                serialMenu = self.connMenu.addMenu(name)
+                self._getSerialMenu(serialMenu, cls.settings)
+                if cls.settings['port'] == '':
+                    self.setDefaultComPort(cls.settings, serialCnt)
                 serialCnt += 1
-            elif issubclass(conn, IACEConnection):
-                actTcp = self.connMenu.addAction(conn.__name__)
+            elif issubclass(cls, IACEConnection):
+                actTcp = self.connMenu.addAction(name)
                 actTcp.triggered.connect(lambda _, settings=conn.settings: self._getIACEMenu(settings))
-            elif issubclass(conn, TcpConnection) or issubclass(conn, UdpConnection) :
-                actTcp = self.connMenu.addAction(conn.__name__)
-                actTcp.triggered.connect(lambda _, settings=conn.settings: self._getTcpMenu(settings))
+            elif issubclass(cls, SocketConnection):
+                actTcp = self.connMenu.addAction(name)
+                actTcp.triggered.connect(lambda _, settings=cls.settings: self._getTcpMenu(settings))
             else:
                 self._logger.warning("Cannot handle the connection type!")
             self.connMenu.addSeparator()
@@ -1422,22 +1423,22 @@ class MainGui(QMainWindow):
         """
         Connects all connections and sets the button states.
         """
-        for conn, _ in self.connections.items():
-            connInstance = conn()
+        for name, conn in self.connections.items():
+            connInstance = conn['cls']()
             if connInstance.connect():
-                self._logger.info("Connection for {} established!".format(conn.__name__))
+                self._logger.info(f"Connection for {name} established!")
                 self.actConnect.setEnabled(False)
                 self.actDisconnect.setEnabled(True)
                 if self._currentExpListItem is not None and self.selectedExp:
                     self.actStartExperiment.setEnabled(True)
                 self.actStopExperiment.setEnabled(False)
                 self.statusbarLabel.setText("Connected!")
-                connInstance.received.connect(lambda frame, conn=conn: self.updateData(frame, conn.__name__))
+                connInstance.received.connect(lambda frame: self.updateData(frame, name))
                 connInstance.finished.connect(self.disconnect)
-                self.connections[conn] = connInstance
+                self.connections[name]['inst'] = connInstance
                 self.isConnected = True
             else:
-                self._logger.warning("No connection for {} established! Check your settings!".format(conn.__name__))
+                self._logger.warning(f"No connection for {name} established! Check your settings!")
                 self.isConnected = False
                 return
 
@@ -1446,11 +1447,11 @@ class MainGui(QMainWindow):
         PySignal function, that sends the given data to the connections
         :param data: to send data
         """
-        for conn, connInstance in self.connections.items():
-            if connInstance and data['id'] == 1:
-                connInstance.writeData(data)
-            elif connInstance and data['connection'] == conn.__name__:
-                connInstance.writeData(data)
+        if data['id'] == 1:
+            for conn in self.connections.values():
+                conn['inst'].writeData(data)
+        else:
+            self.connections[data['connection']]['inst'].writeData(data)
 
     @pyqtSlot()
     def disconnect(self):
@@ -1460,10 +1461,10 @@ class MainGui(QMainWindow):
         if self.actStopExperiment.isEnabled():
             self.stopExperiment()
 
-        for conn, connInstance in self.connections.items():
-            if connInstance:
-                connInstance.disconnect()
-                self.connections[conn] = None
+        for conn in self.connections.values():
+            if conn.get('inst', None):
+                conn['inst'].disconnect()
+                del conn['inst']
         self.actConnect.setEnabled(True)
         self.actDisconnect.setEnabled(False)
         self.actStartExperiment.setEnabled(False)
@@ -1493,9 +1494,8 @@ class MainGui(QMainWindow):
         dataPoints = data['DataPoints']
         names = data['DataPoints'].keys()
 
-        for key, value in self._currentDataPointBuffers.items():
-            if key in names:
-                value.addValue(time, dataPoints[key])
+        for key in names:
+            self._currentDataPointBuffers[key].addValue(time, dataPoints[key])
 
         time_text = "Exp time={}".format(timeString(time))
         self.expTimeLabel.setText(time_text)
