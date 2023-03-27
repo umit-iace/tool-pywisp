@@ -10,7 +10,7 @@ beamLength = 1.575                          # m
 beamHeight = 0.010                          # m
 
 # cart parameter
-cartMass = 1.0                              # kg
+cartMass = 10.0                              # kg
 
 # pendulum parameter
 pendulum1Mass = 0.1                         # kg
