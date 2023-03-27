@@ -128,6 +128,7 @@ class ExperimentInteractor(QObject):
     expFinished = pyqtSignal()
     expStop = pyqtSignal()
     sendData = pyqtSignal(object)
+    missedbeat = pyqtSignal()
 
     def __init__(self, targetView, parent=None):
         QObject.__init__(self, parent)
@@ -361,6 +362,11 @@ class ExperimentInteractor(QObject):
         :param connection: connection of the frame
         :return: data points or None if nothing found
         """
+        if frame.id == 1:
+            self.stopExperiment(broadcast=False)
+            self._logger.warn("rig missed heartbeat! disconnecting...")
+            self.missedbeat.emit()
+            return None
         for row in range(self.targetModel.rowCount()):
             index = self.targetModel.index(row, 0)
 
@@ -504,7 +510,7 @@ class ExperimentInteractor(QObject):
         for _data in data:
             self.sendData.emit(_data)
 
-    def stopExperiment(self):
+    def stopExperiment(self, broadcast=True):
         """
         Sends all stop parameters of all modules that are registered in the target model to stop an experiment and
         adds and frame with id 1 and payload 0 as general stop command.
@@ -541,12 +547,13 @@ class ExperimentInteractor(QObject):
                     break
 
         # stop experiment
-        payload = bytes([0])
+        if broadcast:
+            payload = bytes([0])
 
-        data.append({'id': 1,
-                     'msg': payload})
-        for _data in data:
-            self.sendData.emit(_data)
+            data.append({'id': 1,
+                         'msg': payload})
+            for _data in data:
+                self.sendData.emit(_data)
 
         self.expFinished.emit()
 
