@@ -441,6 +441,7 @@ class MainGui(QMainWindow):
         self.exp.expStop.connect(self.stopExperiment)
 
         self.visualizer = None
+        self.vtkWidget = None
 
         self._updateExperimentsList()
 
@@ -1497,6 +1498,8 @@ class MainGui(QMainWindow):
     def updateDataPlots(self):
         if self.visualizer:
             self.visualizer.update(self._currentDataPointBuffers)
+            if self.vtkWidget is not None:
+                self.vtkWidget.GetRenderWindow().GetInteractor().Render()
 
         for chart in self.plotCharts:
             chart.updatePlot()
