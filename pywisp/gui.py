@@ -1462,7 +1462,7 @@ class MainGui(QMainWindow):
             self.stopExperiment()
 
         for conn in self.connections.values():
-            if conn.get('inst', None):
+            if conn.get('inst', None) and conn['inst'].connected:
                 conn['inst'].disconnect()
                 del conn['inst']
         self.actConnect.setEnabled(True)
