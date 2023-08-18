@@ -1152,8 +1152,9 @@ class MainGui(QMainWindow):
             self.heartbeatTimer.start(int(self.config['HeartbeatTime']))
         self.exp.runExperiment()
 
-        self.guiStartTime = time.time()
-        self.guiTimer.start(1000)
+        if self.actStopExperiment.isEnabled():
+            self.guiStartTime = time.time()
+            self.guiTimer.start(1000)
 
     @pyqtSlot()
     def stopExperiment(self):
