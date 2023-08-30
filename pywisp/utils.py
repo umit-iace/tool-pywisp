@@ -418,6 +418,87 @@ class DataIntDialog(QDialog):
 
         return data, result == QDialog.Accepted
 
+class IACEConnDialog(QDialog):
+    MAP = [
+   ('Marbot1',
+     '48:3F:DA:06:DF:9D',
+     '10.4.22.221'),
+   ('Marbot2',
+     '48:3F:DA:06:B5:45',
+     '10.4.22.222'),
+   ('nTrailer 1',
+     'A4:CF:12:D9:49:70',
+     '10.4.22.223'),
+   ('Tank Aufbau 1',
+     '94:3C:C6:D1:14:6C',
+     '10.4.22.224'),
+   ('Tank Aufbau 2',
+     '94:3C:C6:D1:14:84',
+     '10.4.22.225'),
+   ('Tank Aufbau 3',
+     '94:3C:C6:D1:14:A8',
+     '10.4.22.226'),
+   ('Tank Aufbau 4',
+     '94:3C:C6:D1:14:78',
+     '10.4.22.227'),
+   ('A',
+     'A4:CF:12:D9:46:C1',
+     '10.4.22.228'),
+   ('B',
+     'A4:CF:12:D9:47:03',
+     '10.4.22.229'),
+   ('C',
+     'A4:CF:12:D9:47:1D',
+     '10.4.22.230'),
+   ('D',
+     'A4:CF:12:D9:47:31',
+     '10.4.22.231'),
+   ('E',
+     'A4:CF:12:D9:47:D4',
+     '10.4.22.232'),
+   ('F',
+     'A4:CF:12:D9:47:81',
+     '10.4.22.233'),
+   ('Station 1',
+     '10:52:1C:E0:24:F7',
+     '10.4.22.234'),
+   ('Station 2',
+     '48:3F:DA:7F:B1:B7',
+     '10.4.22.235'),
+   ('Station 3',
+     'A4:CF:12:BB:3E:DB',
+     '10.4.22.236'),
+   ('Station 4',
+     '48:3F:DA:7F:B4:7B',
+     '10.4.22.237'),
+   ('HeliRack',
+     '94:3C:C6:D1:14:A4',
+     '10.4.22.238'),
+    ]
+    def __init__(self, *args, **kwargs):
+        parent = kwargs.get('parent', None)
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        self.box = QComboBox()
+        for item in self.MAP:
+            self.box.addItem(f'{item[0]} / {item[1][-8:]}', item[2])
+        self.box.currentTextChanged.connect(lambda text: print(f"box changed data: {text}"))
+        layout.addWidget(self.box)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
+            Qt.Horizontal, self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+    @staticmethod
+    def getData(*args, **kwargs):
+        dialog = IACEConnDialog(*args, **kwargs)
+        result = dialog.exec_()
+        if result == QDialog.Accepted:
+            ip = dialog.box.currentData()
+            port = 45670
+            return ip, port
 
 class DataTcpIpDialog(QDialog):
     """

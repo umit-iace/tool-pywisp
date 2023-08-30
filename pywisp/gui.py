@@ -35,12 +35,12 @@ from PyQt5.QtWidgets import *
 from pyqtgraph import PlotWidget, TextItem
 from pyqtgraph.dockarea import *
 
-from .connection import SerialConnection, TcpConnection, UdpConnection
+from .connection import SerialConnection, SocketConnection, IACEConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .utils import getResource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
     DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, PinnedDock, \
-    ContextLineEditAction, TreeWidgetStyledItemDelegate
+    ContextLineEditAction, TreeWidgetStyledItemDelegate, IACEConnDialog
 
 from .visualization import MplVisualizer, VtkVisualizer
 from .gamepad import getGamepadByIndex
@@ -354,24 +354,28 @@ class MainGui(QMainWindow):
 
         availableConns = getRegisteredConnections()
         if availableConns:
-            for cls, name in availableConns:
-                self._logger.info("Found Connection: {}".format(name))
-                self.connections[cls] = {}
+            for name, cls in availableConns.items():
+                self._logger.info(f"Found Connection: {name}")
+                self.connections[name] = {'cls':cls}
         else:
             self._logger.error("No Connections found, return!")
             # return
 
         serialCnt = 0
-        for conn, connInstance in self.connections.items():
-            if issubclass(conn, SerialConnection):
-                serialMenu = self.connMenu.addMenu(conn.__name__)
-                self._getSerialMenu(serialMenu, conn.settings)
-                if conn.settings['port'] == '':
-                    self.setDefaultComPort(conn.settings, serialCnt)
+        for name, conn in self.connections.items():
+            cls = conn['cls']
+            if issubclass(cls, SerialConnection):
+                serialMenu = self.connMenu.addMenu(name)
+                self._getSerialMenu(serialMenu, cls.settings)
+                if cls.settings['port'] == '':
+                    self.setDefaultComPort(cls.settings, serialCnt)
                 serialCnt += 1
-            elif issubclass(conn, TcpConnection) or issubclass(conn, UdpConnection) :
-                actTcp = self.connMenu.addAction(conn.__name__)
-                actTcp.triggered.connect(lambda _, settings=conn.settings: self._getTcpMenu(settings))
+            elif issubclass(cls, IACEConnection):
+                actTcp = self.connMenu.addAction(name)
+                actTcp.triggered.connect(lambda _, settings=conn.settings: self._getIACEMenu(settings))
+            elif issubclass(cls, SocketConnection):
+                actTcp = self.connMenu.addAction(name)
+                actTcp.triggered.connect(lambda _, settings=cls.settings: self._getTcpMenu(settings))
             else:
                 self._logger.warning("Cannot handle the connection type!")
             self.connMenu.addSeparator()
@@ -457,16 +461,21 @@ class MainGui(QMainWindow):
             self.animationLayout.itemAt(i).widget().setParent(None)
 
         visName = self.visComboBox.itemText(idx)
-        availableVis = getRegisteredVisualizers()
+        available = getRegisteredVisualizers()
 
-        for aVis in availableVis:
-            if aVis[1] == visName:
-                self.setVisualizer(aVis[0])
-                break
+        self.setVisualizer(available[visName])
+
+    def _getIACEMenu(self, settings):
+        data = IACEConnDialog.getData(parent=self,**settings)
+        if data:
+            ip, port = data
+            print(f"got {ip=} from Dialog")
+            settings['ip'] = ip
+            settings['port'] = port
 
     def _getTcpMenu(self, settings):
         # ip and port
-        ip, port, ok = DataTcpIpDialog.getData(ip=settings['ip'], port=settings['port'])
+        ip, port, ok = DataTcpIpDialog.getData(parent=self,ip=settings['ip'], port=settings['port'])
 
         if ok:
             settings['ip'] = ip
@@ -613,7 +622,7 @@ class MainGui(QMainWindow):
         Sets the timer time in settings with a dialog.
         """
         self._settings.beginGroup('plot')
-        timerTime, ok = DataIntDialog.getData(title="Timer Time", min=2, max=10000, unit='ms',
+        timerTime, ok = DataIntDialog.getData(parent=self,title="Timer Time", min=2, max=10000, unit='ms',
                                               current=self.config['TimerTime'])
 
         if ok:
@@ -1138,13 +1147,14 @@ class MainGui(QMainWindow):
         self.lastMeasList.scrollToItem(item)
         self.copyLastMeas(item)
 
-        self.timer.start(int(self.config['TimerTime']))
+        self.timer.start(max(int(self.config['TimerTime']), 40)) # ~25 fps should be plenty
         if self.config['HeartbeatTime']:
             self.heartbeatTimer.start(int(self.config['HeartbeatTime']))
         self.exp.runExperiment()
 
-        self.guiStartTime = time.time()
-        self.guiTimer.start(1000)
+        if self.actStopExperiment.isEnabled():
+            self.guiStartTime = time.time()
+            self.guiTimer.start(1000)
 
     @pyqtSlot()
     def stopExperiment(self):
@@ -1280,10 +1290,7 @@ class MainGui(QMainWindow):
         if availableVis and 'Visu' in self._experiments[idx]:
             if self._experiments[idx]['Visu'] is not None:
                 for vis in self._experiments[idx]['Visu']:
-                    for avis in availableVis:
-                        if vis == avis[1]:
-                            used.append(avis)
-                            break
+                    used.append(availableVis[vis])
             else:
                 self._logger.warning("No Visualization configured!")
                 self.visualizer = None
@@ -1294,10 +1301,10 @@ class MainGui(QMainWindow):
         self.visComboBox.clear()
         self.visComboBox.disconnect()
         for vis in used:
-            self.visComboBox.addItem(vis[1])
+            self.visComboBox.addItem(vis.__name__)
         self.visComboBox.currentIndexChanged.connect(self.visualizerChanged)
-        self._logger.info("loading visualizer '{}'".format(used[0][1]))
-        self.setVisualizer(used[0][0])
+        self._logger.info("loading visualizer '{}'".format(used[0].__name__))
+        self.setVisualizer(used[0])
 
     def setVisualizer(self, vis):
         if issubclass(vis, MplVisualizer):
@@ -1417,22 +1424,22 @@ class MainGui(QMainWindow):
         """
         Connects all connections and sets the button states.
         """
-        for conn, _ in self.connections.items():
-            connInstance = conn()
+        for name, conn in self.connections.items():
+            connInstance = conn['cls']()
             if connInstance.connect():
-                self._logger.info("Connection for {} established!".format(conn.__name__))
+                self._logger.info(f"Connection for {name} established!")
                 self.actConnect.setEnabled(False)
                 self.actDisconnect.setEnabled(True)
                 if self._currentExpListItem is not None and self.selectedExp:
                     self.actStartExperiment.setEnabled(True)
                 self.actStopExperiment.setEnabled(False)
                 self.statusbarLabel.setText("Connected!")
-                connInstance.received.connect(lambda frame, conn=conn: self.updateData(frame, conn))
+                connInstance.received.connect(lambda frame: self.updateData(frame, name))
                 connInstance.finished.connect(self.disconnect)
-                self.connections[conn] = connInstance
+                self.connections[name]['inst'] = connInstance
                 self.isConnected = True
             else:
-                self._logger.warning("No connection for {} established! Check your settings!".format(conn.__name__))
+                self._logger.warning(f"No connection for {name} established! Check your settings!")
                 self.isConnected = False
                 return
 
@@ -1441,11 +1448,11 @@ class MainGui(QMainWindow):
         PySignal function, that sends the given data to the connections
         :param data: to send data
         """
-        for conn, connInstance in self.connections.items():
-            if connInstance and data['id'] == 1:
-                connInstance.writeData(data)
-            elif connInstance and data['connection'] == conn.__name__:
-                connInstance.writeData(data)
+        if data['id'] == 1:
+            for conn in self.connections.values():
+                conn['inst'].writeData(data)
+        else:
+            self.connections[data['connection']]['inst'].writeData(data)
 
     @pyqtSlot()
     def disconnect(self):
@@ -1455,10 +1462,10 @@ class MainGui(QMainWindow):
         if self.actStopExperiment.isEnabled():
             self.stopExperiment()
 
-        for conn, connInstance in self.connections.items():
-            if connInstance:
-                connInstance.disconnect()
-                self.connections[conn] = None
+        for conn in self.connections.values():
+            if conn.get('inst', None) and conn['inst'].connected:
+                conn['inst'].disconnect()
+                del conn['inst']
         self.actConnect.setEnabled(True)
         self.actDisconnect.setEnabled(False)
         self.actStartExperiment.setEnabled(False)
@@ -1488,9 +1495,8 @@ class MainGui(QMainWindow):
         dataPoints = data['DataPoints']
         names = data['DataPoints'].keys()
 
-        for key, value in self._currentDataPointBuffers.items():
-            if key in names:
-                value.addValue(time, dataPoints[key])
+        for key in names:
+            self._currentDataPointBuffers[key].addValue(time, dataPoints[key])
 
         time_text = "Exp time={}".format(timeString(time))
         self.expTimeLabel.setText(time_text)

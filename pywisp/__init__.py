@@ -27,3 +27,8 @@ with open(getResource("logging.yaml", ""), "r") as f:
     log_conf = yaml.load(f, Loader=Loader)
 
 logging.config.dictConfig(log_conf)
+
+# go to correct directory
+import sys
+if (dir := os.path.dirname(sys.argv[-1])):
+    os.chdir(dir)
