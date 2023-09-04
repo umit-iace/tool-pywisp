@@ -372,7 +372,7 @@ class MainGui(QMainWindow):
                 serialCnt += 1
             elif issubclass(cls, IACEConnection):
                 actTcp = self.connMenu.addAction(name)
-                actTcp.triggered.connect(lambda _, settings=conn.settings: self._getIACEMenu(settings))
+                actTcp.triggered.connect(lambda _, settings=cls.settings: self._getIACEMenu(settings))
             elif issubclass(cls, SocketConnection):
                 actTcp = self.connMenu.addAction(name)
                 actTcp.triggered.connect(lambda _, settings=cls.settings: self._getTcpMenu(settings))
