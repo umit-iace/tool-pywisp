@@ -208,6 +208,7 @@ class MainGui(QMainWindow):
         self.actStopExperiment.triggered.connect(self.stopExperiment)
 
         self.visComboBox = QComboBox()
+        self.visComboBox.currentIndexChanged.connect(self.visualizerChanged)
 
         # lastmeas dock
         self.lastMeasList = QListWidget(self)
@@ -1284,29 +1285,20 @@ class MainGui(QMainWindow):
             self.remoteAddWidget(config)
 
     def configureVisualizer(self, idx):
-        if self.visualizer is not None:
-            for i in reversed(range(self.animationLayout.count())):
-                self.animationLayout.itemAt(i).widget().setParent(None)
         availableVis = getRegisteredVisualizers()
         used = []
-        if availableVis and 'Visu' in self._experiments[idx]:
-            if self._experiments[idx]['Visu'] is not None:
-                for vis in self._experiments[idx]['Visu']:
-                    used.append(availableVis[vis])
-            else:
-                self._logger.warning("No Visualization configured!")
-                self.visualizer = None
+        vis = ''
 
-        if not used:
-            return
+        try:
+            for vis in self._experiments[idx]['Visu']:
+                used.append(availableVis[vis])
+        except KeyError:
+            self._logger.warning(f"Cannot configure visualization '{vis}'")
 
         self.visComboBox.clear()
-        self.visComboBox.disconnect()
-        for vis in used:
-            self.visComboBox.addItem(vis.__name__)
-        self.visComboBox.currentIndexChanged.connect(self.visualizerChanged)
-        self._logger.info("loading visualizer '{}'".format(used[0].__name__))
-        self.setVisualizer(used[0])
+
+        if used:
+            self.visComboBox.addItems([vis.__name__ for vis in used])
 
     def setVisualizer(self, vis):
         if issubclass(vis, MplVisualizer):
@@ -1331,6 +1323,7 @@ class MainGui(QMainWindow):
         else:
             self._logger.warning("visualizer is not a subclass of MplVisualizer or VtkVisualizer")
             return
+        self._logger.info("loading visualizer '{}'".format(vis.__name__))
 
         self.visualizer.checkSaveAnimation(self.actSaveAnimation.isChecked())
         self.actSaveAnimation.disconnect()
