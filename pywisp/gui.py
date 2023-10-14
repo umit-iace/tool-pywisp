@@ -459,6 +459,8 @@ class MainGui(QMainWindow):
     def visualizerChanged(self, idx):
         for i in reversed(range(self.animationLayout.count())):
             self.animationLayout.itemAt(i).widget().setParent(None)
+        if idx == -1:
+            return
 
         visName = self.visComboBox.itemText(idx)
         available = getRegisteredVisualizers()
