@@ -6,8 +6,6 @@
 
 #include "Transport/Frame.h"
 
-#define MAX_PAYLOAD (80)
-
 /**
  * @class Comm
  * @brief defines an interface class which lets the TcpIpServer communicate with the transport protocol
