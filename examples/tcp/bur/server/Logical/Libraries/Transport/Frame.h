@@ -25,7 +25,6 @@
  * the data to and from byte wise array. The id represents the identification of the frame.
  */
 class Frame {
-
 public:
 	struct _data {
 		unsigned char id;
@@ -67,16 +66,6 @@ public:
 
 private:
 	unsigned char cCursor;
-
-	union {
-		double dVar;
-		struct {
-			float fVar2;
-			float fVar1;
-		};
-		unsigned char cVar[8];
-	} uPack;
-
 };
 
 #endif //SERVER_FRAME_H
