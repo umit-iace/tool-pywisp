@@ -29,7 +29,7 @@ class Frame {
 public:
 	struct _data {
 		unsigned char id;
-		unsigned char payload[80];
+		unsigned char payload[MAX_PAYLOAD];
 	} data;
 
 	Frame(unsigned char id) {
