@@ -9,7 +9,7 @@ At the command line with virtualenvwrapper installed::
 
     $ mkvirtualenv pywisp
     $ git clone https://github.com/umit-iace/pywisp
-    $ python setup.py install
+    $ python -m pip install .
 
 
 For Windows
@@ -41,22 +41,3 @@ to install it.
 .. _pypi: https://pypi.python.org/pypi
 .. _here: https://www.lfd.uci.edu/~gohlke/pythonlibs/
 
-**PyQT5 Sip**
-
-If the application doesn't start and returns a PyQt error like
-
-.. code-block:: bash
-
-    user@machine % python main.py
-    Traceback (most recent call last):
-        File "main.py", line 5, in <module>
-            from PyQt5.QtWidgets import QApplication
-    ModuleNotFoundError: No module named 'PyQt5.sip'
-
-then PyQt5 and PyQt5.sip must be uninstalled and PyQt5 must be reinstalled
-
-.. code-block:: bash
-
-    $ pip uninstall pyqt5-sip
-    $ pip uninstall pyqt5
-    $ pip install pyqt5

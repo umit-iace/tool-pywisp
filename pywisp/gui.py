@@ -2,9 +2,9 @@
 import logging
 import os
 import time
+import importlib.metadata
 from copy import deepcopy
 
-import pkg_resources
 import serial.tools.list_ports
 import yaml
 
@@ -60,7 +60,7 @@ class MainGui(QMainWindow):
         QCoreApplication.setOrganizationName("IACE")
         QCoreApplication.setOrganizationDomain("https://umit-tirol.at/iace")
         QCoreApplication.setApplicationVersion(
-            pkg_resources.require("PyWisp")[0].version)
+            importlib.metadata.version("PyWisp"))
         QCoreApplication.setApplicationName(globals()["__package__"])
 
         # general config parameters
