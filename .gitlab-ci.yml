@@ -9,8 +9,7 @@ docu:
   script:
     - virtualenv _venv
     - source _venv/bin/activate
-    - pip install -r requirements.txt
-    - python setup.py develop
+    - python -m pip install -e .
     - cd docs
     - export DISPLAY=:0
     - xvfb-run -a -s "-screen 0 1400x900x24 +extension RANDR" make html
@@ -31,10 +30,11 @@ deploy:
   script:
     - virtualenv _venv
     - source _venv/bin/activate
-    - pip install -r requirements.txt
     - pip install -U twine
-    - python setup.py sdist bdist_wheel
+    - python -m pip install .
+    - python -m build
     - twine upload dist/* --config-file /etc/pypirc
+    - pip uninstall -y pywisp
     - rm -rf *
   only:
     - tags
