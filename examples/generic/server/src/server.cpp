@@ -2,7 +2,7 @@
  *
  * Copyright (c) 2023 IACE
  */
-#include <linux/host.h>
+#include <sys/comm.h>
 #include <cstdlib>
 #include <core/experiment.h>
 #include "model.h"
@@ -10,6 +10,9 @@
 #include "comm/min.h"
 #include "comm/bufferutils.h"
 #include "comm/line.h"
+
+TTY tty{"/dev/tty"};
+UDP udp{"127.0.0.1", 45670};
 
 struct Support {
     Support();
@@ -19,8 +22,8 @@ struct Support {
 };
 
 Support::Support()
-    : lineout{host.tty.out}
-    , min{.in = host.socket.in, .out = host.socket.out}
+    : lineout{tty}
+    , min{.in = udp, .out = udp}
 {}
 void Support::init() {
     /* e.setHeartbeatTimeout(500, min.out); */
@@ -41,7 +44,6 @@ void Support::init() {
 Kernel k;
 Support support;
 Experiment e{&support.min.reg};
-ExpLog elog{e, k.log};
 
 int main() {
     support.init();

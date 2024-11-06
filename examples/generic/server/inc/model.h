@@ -27,7 +27,7 @@ struct Trajectory {
     LinearTrajectory interp{};
     operator Reference&() { return ref; }
     void step(uint32_t time, uint32_t) {
-        ref(0) = interp(time/1000.);
+        ref(0) = interp(time/1000.)[0];
     }
 };
 
@@ -66,7 +66,7 @@ struct Model {
 
     }
     void getTrajData(Frame &f) {
-        static SeriesUnpacker su;
+        static SeriesUnpacker<double> su;
         auto buf = su.unpack(f);
         if (buf) {
             traj.interp.setData(std::move(*buf));
