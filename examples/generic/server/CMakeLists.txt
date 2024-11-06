@@ -20,15 +20,14 @@ find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/inc/doublependulum.h
-    COMMAND python codegen.py 
+    COMMAND python codegen.py
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/settings.py
             ${CMAKE_CURRENT_SOURCE_DIR}/codegen.py
     VERBATIM
     )
 
-add_executable(${PROJECT_NAME} src/server.cpp
-    inc/doublependulum.h)
+add_executable(${PROJECT_NAME} src/server.cpp inc/doublependulum.h)
 
 target_include_directories(${PROJECT_NAME} PUBLIC inc)
 target_link_libraries(${PROJECT_NAME}
@@ -37,6 +36,6 @@ target_link_libraries(${PROJECT_NAME}
     Eigen3::Eigen)
 add_custom_target(run
     DEPENDS ${PROJECT_NAME}
-    COMMAND ncat -lkuvv4 127.0.0.1 45670 -c ./${PROJECT_NAME}
+    COMMAND ./${PROJECT_NAME}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
