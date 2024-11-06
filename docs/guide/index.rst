@@ -101,7 +101,7 @@ Heartbeat
 `PyWisp` provides the possibility to send a heartbeat on `ID 1` at bit 1. For the configuration `Config` section of the
 `defaults.sreg` must be extended by the setting
 
-.. code-block:: json
+.. code-block:: yaml
 
     Heartbeat: <time in ms>
 
@@ -112,10 +112,10 @@ For detailed information see the :ref:`chapter_examples` section.
 defaults.sreg
 -------------
 
-The `defaults.sreg` constitutes the standard configuration file for `PyWisp`. It uses a `xml` syntax.
+The `defaults.sreg` constitutes the standard configuration file for `PyWisp`. It uses a `yaml` syntax.
 Below a normal configuration with two experiments is presented:
 
-.. code-block:: json
+.. code-block:: yaml
 
     # default experiment file that is loaded when the gui starts up
 
@@ -176,7 +176,7 @@ Additionally the plot and visualization have some configuration parameters. Thes
 The can be set by a right click of the plot in the GUI or about the Config menu.
 To save the configuration the `defaults.sreg` can be extended by a `Config section` with the keys:
 
-.. code-block:: json
+.. code-block:: yaml
 
     TimerTime:           <time in ms>
     InterpolationPoints: <0..no interpolation, >0..grid points for interpolation>
