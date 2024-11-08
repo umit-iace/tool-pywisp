@@ -14,9 +14,9 @@ import pandas as pd
 from PyQt5.QtCore import Qt, QRegExp, QSize, pyqtSignal, QRect
 from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator, QKeySequence, QFont, QPen, \
     QPainter, QTextCursor
-from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
+from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QAction, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
     QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction, QShortcut, QStyledItemDelegate, QStyle
-from pyqtgraph import mkPen
+from pyqtgraph import PlotWidget, TextItem, mkPen
 from pyqtgraph.dockarea import Dock
 
 __all__ = ["createDir", "getResource", "packArrayToFrame", "coroutine", "pipe"]
@@ -220,33 +220,50 @@ class PlotChart(object):
 
     def __init__(self, title, settings, movingWindowEnable, movingWindowWidth):
         self.title = title
-        self.dataPoints = dict()
         self.plotWidget = None
-        self.plotCurves = []
+        self.plotCurves = {}
 
         # plot settings
         self.settings = settings
         self.movingWindowEnable = movingWindowEnable
         self.movingWindowWidth = movingWindowWidth
 
-    def addPlotCurve(self, name, data):
+    def addCurve(self, name, data):
         """
         Adds a curve to the plot widget
         Args:
             dataPoint(DataPointBuffer): Data point which contains the data be added
         """
-        self.dataPoints[name] = data
-
+        # get plot color
         self.settings.beginGroup('plot_colors')
         cKeys = self.settings.childKeys()
         colorIdxItem = len(self.plotCurves) % len(cKeys)
         colorItem = QColor(self.settings.value(cKeys[colorIdxItem]))
         self.settings.endGroup()
 
-        self.plotCurves.append(self.plotWidget.plot(name=name, pen=mkPen(colorItem, width=2)))
+        # add the actual curve
+        self.plotCurves[name] = self.plotWidget.plot(x=data.time, y=data.values,
+                                                    name=name,
+                                                    pen=mkPen(colorItem, width=1))
+
+    def removeCurve(self, name):
+        if name in self.plotCurves:
+            curve = self.plotCurves.pop(name)
+        self.plotWidget.getPlotItem().removeItem(curve)
+
+    def setAutoRange(self):
+        self.plotWidget.autoRange()
+        self.plotWidget.enableAutoRange()
 
     def setEnableMovingWindow(self, movingWindowEnable):
         self.movingWindowEnable = movingWindowEnable
+        if movingWindowEnable:
+            self.plotWidget.disableAutoRange(axis="x")
+            self.plotWidget.enableAutoRange(axis="y")
+        else:
+            self.plotWidget.autoRange()
+            self.plotWidget.enableAutoRange(axis="x")
+            self.plotWidget.enableAutoRange(axis="y")
 
     def setMovingWindowWidth(self, movingWindowWidth):
         self.movingWindowWidth = int(movingWindowWidth)
@@ -254,30 +271,17 @@ class PlotChart(object):
     def getMovingWindowWidth(self):
         return self.movingWindowWidth
 
-    def updatePlot(self):
+    def updateCurves(self, dataPoints):
         """
         Updates all curves of the plot with the actual data in the buffers
         """
-        if self.plotWidget:
-            startPlotRange = 0
-            for indx, curve in enumerate(self.plotCurves):
-                # check if data is multidimensional
-                if self.dataPoints[curve.name()].values:
-                    if isinstance(self.dataPoints[curve.name()].values[-1], (list, np.ndarray)):
-                        continue
-                if self.movingWindowEnable:
-                    timeLen = len(self.dataPoints[curve.name()].time)
-                    if timeLen > 0:
-                        startPlotRange = bisect_left(self.dataPoints[curve.name()].time,
-                                                     self.dataPoints[curve.name()].time[-1]
-                                                     - self.movingWindowWidth)
-                    if startPlotRange < 0 or startPlotRange > timeLen:
-                        startPlotRange = 0
-                datax = self.dataPoints[curve.name()].time[startPlotRange:]
-                datay = self.dataPoints[curve.name()].values[startPlotRange:]
-                if datax:
-                    curve.setData(datax, datay)
+        for name, curve in self.plotCurves.items():
+            datax = dataPoints[name].time
+            datay = dataPoints[name].values
+            curve.setData(datax, datay)
 
+        if self.movingWindowEnable:
+            self.plotWidget.setXRange(max(0, datax[-1] - self.movingWindowWidth), datax[-1])
 
     def clear(self):
         """
@@ -285,8 +289,7 @@ class PlotChart(object):
         """
         if self.plotWidget:
             self.plotWidget.getPlotItem().clear()
-            self.dataPoints.clear()
-            del self.plotCurves[:]
+            self.plotCurves.clear()
 
 
 class Exporter(object):

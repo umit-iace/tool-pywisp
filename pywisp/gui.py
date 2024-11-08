@@ -431,7 +431,7 @@ class MainGui(QMainWindow):
         self._currentExpListItem = None
         self._currentLastMeasItem = None
         self._currentDataPointBuffers = None
-        self.plotCharts = []
+        self.plotCharts = {}
 
         loadExpFromFileSuccess = self.loadExpFromFile(fileName)
 
@@ -776,7 +776,6 @@ class MainGui(QMainWindow):
             if dataPoint.text() not in topLevelItemList:
                 child = QTreeWidgetItem()
                 child.setText(1, dataPoint.text())
-
                 toplevelItem.addChild(child)
 
         for i in range(toplevelItem.childCount()):
@@ -787,7 +786,7 @@ class MainGui(QMainWindow):
             self._settings.endGroup()
             toplevelItem.child(i).setBackground(0, colorItem)
 
-        self.plots(toplevelItem)
+        self.updatePlotChart(toplevelItem)
 
     def exportDataPointFromTree(self):
         if not self.dataPointListWidget.selectedIndexes():
@@ -830,9 +829,9 @@ class MainGui(QMainWindow):
             self._settings.endGroup()
             toplevelItem.child(i).setBackground(0, colorItem)
 
-        self.plots(toplevelItem)
+        self.updatePlotChart(toplevelItem)
 
-    def plots(self, item):
+    def updatePlotChart(self, item):
         title = item.text(0)
 
         if self._currentLastMeasItem is None:
@@ -853,11 +852,23 @@ class MainGui(QMainWindow):
             # check if plot has already been opened
             openDocks = [dock.title() for dock in self.findAllPlotDocks()]
             if title in openDocks:
-                self.updatePlot(item, dataPointBuffers)
+                chart = self.plotCharts[title]
+
+                # check if all items are present as curves
+                req_lbls = []
+                for idx in range(item.childCount()):
+                    curve_lbl = item.child(idx).text(1)
+                    req_lbls.append(curve_lbl)
+                    if curve_lbl not in chart.plotCurves.keys():
+                        chart.addCurve(curve_lbl, dataPointBuffers[curve_lbl])
+
+                # clear all curves that are no longer required by items
+                ub_lbls = [lbl for lbl in chart.plotCurves.keys()
+                    if lbl not in req_lbls]
+                [chart.removeCurve(lbl) for lbl in ub_lbls]
 
     def plotVectorClicked(self, item):
-
-        # check if a top level item has been clicked
+        # ignore non-top level items
         if item.parent():
             return
 
@@ -871,16 +882,8 @@ class MainGui(QMainWindow):
         # check if plot has already been opened
         openDocks = [dock.title() for dock in self.findAllPlotDocks()]
         if title in openDocks:
-            if self._currentLastMeasItem is None:
-                dataPointNames = self.exp.getDataPoints()
-                dataPointBuffers = dict()
-                for data in dataPointNames:
-                    dataPointBuffers[data] = DataPointBuffer()
-            else:
-                idx = self.lastMeasList.row(self._currentLastMeasItem)
-                dataPointBuffers = self.measurements[idx]['dataPointBuffers']
-
-            self.updatePlot(item, dataPointBuffers)
+            # dataPointBuffers = self.getCurrentDataPoints()
+            # self.updatePlot(item, dataPointBuffers)
             try:
                 self.area.docks[title].raiseDock()
             except:
@@ -888,65 +891,30 @@ class MainGui(QMainWindow):
         else:
             self.plotDataVector(item)
 
+    def getCurrentDataPoints(self):
+        if self._currentLastMeasItem is None:
+            dataPointNames = self.exp.getDataPoints()
+            dataPointBuffers = dict()
+            for data in dataPointNames:
+                dataPointBuffers[data] = DataPointBuffer()
+        else:
+            idx = self.lastMeasList.row(self._currentLastMeasItem)
+            dataPointBuffers = self.measurements[idx]['dataPointBuffers']
+        return dataPointBuffers
+
     def updatePlot(self, item, dataPointBuffers):
         title = item.text(0)
+        self.plotCharts[title].updateCurves(dataPointBuffers)
 
-        # get the new datapoints
-        newDataPoints = dict()
-        for indx in range(item.childCount()):
-            for key, value in dataPointBuffers.items():
-                if key == item.child(indx).text(1):
-                    newDataPoints[key] = value
-
-        # set the new datapoints
-        for chart in self.plotCharts:
-            if chart.title == title:
-                chart.clear()
-                for key, value in newDataPoints.items():
-                    chart.addPlotCurve(key, value)
-                chart.updatePlot()
-                break
-
-    def plotDataVector(self, item):
-        title = str(item.text(0))
-
+    def createCustomPlotWidget(self, chart):
         # create plot widget
         widget = PlotWidget()
         widget.showGrid(True, True)
         widget.getPlotItem().getAxis("bottom").setLabel(text="Time", units="s")
 
-        # enable downsampling and clipping for better performance
+        # enable down-sampling and clipping for better performance
         widget.setDownsampling(ds=None, auto=True)
         widget.setClipToView(True)
-
-        # create chart
-        chart = PlotChart(title,
-                          self._settings,
-                          self.config['MovingWindowEnable'],
-                          self.config['MovingWindowSize'])
-        chart.plotWidget = widget
-
-        if self._currentLastMeasItem is None:
-            dataPointNames = self.exp.getDataPoints()
-            dataPointBuffers = dict()
-            for name in dataPointNames:
-                dataPointBuffers[name] = DataPointBuffer()
-        else:
-            idx = self.lastMeasList.row(self._currentLastMeasItem)
-            dataPointBuffers = self.measurements[idx]['dataPointBuffers']
-
-        for idx in range(item.childCount()):
-            for key, value in dataPointBuffers.items():
-                if key == item.child(idx).text(1):
-                    chart.addPlotCurve(key, value)
-
-        # before adding the PlotChart object to the list check if the plot contains any data points
-        if chart.dataPoints is not None:
-            self.plotCharts.append(chart)
-        else:
-            return
-
-        chart.updatePlot()
 
         coordItem = TextItem(text='', anchor=(0, 1))
         widget.getPlotItem().addItem(coordItem, ignoreBounds=True)
@@ -965,14 +933,13 @@ class MainGui(QMainWindow):
 
         qActionMovingWindowEnable = QAction('Enable', self, checkable=True)
         qActionMovingWindowEnable.setChecked(self.config['MovingWindowEnable'])
-        qActionMovingWindowEnable.triggered.connect(lambda state, _chart=chart: self.enableMovingWindow(state, _chart))
+        qActionMovingWindowEnable.triggered.connect(lambda state, _chart=chart: _chart.setEnableMovingWindow(state))
 
         qActionMovingWindowSize = ContextLineEditAction(min=0, max=10000, current=chart.getMovingWindowWidth(),
                                                         unit='s', title='Size', parent=self)
         qActionMovingWindowSize.dataEmit.connect(lambda data,
                                                         _chart=chart,
-                                                        _widget=widget: self.setMovingWindowWidth(data, _chart,
-                                                                                                  _widget))
+                                                        _widget=widget: _chart.setMovingWindowWidth(data))
         qMenuMovingWindow = QMenu('Moving Window', self)
         qMenuMovingWindow.addAction(qActionMovingWindowSize)
         qMenuMovingWindow.addAction(qActionMovingWindowEnable)
@@ -991,12 +958,35 @@ class MainGui(QMainWindow):
 
             return _wrapper
 
-        widget.scene().contextMenu[1].triggered.connect(lambda: self.setAutoRange(widget))
+        widget.scene().contextMenu[1].triggered.connect(lambda _chart=chart: _chart.setAutoRange())
         widget.scene().contextMenu[3].triggered.connect(_export_wrapper(self.exportPlotItem))
+
+        return widget
+
+    def plotDataVector(self, item):
+        title = str(item.text(0))
+        if title in self.plotCharts.keys():
+            self._logger.error(f"Plot chart name '{title}' is already taken.")
+            return
+
+        # create chart
+        chart = PlotChart(title,
+                          self._settings,
+                          self.config['MovingWindowEnable'],
+                          self.config['MovingWindowSize'])
+        chart.plotWidget = self.createCustomPlotWidget(chart)
+        self.plotCharts[title] = chart
+
+        # add curves
+        dataPointBuffers = self.getCurrentDataPoints()
+        for idx in range(item.childCount()):
+            for key, value in dataPointBuffers.items():
+                if key == item.child(idx).text(1):
+                    chart.addCurve(key, value)
 
         # create dock container and add it to dock area
         dock = Dock(title, closable=True)
-        dock.addWidget(widget)
+        dock.addWidget(chart.plotWidget)
         dock.sigClosed.connect(self.closedDock)
 
         plotWidgets = self.findAllPlotDocks()
@@ -1005,34 +995,17 @@ class MainGui(QMainWindow):
         else:
             self.area.addDock(dock, "bottom", self.animationDock)
 
-    def setMovingWindowWidth(self, data, chart, widget):
-        """
-        Sets the moving window width and autorange.
-        """
-        chart.setMovingWindowWidth(int(data))
-        widget.autoRange()
-        widget.enableAutoRange()
-
-    def enableMovingWindow(self, state, chart):
-        chart.setEnableMovingWindow(state)
-
     def closedDock(self):
         """
         Gets called when a dock was closed, if it was a plot dock remove the corresponding PlotChart object
         form the list
-
         """
         openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-        for indx, plot in enumerate(self.plotCharts):
-            if not plot.title in openDocks:
-                self.plotCharts.pop(indx)
+        d_lbls = [lbl for lbl in self.plotCharts.keys() if lbl not in openDocks]
+        [self.plotCharts.pop(lbl, None) for lbl in d_lbls]
 
-        if len(self.findAllPlotDocks()) == 0:
+        if len(openDocks) == 0:
             self.disableCoord()
-
-    def setAutoRange(self, widget):
-        widget.autoRange()
-        widget.enableAutoRange()
 
     def exportPlotItem(self, plotItem):
         dataPoints = dict()
@@ -1124,9 +1097,6 @@ class MainGui(QMainWindow):
                 self._currentDataPointBuffers[data] = DataPointBuffer()
         else:
             return
-
-        for chart in self.plotCharts:
-            chart.updatePlot()
 
         data = {}
         data.update({'dataPointBuffers': self._currentDataPointBuffers})
@@ -1491,8 +1461,8 @@ class MainGui(QMainWindow):
             if self.vtkWidget is not None:
                 self.vtkWidget.GetRenderWindow().GetInteractor().Render()
 
-        for chart in self.plotCharts:
-            chart.updatePlot()
+        for lbl, chart in self.plotCharts.items():
+            chart.updateCurves(self._currentDataPointBuffers)
 
     def heartbeat(self):
         self.writeToConnection({'id': 1,
