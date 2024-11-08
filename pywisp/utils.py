@@ -218,12 +218,13 @@ class PlotChart(object):
     Object containing the plot widgets and the associated plot curves
     """
 
-    def __init__(self, title, settings, interpolationPoints, movingWindowEnable, movingWindowWidth):
+    def __init__(self, title, settings, movingWindowEnable, movingWindowWidth):
         self.title = title
         self.dataPoints = dict()
         self.plotWidget = None
         self.plotCurves = []
-        self.interpolationPoints = interpolationPoints
+
+        # plot settings
         self.settings = settings
         self.movingWindowEnable = movingWindowEnable
         self.movingWindowWidth = movingWindowWidth
@@ -244,9 +245,6 @@ class PlotChart(object):
 
         self.plotCurves.append(self.plotWidget.plot(name=name, pen=mkPen(colorItem, width=2)))
 
-    def setInterpolationPoints(self, interpolationPoints):
-        self.interpolationPoints = int(interpolationPoints)
-
     def setEnableMovingWindow(self, movingWindowEnable):
         self.movingWindowEnable = movingWindowEnable
 
@@ -255,9 +253,6 @@ class PlotChart(object):
 
     def getMovingWindowWidth(self):
         return self.movingWindowWidth
-
-    def getInterpolataionPoints(self):
-        return self.interpolationPoints
 
     def updatePlot(self):
         """
@@ -281,12 +276,8 @@ class PlotChart(object):
                 datax = self.dataPoints[curve.name()].time[startPlotRange:]
                 datay = self.dataPoints[curve.name()].values[startPlotRange:]
                 if datax:
-                    if self.interpolationPoints == 0 or len(datax) < self.interpolationPoints:
-                        curve.setData(datax, datay)
-                    else:
-                        interpx = np.linspace(datax[0], datax[-1], self.interpolationPoints)
-                        interpy = np.interp(interpx, datax, datay)
-                        curve.setData(interpx, interpy)
+                    curve.setData(datax, datay)
+
 
     def clear(self):
         """
