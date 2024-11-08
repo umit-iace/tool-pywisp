@@ -912,14 +912,19 @@ class MainGui(QMainWindow):
 
         # create plot widget
         widget = PlotWidget()
+        widget.showGrid(True, True)
+        widget.getPlotItem().getAxis("bottom").setLabel(text="Time", units="s")
+
+        # enable downsampling and clipping for better performance
+        widget.setDownsampling(ds=None, auto=True)
+        widget.setClipToView(True)
+
+        # create chart
         chart = PlotChart(title,
                           self._settings,
-                          self.config['InterpolationPoints'],
                           self.config['MovingWindowEnable'],
                           self.config['MovingWindowSize'])
         chart.plotWidget = widget
-        widget.showGrid(True, True)
-        widget.getPlotItem().getAxis("bottom").setLabel(text="Time", units="s")
 
         if self._currentLastMeasItem is None:
             dataPointNames = self.exp.getDataPoints()
@@ -968,18 +973,9 @@ class MainGui(QMainWindow):
                                                         _chart=chart,
                                                         _widget=widget: self.setMovingWindowWidth(data, _chart,
                                                                                                   _widget))
-
-        qActionInterpolationPoints = ContextLineEditAction(min=0, max=10000, current=chart.getInterpolataionPoints(),
-                                                           unit='', title='Size', parent=self)
-        qActionInterpolationPoints.dataEmit.connect(lambda data,
-                                                           _chart=chart: self.setInterpolationPoints(data, _chart))
-
         qMenuMovingWindow = QMenu('Moving Window', self)
         qMenuMovingWindow.addAction(qActionMovingWindowSize)
         qMenuMovingWindow.addAction(qActionMovingWindowEnable)
-
-        qMenuInterpolation = QMenu('Interpolation Points', self)
-        qMenuInterpolation.addAction(qActionInterpolationPoints)
 
         widget.scene().contextMenu = [qActionSep1,
                                       QAction("Auto Range All", self),
@@ -987,7 +983,6 @@ class MainGui(QMainWindow):
                                       QAction("Export as ...", self),
                                       qActionSep3,
                                       qMenuMovingWindow,
-                                      qMenuInterpolation,
                                       ]
 
         def _export_wrapper(export_func):
@@ -1009,12 +1004,6 @@ class MainGui(QMainWindow):
             self.area.addDock(dock, "above", plotWidgets[0])
         else:
             self.area.addDock(dock, "bottom", self.animationDock)
-
-    def setInterpolationPoints(self, data, chart):
-        """
-        Sets the interpolation points in settings with a dialog.
-        """
-        chart.setInterpolationPoints(int(data))
 
     def setMovingWindowWidth(self, data, chart, widget):
         """
