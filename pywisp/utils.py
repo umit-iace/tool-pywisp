@@ -310,14 +310,9 @@ class Exporter(object):
             raise Exception("Given data points are None!")
 
         # build pandas data frame
-        self.df = None
-        for key, value in dataPoints.items():
-            if self.df is None:
-                self.df = pd.DataFrame(index=value.time, data={key: value.values})
-            else:
-                newDf = pd.DataFrame(index=value.time, data={key: value.values})
-                self.df = self.df.join(newDf, how='outer')
-
+        d = {key: pd.Series(val.values, index=val.time)
+             for key, val in dataPoints.items()}
+        self.df = pd.DataFrame.from_dict(d)
         self.df.index.name = 'time'
 
     def exportPng(self, fileName):
