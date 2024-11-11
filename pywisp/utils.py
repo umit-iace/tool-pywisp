@@ -281,7 +281,7 @@ class PlotChart(object):
             datay = dataPoints[name].values
             curve.setData(datax, datay)
 
-        if self.movingWindowEnable:
+        if self.plotCurves and self.movingWindowEnable:
             self.plotWidget.setXRange(max(0, datax[-1] - self.movingWindowWidth), datax[-1])
 
     def clear(self):
