@@ -7,11 +7,12 @@ import subprocess
 from pathlib import Path
 import importlib.util
 
+import matplotlib
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from PyQt5.QtCore import Qt, QRegExp, QSize, pyqtSignal, QRect
+from PyQt5.QtCore import Qt, QObject, QRegExp, QSize, pyqtSignal, pyqtSlot, QRect
 from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator, QKeySequence, QFont, QPen, \
     QPainter, QTextCursor
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QAction, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
@@ -292,29 +293,54 @@ class PlotChart(object):
             self.plotCurves.clear()
 
 
-class Exporter(object):
+class Exporter(QObject):
     """
     Class exports data points from GUI to different formats (csv, png) as pandas dataframe.
     """
+    finished = pyqtSignal()
+    failed = pyqtSignal(str)
 
     def __init__(self, **kwargs):
-        dataPoints = kwargs.get('dataPoints', None)
+        super().__init__()
+        self.dataPoints = kwargs.get("dataPoints", None)
+        if self.dataPoints is None:
+            self.failed.emit("No data given")
+        self.fileName = kwargs.get("fileName", None)
+        if self.dataPoints is None:
+            self.failed.emit("No file name given")
 
-        if dataPoints is None:
-            raise Exception("Given data points are None!")
-
+    def _buildFrame(self):
         # build pandas data frame
         d = {key: pd.Series(val.values, index=val.time)
-             for key, val in dataPoints.items()}
-        self.df = pd.DataFrame.from_dict(d, orient='index').transpose()
+             for key, val in self.dataPoints.items()}
+        try:
+            self.df = pd.DataFrame.from_dict(d, orient='index').transpose()
+        except BaseException:
+            self.failed.emit()
+            self.df = None
         self.df.index.name = 'time'
         self.df.sort_index(inplace=True)
 
-    def exportPng(self, fileName):
+    @pyqtSlot()
+    def runExport(self):
+        file, ext = os.path.splitext(self.fileName)
+        if ext == '.csv':
+            self.exportCsv()
+        elif ext == '.png':
+            self.exportPng()
+        else:
+            self.failed.emit("Unsupported file extension '{ext}'.")
+
+    def exportPng(self):
         """
         Exports the data point dataframe as png with matplotlib.
         :param fileName: name of file with extension
         """
+        self._buildFrame()
+        if self.df is None:
+            return
+
+        matplotlib.use('agg')
         fig = plt.figure(figsize=(10, 6))
         gs = gridspec.GridSpec(1, 1, hspace=0.1)
         axes = plt.Subplot(fig, gs[0])
@@ -330,16 +356,19 @@ class Exporter(object):
             axes.set_xlabel(r"Time (s)")
 
         fig.add_subplot(axes)
+        fig.savefig(self.fileName, dpi=300)
+        self.finished.emit()
 
-        fig.savefig(fileName, dpi=300)
-
-    def exportCsv(self, fileName, sep=','):
+    def exportCsv(self, sep=','):
         """
         Exports the data point dataframe as csv
-        :param fileName: name of file with extension
         :param sep: separator for csv (default: ,)
         """
-        self.df.to_csv(fileName, sep=sep)
+        self._buildFrame()
+        if self.df is None:
+            return
+        self.df.to_csv(self.fileName, sep=sep)
+        self.finished.emit()
 
 
 class DataIntDialog(QDialog):
