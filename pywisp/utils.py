@@ -315,11 +315,11 @@ class Exporter(QObject):
              for key, val in self.dataPoints.items()}
         try:
             self.df = pd.DataFrame.from_dict(d, orient='index').transpose()
+            self.df.index.name = 'time'
+            self.df.sort_index(inplace=True)
         except BaseException:
             self.failed.emit()
             self.df = None
-        self.df.index.name = 'time'
-        self.df.sort_index(inplace=True)
 
     @pyqtSlot()
     def runExport(self):
