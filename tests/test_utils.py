@@ -2,13 +2,16 @@ import os
 import pickle
 import random
 import string
+import sys
 import time
 import unittest
 
 import numpy as np
 
+from PyQt5.QtWidgets import QApplication
 from pywisp.utils import Exporter, DataPointBuffer
 
+app = QApplication(sys.argv)
 class ExporterTestCase(unittest.TestCase):
     base_path = os.path.dirname(__file__)
     d_name = os.path.join(base_path, "dataPoints.pkl")
@@ -44,11 +47,13 @@ class ExporterTestCase(unittest.TestCase):
     def test_export_csv(self):
         e = Exporter(dataPoints=self.dataPoints, fileName=self.csv_name)
         e.runExport()
+        e.worker.wait()
         self.assertTrue(os.path.exists(self.csv_name))
 
     def test_export_png(self):
         e = Exporter(dataPoints=self.dataPoints, fileName=self.png_name)
         e.runExport()
+        e.worker.wait()
         self.assertTrue(os.path.exists(self.png_name))
 
     def test_timings(self):
@@ -57,7 +62,7 @@ class ExporterTestCase(unittest.TestCase):
         t0 = time.perf_counter()
         N = 10
         for n in range(N):
-            e._buildFrame()
+            e.worker._buildFrame()
         dt = time.perf_counter() - t0
         print(f"Average time needed for init is {dt/N} seconds.")
 

@@ -29,8 +29,7 @@ try:
     from yaml import CLoader as Loader, CDumper as Dumper
 except ImportError:
     from yaml import Loader, Dumper
-from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QSettings, QCoreApplication, QThread, \
-    QMutex
+from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QSettings, QCoreApplication, QMutex
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from pyqtgraph import PlotWidget, TextItem
@@ -456,7 +455,6 @@ class MainGui(QMainWindow):
             self.selectedExp = True
 
         self.data_mutex = QMutex()
-        self.exp_thread = None
         self.exporter = None
 
         # close splash screen
@@ -654,10 +652,6 @@ class MainGui(QMainWindow):
         """
         Provides initial settings for view, plot and log management.
         """
-        # path management
-        self._addSetting("path", "previous_plot_export", os.path.curdir)
-        self._addSetting("path", "previous_plot_format", ".csv")
-
         # view management
         self._addSetting("view", "show_coordinates", "True")
 
@@ -794,6 +788,10 @@ class MainGui(QMainWindow):
         self.updatePlotChart(toplevelItem)
 
     def exportDataPointFromTree(self):
+        if self.exporter is not None:
+            self._logger.error("There is already an export job running")
+            return
+
         if not self.dataPointListWidget.selectedIndexes():
             self._logger.error("Can't export data set: no data set selected.")
             return
@@ -809,7 +807,15 @@ class MainGui(QMainWindow):
                     for item in self.dataPointListWidget.selectedItems()]
         self._logger.info(f"Measurements selected for export are: {exp_lbls}")
         dataPoints = {lbl: dataPointBuffers[lbl] for lbl in exp_lbls}
-        self.export(dataPoints)
+
+        self.data_mutex.lock()
+        expData = deepcopy(dataPoints)
+        self.data_mutex.unlock()
+        self.exporter = Exporter(dataPoints=expData)
+        self.exporter.failed.connect(self.exportFailed)
+        self.exporter.finished.connect(self.exportFinished)
+        self._logger.info(f"Export to {self.exporter.worker.fileName} started.")
+        self.exporter.runExport()
 
     def removeDatapointFromTree(self):
         items = self.dataPointTreeWidget.selectedItems()
@@ -1009,73 +1015,16 @@ class MainGui(QMainWindow):
         if len(openDocks) == 0:
             self.disableCoord()
 
-    def exportPlotItem(self, plotItem):
-        dataPoints = dict()
-        for i, c in enumerate(plotItem.curves):
-            if c.getData() is None:
-                continue
-            if len(c.getData()) > 2:
-                self._logger.warning('Can not handle the amount of data!')
-                continue
-            dataPoints[c.name()] = DataPointBuffer(time=c.getData()[0], values=c.getData()[1])
-
-        self.export(dataPoints)
-
-    def export(self, dataPoints):
-        if self.exp_thread is not None and self.exp_thread.isRunning():
-            self._logger.error("There is already an export job running")
-            return
-
-        # handle the file path
-        lastPath = self._settings.value("path/previous_plot_export")
-        lastFormat = self._settings.value("path/previous_plot_format")
-        exportFormats = ["CSV Data (*.csv)", "PNG Image (*.png)"]
-        if lastFormat == ".png":
-            exportFormats[:] = exportFormats[::-1]
-        formatStr = ";;".join(exportFormats)
-        defaultFile = os.path.join(lastPath, "export" + lastFormat)
-        filename = QFileDialog.getSaveFileName(self,
-                                               "Export as ...",
-                                               defaultFile,
-                                               formatStr)
-        if not filename[0]:
-            self._logger.info("Export aborted.")
-            return
-
-
-        # setup worker thread
-        self._logger.info(f"Export to {filename[0]} started.")
-        self.data_mutex.lock()
-        self.exporter = Exporter(dataPoints=deepcopy(dataPoints), fileName=filename[0])
-        self.data_mutex.unlock()
-        self.exp_thread = QThread()
-        self.exporter.moveToThread(self.exp_thread)
-        self.exp_thread.started.connect(self.exporter.runExport)
-        self.exporter.failed.connect(self.exp_thread.quit)
-        self.exporter.failed.connect(self.exporter.deleteLater)
-        self.exporter.failed.connect(self.exportFailed)
-        self.exporter.finished.connect(self.exp_thread.quit)
-        self.exporter.finished.connect(self.exporter.deleteLater)
-        self.exp_thread.finished.connect(self.exportFinished)
-        self.exp_thread.finished.connect(self.exp_thread.deleteLater)
-
-        # run the export
-        self.exp_thread.start()
-
-        self._settings.setValue("path/previous_plot_export",
-                                os.path.dirname(filename[0]))
-
     @pyqtSlot()
     def exportFinished(self):
         self.statusbarLabel.setText("Export succesful.")
         self._logger.info("Export successful.")
-        self.exp_thread = None
+        self.exporter = None
 
     @pyqtSlot(str)
     def exportFailed(self, msg):
         self._logger.error(f"Export failed with: {msg}.")
-        self.exp_thread.terminate()
-        self.exp_thread.wait()
+        self.exporter = None
 
     @pyqtSlot(QModelIndex)
     def targetViewChanged(self, index=None):

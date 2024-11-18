@@ -12,13 +12,15 @@ import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from PyQt5.QtCore import Qt, QObject, QRegExp, QSize, pyqtSignal, pyqtSlot, QRect
+from PyQt5.QtCore import Qt, QObject, QRegExp, QSize, pyqtSignal, pyqtSlot, QRect, QThread
 from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator, QKeySequence, QFont, QPen, \
     QPainter, QTextCursor
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QAction, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
     QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction, QShortcut, QStyledItemDelegate, QStyle
 from pyqtgraph import PlotWidget, TextItem, mkPen
 from pyqtgraph.dockarea import Dock
+
+from .widgets.fileselector import FileSelector
 
 __all__ = ["createDir", "getResource", "packArrayToFrame", "coroutine", "pipe"]
 
@@ -302,73 +304,84 @@ class Exporter(QObject):
 
     def __init__(self, **kwargs):
         super().__init__()
-        self.dataPoints = kwargs.get("dataPoints", None)
-        if self.dataPoints is None:
-            self.failed.emit("No data given")
-        self.fileName = kwargs.get("fileName", None)
-        if self.dataPoints is None:
-            self.failed.emit("No file name given")
+        dataPoints = kwargs.get("dataPoints", None)
+        fileName = kwargs.get("fileName", None) or FileSelector(
+            ["CSV Data (*.csv)", "PNG Image (*.png)"]
+        ).getSaveFileName()
 
-    def _buildFrame(self):
-        # build pandas data frame
-        d = {key: pd.Series(val.values, index=val.time)
-             for key, val in self.dataPoints.items()}
-        try:
-            self.df = pd.DataFrame.from_dict(d, orient='index').transpose()
-            self.df.index.name = 'time'
-            self.df.sort_index(inplace=True)
-        except BaseException:
-            self.failed.emit()
-            self.df = None
+        self.worker = self.Worker(self, dataPoints, fileName)
 
-    @pyqtSlot()
     def runExport(self):
-        file, ext = os.path.splitext(self.fileName)
-        if ext == '.csv':
-            self.exportCsv()
-        elif ext == '.png':
-            self.exportPng()
-        else:
-            self.failed.emit("Unsupported file extension '{ext}'.")
+        self.worker.start()
 
-    def exportPng(self):
-        """
-        Exports the data point dataframe as png with matplotlib.
-        :param fileName: name of file with extension
-        """
-        self._buildFrame()
-        if self.df is None:
-            return
+    class Worker(QThread):
+        def __init__(self, parent, data, file):
+            super().__init__()
+            self.dataPoints = data
+            self.fileName = file
+            self.parent = parent
 
-        matplotlib.use('agg')
-        fig = plt.figure(figsize=(10, 6))
-        gs = gridspec.GridSpec(1, 1, hspace=0.1)
-        axes = plt.Subplot(fig, gs[0])
+        def run(self):
+            if self.dataPoints is None:
+                self.parent.failed.emit("No data given")
+                return
+            if self.fileName is None:
+                self.parent.failed.emit("No file name given")
+                return
+            self._buildFrame()
+            if self.df is None:
+                return
+            file, ext = os.path.splitext(self.fileName)
+            if ext == '.csv':
+                self.exportCsv()
+            elif ext == '.png':
+                self.exportPng()
+            else:
+                self.parent.failed.emit(f"Unsupported file extension '{ext}'.")
+            self.parent.finished.emit()
 
-        for col in self.df.columns:
-            self.df[col].plot(ax=axes, label=col)
+        def _buildFrame(self):
+            # build pandas data frame
+            d = {key: pd.Series(val.values, index=val.time)
+                 for key, val in self.dataPoints.items()}
+            try:
+                self.df = pd.DataFrame.from_dict(d, orient='index').transpose()
+                self.df.index.name = 'time'
+                self.df.sort_index(inplace=True)
+            except BaseException:
+                self.parent.failed.emit()
+                self.df = None
 
-        axes.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=4,
-                    ncol=4, mode="expand", borderaxespad=0., framealpha=0.5)
+        def exportPng(self):
+            """
+            Exports the data point dataframe as png with matplotlib.
+            :param fileName: name of file with extension
+            """
 
-        axes.grid(True)
-        if self.df.index.name == 'time':
-            axes.set_xlabel(r"Time (s)")
+            matplotlib.use('agg')
+            fig = plt.figure(figsize=(10, 6))
+            gs = gridspec.GridSpec(1, 1, hspace=0.1)
+            axes = plt.Subplot(fig, gs[0])
 
-        fig.add_subplot(axes)
-        fig.savefig(self.fileName, dpi=300)
-        self.finished.emit()
+            for col in self.df.columns:
+                self.df[col].plot(ax=axes, label=col)
 
-    def exportCsv(self, sep=','):
-        """
-        Exports the data point dataframe as csv
-        :param sep: separator for csv (default: ,)
-        """
-        self._buildFrame()
-        if self.df is None:
-            return
-        self.df.to_csv(self.fileName, sep=sep)
-        self.finished.emit()
+            axes.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=4,
+                        ncol=4, mode="expand", borderaxespad=0., framealpha=0.5)
+
+            axes.grid(True)
+            if self.df.index.name == 'time':
+                axes.set_xlabel(r"Time (s)")
+
+            fig.add_subplot(axes)
+            fig.savefig(self.fileName, dpi=300)
+
+        def exportCsv(self, sep=','):
+            """
+            Exports the data point dataframe as csv
+            :param sep: separator for csv (default: ,)
+            """
+            self.df.to_csv(self.fileName, sep=sep)
 
 
 class DataIntDialog(QDialog):
