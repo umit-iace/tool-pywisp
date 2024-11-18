@@ -38,13 +38,14 @@ from pyqtgraph.dockarea import *
 from .connection import SerialConnection, SocketConnection, IACEConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
-from .utils import getResource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
+from .utils import getResource, PlainTextLogger, DataPointBuffer, Exporter, DataIntDialog, \
     DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, PinnedDock, \
     ContextLineEditAction, TreeWidgetStyledItemDelegate, IACEConnDialog
 
 from .visualization import MplVisualizer, VtkVisualizer
 from .gamepad import getGamepadByIndex
 from .gamepad import getAllGamepads
+from .widgets.plotchart import PlotChart
 
 
 class MainGui(QMainWindow):
@@ -650,11 +651,8 @@ class MainGui(QMainWindow):
 
     def _initSettings(self):
         """
-        Provides initial settings for view, plot and log management.
+        Provides initial settings for log management.
         """
-        # view management
-        self._addSetting("view", "show_coordinates", "True")
-
         # log management
         self._addSetting("log_colors", "CRITICAL", "#DC143C")
         self._addSetting("log_colors", "ERROR", "#B22222")
@@ -663,36 +661,13 @@ class MainGui(QMainWindow):
         self._addSetting("log_colors", "DEBUG", "#4682B4")
         self._addSetting("log_colors", "NOTSET", "#000000")
 
-        # plot management
-        self._addSetting("plot_colors", "blue", "#1f77b4")
-        self._addSetting("plot_colors", "orange", "#ff7f0e")
-        self._addSetting("plot_colors", "green", "#2ca02c")
-        self._addSetting("plot_colors", "red", "#d62728")
-        self._addSetting("plot_colors", "purple", "#9467bd")
-        self._addSetting("plot_colors", "brown", "#8c564b")
-        self._addSetting("plot_colors", "pink", "#e377c2")
-        self._addSetting("plot_colors", "gray", "#7f7f7f")
-        self._addSetting("plot_colors", "olive", "#bcbd22")
-        self._addSetting("plot_colors", "cyan", "#17becf")
-
-    def updateCoordInfo(self, pos, widget, coordItem):
+    def updateCoordInfo(self, coord_text):
+        self.coordLabel.setText(coord_text)
         self.coordLabel.setVisible(True)
         self.coordTimer.start(5000)
-        mouseCoords = widget.getPlotItem().vb.mapSceneToView(pos)
-        coordItem.setPos(mouseCoords.x(), mouseCoords.y())
-        coord_text = "x={:.3e} y={:.3e}".format(mouseCoords.x(),
-                                                mouseCoords.y())
-        self.coordLabel.setText(coord_text)
-
-        show_info = self._settings.value("view/show_coordinates") == "True"
-        if widget.sceneBoundingRect().contains(pos) and show_info:
-            coordItem.setText(coord_text.replace(" ", "\n"))
-            coordItem.show()
-        else:
-            coordItem.hide()
 
     def disableCoord(self):
-        self.coordLabel.setVisible(False)
+        self.coordLabel.setText("")
         self.coordTimer.stop()
 
     # event functions
@@ -914,63 +889,6 @@ class MainGui(QMainWindow):
         title = item.text(0)
         self.plotCharts[title].updateCurves(dataPointBuffers)
 
-    def createCustomPlotWidget(self, chart):
-        # create plot widget
-        widget = PlotWidget()
-        widget.showGrid(True, True)
-        widget.getPlotItem().getAxis("bottom").setLabel(text="Time", units="s")
-
-        # enable down-sampling and clipping for better performance
-        widget.setDownsampling(ds=None, auto=True)
-        widget.setClipToView(True)
-
-        coordItem = TextItem(text='', anchor=(0, 1))
-        widget.getPlotItem().addItem(coordItem, ignoreBounds=True)
-
-        def infoWrapper(pos):
-            self.updateCoordInfo(pos, widget, coordItem)
-
-        widget.scene().sigMouseMoved.connect(infoWrapper)
-
-        qActionSep1 = QAction("", self)
-        qActionSep1.setSeparator(True)
-        qActionSep2 = QAction("", self)
-        qActionSep2.setSeparator(True)
-        qActionSep3 = QAction("", self)
-        qActionSep3.setSeparator(True)
-
-        qActionMovingWindowEnable = QAction('Enable', self, checkable=True)
-        qActionMovingWindowEnable.setChecked(self.config['MovingWindowEnable'])
-        qActionMovingWindowEnable.triggered.connect(lambda state, _chart=chart: _chart.setEnableMovingWindow(state))
-
-        qActionMovingWindowSize = ContextLineEditAction(min=0, max=10000, current=chart.getMovingWindowWidth(),
-                                                        unit='s', title='Size', parent=self)
-        qActionMovingWindowSize.dataEmit.connect(lambda data,
-                                                        _chart=chart,
-                                                        _widget=widget: _chart.setMovingWindowWidth(data))
-        qMenuMovingWindow = QMenu('Moving Window', self)
-        qMenuMovingWindow.addAction(qActionMovingWindowSize)
-        qMenuMovingWindow.addAction(qActionMovingWindowEnable)
-
-        widget.scene().contextMenu = [qActionSep1,
-                                      QAction("Auto Range All", self),
-                                      qActionSep2,
-                                      QAction("Export as ...", self),
-                                      qActionSep3,
-                                      qMenuMovingWindow,
-                                      ]
-
-        def _export_wrapper(export_func):
-            def _wrapper():
-                return export_func(widget.getPlotItem(), )
-
-            return _wrapper
-
-        widget.scene().contextMenu[1].triggered.connect(lambda _chart=chart: _chart.setAutoRange())
-        widget.scene().contextMenu[3].triggered.connect(_export_wrapper(self.exportPlotItem))
-
-        return widget
-
     def plotDataVector(self, item):
         title = str(item.text(0))
         if title in self.plotCharts.keys():
@@ -979,10 +897,9 @@ class MainGui(QMainWindow):
 
         # create chart
         chart = PlotChart(title,
-                          self._settings,
                           self.config['MovingWindowEnable'],
                           self.config['MovingWindowSize'])
-        chart.plotWidget = self.createCustomPlotWidget(chart)
+        chart.coords.connect(self.updateCoordInfo)
         self.plotCharts[title] = chart
 
         # add curves
@@ -994,7 +911,7 @@ class MainGui(QMainWindow):
 
         # create dock container and add it to dock area
         dock = Dock(title, closable=True)
-        dock.addWidget(chart.plotWidget)
+        dock.addWidget(chart)
         dock.sigClosed.connect(self.closedDock)
 
         plotWidgets = self.findAllPlotDocks()

@@ -17,7 +17,6 @@ from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleV
     QPainter, QTextCursor
 from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QAction, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
     QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction, QShortcut, QStyledItemDelegate, QStyle
-from pyqtgraph import PlotWidget, TextItem, mkPen
 from pyqtgraph.dockarea import Dock
 
 from .widgets.fileselector import FileSelector
@@ -215,84 +214,6 @@ class DataPointBuffer(object):
         del self.values[:]
         del self.time[:]
 
-
-class PlotChart(object):
-    """
-    Object containing the plot widgets and the associated plot curves
-    """
-
-    def __init__(self, title, settings, movingWindowEnable, movingWindowWidth):
-        self.title = title
-        self.plotWidget = None
-        self.plotCurves = {}
-
-        # plot settings
-        self.settings = settings
-        self.movingWindowEnable = movingWindowEnable
-        self.movingWindowWidth = movingWindowWidth
-
-    def addCurve(self, name, data):
-        """
-        Adds a curve to the plot widget
-        Args:
-            dataPoint(DataPointBuffer): Data point which contains the data be added
-        """
-        # get plot color
-        self.settings.beginGroup('plot_colors')
-        cKeys = self.settings.childKeys()
-        colorIdxItem = len(self.plotCurves) % len(cKeys)
-        colorItem = QColor(self.settings.value(cKeys[colorIdxItem]))
-        self.settings.endGroup()
-
-        # add the actual curve
-        self.plotCurves[name] = self.plotWidget.plot(x=data.time, y=data.values,
-                                                    name=name,
-                                                    pen=mkPen(colorItem, width=1))
-
-    def removeCurve(self, name):
-        if name in self.plotCurves:
-            curve = self.plotCurves.pop(name)
-        self.plotWidget.getPlotItem().removeItem(curve)
-
-    def setAutoRange(self):
-        self.plotWidget.autoRange()
-        self.plotWidget.enableAutoRange()
-
-    def setEnableMovingWindow(self, movingWindowEnable):
-        self.movingWindowEnable = movingWindowEnable
-        if movingWindowEnable:
-            self.plotWidget.disableAutoRange(axis="x")
-            self.plotWidget.enableAutoRange(axis="y")
-        else:
-            self.plotWidget.autoRange()
-            self.plotWidget.enableAutoRange(axis="x")
-            self.plotWidget.enableAutoRange(axis="y")
-
-    def setMovingWindowWidth(self, movingWindowWidth):
-        self.movingWindowWidth = int(movingWindowWidth)
-
-    def getMovingWindowWidth(self):
-        return self.movingWindowWidth
-
-    def updateCurves(self, dataPoints):
-        """
-        Updates all curves of the plot with the actual data in the buffers
-        """
-        for name, curve in self.plotCurves.items():
-            datax = dataPoints[name].time
-            datay = dataPoints[name].values
-            curve.setData(datax, datay)
-
-        if self.plotCurves and self.movingWindowEnable:
-            self.plotWidget.setXRange(max(0, datax[-1] - self.movingWindowWidth), datax[-1])
-
-    def clear(self):
-        """
-        Clears the data point and curve lists and the plot items
-        """
-        if self.plotWidget:
-            self.plotWidget.getPlotItem().clear()
-            self.plotCurves.clear()
 
 
 class Exporter(QObject):
