@@ -1073,7 +1073,7 @@ class MainGui(QMainWindow):
 
     @pyqtSlot(str)
     def exportFailed(self, msg):
-        self._logger.error("Export failed with: {msg}.")
+        self._logger.error(f"Export failed with: {msg}.")
         self.exp_thread.terminate()
         self.exp_thread.wait()
 
