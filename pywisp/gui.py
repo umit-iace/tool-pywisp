@@ -65,11 +65,12 @@ class MainGui(QMainWindow):
         QCoreApplication.setApplicationName(globals()["__package__"])
 
         # general config parameters
-        self.config = {'TimerTime': 100,
+        self.config = {'TimerTime': 100, # [] = ms
                        'HeartbeatTime': 0,
-                       'InterpolationPoints': 100,
                        'MovingWindowEnable': False,
                        'MovingWindowSize': 10,
+                       'downsampling': True,
+                       'downsamplingMode': 'mean',
                        }
         self.configDefaults = self.config.copy()
         QStyleSheet = """
@@ -898,7 +899,10 @@ class MainGui(QMainWindow):
         # create chart
         chart = PlotChart(title,
                           self.config['MovingWindowEnable'],
-                          self.config['MovingWindowSize'])
+                          self.config['MovingWindowSize'],
+                          self.config['autoDownsampling'],
+                          self.config['downsamplingMode'],
+                          )
         chart.coords.connect(self.updateCoordInfo)
         self.plotCharts[title] = chart
 
@@ -1001,7 +1005,9 @@ class MainGui(QMainWindow):
         self.lastMeasList.scrollToItem(item)
         self.copyLastMeas(item)
 
-        self.timer.start(max(int(self.config['TimerTime']), 40)) # ~25 fps should be plenty
+        # cap the plot updates at 25 fps
+        timeout = max(int(self.config['TimerTime']), 40)
+        self.timer.start(timeout)
         if self.config['HeartbeatTime']:
             self.heartbeatTimer.start(int(self.config['HeartbeatTime']))
         self.exp.runExperiment()

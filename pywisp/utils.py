@@ -215,7 +215,6 @@ class DataPointBuffer(object):
         del self.time[:]
 
 
-
 class Exporter(QObject):
     """
     Class exports data points from GUI to different formats (csv, png) as pandas dataframe.
@@ -230,12 +229,12 @@ class Exporter(QObject):
             ["CSV Data (*.csv)", "PNG Image (*.png)"]
         ).getSaveFileName()
 
-        self.worker = self.Worker(self, dataPoints, fileName)
+        self.worker = self.ExportThread(self, dataPoints, fileName)
 
     def runExport(self):
         self.worker.start()
 
-    class Worker(QThread):
+    class ExportThread(QThread):
         def __init__(self, parent, data, file):
             super().__init__()
             self.dataPoints = data

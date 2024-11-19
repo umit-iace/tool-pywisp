@@ -29,7 +29,7 @@ class PlotChart(PlotWidget):
     """
     coords = pyqtSignal(str)
 
-    def __init__(self, title, movingWindowEnable, movingWindowWidth):
+    def __init__(self, title, movingWindowEnable, movingWindowWidth, downsampling, downsamplingMethod):
         super().__init__()
         self.title = title
         self.plotCurves = {}
@@ -38,12 +38,15 @@ class PlotChart(PlotWidget):
         self.settings = settings(_default)
         self.movingWindowEnable = movingWindowEnable
         self.movingWindowWidth = movingWindowWidth
+
         # plot widget settings
         self.showGrid(True, True)
         self.getPlotItem().getAxis("bottom").setLabel(text="Time", units="s")
 
         # enable down-sampling and clipping for better performance
-        self.setDownsampling(ds=None, auto=True)
+        self.setDownsampling(ds=downsampling,
+                             auto=True if downsampling is True else False,
+                             mode=downsamplingMethod)
         self.setClipToView(True)
 
         coordItem = TextItem(text='', anchor=(0, 1))
@@ -128,6 +131,7 @@ class PlotChart(PlotWidget):
         self.plotCurves[name] = self.plot(x=data.time, y=data.values,
                                           name=name,
                                           pen=mkPen(colorItem, width=1),
+                                          skipFiniteCheck=True
                                           )
 
     def removeCurve(self, name):
