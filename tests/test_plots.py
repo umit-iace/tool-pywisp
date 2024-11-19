@@ -7,7 +7,6 @@ import time
 import unittest
 
 import numpy as np
-from matplotlib import pyplot as plt
 import pyqtgraph as pg
 
 from PyQt5.QtWidgets import QApplication
@@ -106,17 +105,12 @@ class PlotTestCase(unittest.TestCase):
         var = np.var(times[1])
         print(f"Mean: {mean}, Variance: {var}")
 
-        f, ax = plt.subplots()
-        ax.plot(times[0], times[1], label="sum")
-        ax.plot(times[0], times[2], label="update")
-        ax.plot(times[0], times[3], label="render")
-        ax.set_xlabel("Step")
-        ax.set_ylabel("Time in s")
-        ax.legend()
-        ax.grid()
-        f_name = f"timings_for_moving_{moving}_downsampling_{downsample}.pdf"
-        f.savefig(os.path.join(self.base_path, f_name))
-        # plt.show()
+        timeplot = PlotChart("Timings",{"MovingWindowEnable": False})
+        timeplot.addCurve("sum",    DataPointBuffer(times[0], times[1]))
+        timeplot.addCurve("update", DataPointBuffer(times[0], times[2]))
+        timeplot.addCurve("render", DataPointBuffer(times[0], times[3]))
+        f_name = f"timings_for_moving_{moving}_downsampling_{downsample}.png"
+        timeplot.export(f_name)
 
     def test_update_timings(self):
         # downsampling
