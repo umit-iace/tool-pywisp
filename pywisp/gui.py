@@ -32,7 +32,6 @@ except ImportError:
 from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QSettings, QCoreApplication, QMutex
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from pyqtgraph import PlotWidget, TextItem
 from pyqtgraph.dockarea import *
 
 from .connection import SerialConnection, SocketConnection, IACEConnection
