@@ -98,21 +98,8 @@ class PlotChart(PlotWidget):
                                       qMenuMovingWindow,
                                       ]
 
-        def exportPlotItem():
-            dataPoints = dict()
-            for i, c in enumerate(self.getPlotItem().curves):
-                if c.getData() is None:
-                    continue
-                if len(c.getData()) > 2:
-                    self._logger.warning('Can not handle the amount of data!')
-                    continue
-                dataPoints[c.name()] = DataPointBuffer(time=c.getData()[0], values=c.getData()[1])
-
-            self.exporter = Exporter(dataPoints=dataPoints)
-            self.exporter.runExport()
-
         self.scene().contextMenu[1].triggered.connect(self.setAutoRange)
-        self.scene().contextMenu[3].triggered.connect(exportPlotItem)
+        self.scene().contextMenu[3].triggered.connect(self.export)
 
     def addCurve(self, name, data):
         """
@@ -183,3 +170,15 @@ class PlotChart(PlotWidget):
         self.getPlotItem().clear()
         self.plotCurves.clear()
 
+    def export(self, filename=None):
+        dataPoints = dict()
+        for i, c in enumerate(self.getPlotItem().curves):
+            if c.getData() is None:
+                continue
+            if len(c.getData()) > 2:
+                self._logger.warning('Can not handle the amount of data!')
+                continue
+            dataPoints[c.name()] = DataPointBuffer(time=c.getData()[0], values=c.getData()[1])
+
+        self.exporter = Exporter(dataPoints=dataPoints, fileName=filename)
+        self.exporter.runExport()
