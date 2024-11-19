@@ -1109,14 +1109,7 @@ class MainGui(QMainWindow):
 
     def configureConfig(self, idx):
         self.config = self.configDefaults.copy()
-        if 'Config' not in self._experiments[idx]:
-            return
-        for key, value in self._experiments[idx]['Config'].items():
-            if key in self.config:
-                self.config[key] = value
-            else:
-                self._logger.warning("Experiment config key '{}' does not exist.\n\
-                Possible keys: {}".format(key, [key for key in self.config.keys()]))
+        self.config |= self._experiments[idx].get('Config', {})
 
     def configureRemote(self, idx):
         self.remoteWidgetLayout.clearAll()
