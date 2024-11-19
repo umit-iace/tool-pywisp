@@ -30,10 +30,10 @@ class PlotTestCase(unittest.TestCase):
             lbls = ["".join(random.choice(lttrs) for i in range(10))
                         for j in range(10)]
             self.dataPoints = {lbl: DataPointBuffer() for lbl in lbls}
-            t_end = 10000
-            for t in range(0, t_end):
+            t_end = 250
+            for t in np.arange(0, t_end, 0.01):
                 for idx, d in enumerate(self.dataPoints.values()):
-                    d.addValue(t, np.sin(20*idx*t/t_end))
+                    d.addValue(t, np.sin(20*idx*t/t_end) + np.sin(20*idx*t)/10)
             with open(self.d_name, "wb") as f:
                 pickle.dump(self.dataPoints, f)
 
@@ -96,7 +96,7 @@ class PlotTestCase(unittest.TestCase):
             t_full = t2 - t0
             t_update = t1 -t0
             t_render = t2 -t1
-            times.append([i, t_full, t_update, t_render])
+            times.append([buf.time[i-20], t_full, t_update, t_render])
         chart.close()
 
         times = np.array(times).T
