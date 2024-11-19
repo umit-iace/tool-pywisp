@@ -49,7 +49,12 @@ class PlotChart(PlotWidget):
         coordItem = TextItem(text='', anchor=(0, 1))
         self.getPlotItem().addItem(coordItem, ignoreBounds=True)
         self.timer = QTimer()
-        self.timer.timeout.connect(coordItem.hide)
+        def wrapCoordHide():
+            try:
+                coordItem.hide()
+            except RuntimeError: # happens when Chart got garbage collected in the meantime
+                pass
+        self.timer.timeout.connect(wrapCoordHide)
 
         def coordWrapper(pos):
             coords = self.getPlotItem().vb.mapSceneToView(pos)
