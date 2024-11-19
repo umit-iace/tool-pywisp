@@ -29,24 +29,25 @@ class PlotChart(PlotWidget):
     """
     coords = pyqtSignal(str)
 
-    def __init__(self, title, movingWindowEnable, movingWindowWidth, downsampling, downsamplingMethod):
+    def __init__(self, title, config):
         super().__init__()
         self.title = title
         self.plotCurves = {}
 
         # plot settings
         self.settings = settings(_default)
-        self.movingWindowEnable = movingWindowEnable
-        self.movingWindowWidth = movingWindowWidth
+        self.movingWindowEnable = config.get("MovingWindowEnable", True)
+        self.movingWindowWidth = config.get("MovingWindowWidth", 30)
 
         # plot widget settings
         self.showGrid(True, True)
         self.getPlotItem().getAxis("bottom").setLabel(text="Time", units="s")
 
         # enable down-sampling and clipping for better performance
-        self.setDownsampling(ds=downsampling,
-                             auto=True if downsampling is True else False,
-                             mode=downsamplingMethod)
+        method = config.get("downsamplingMethod", 'peak')
+        self.setDownsampling(ds=1 if method == 'off' else None,
+                             auto=None if method == 'off' else True,
+                             mode='peak' if method == 'off' else method)
         self.setClipToView(True)
 
         coordItem = TextItem(text='', anchor=(0, 1))
@@ -80,7 +81,7 @@ class PlotChart(PlotWidget):
         qActionSep3.setSeparator(True)
 
         qActionMovingWindowEnable = QAction('Enable', self, checkable=True)
-        qActionMovingWindowEnable.setChecked(movingWindowEnable)
+        qActionMovingWindowEnable.setChecked(self.movingWindowEnable)
         qActionMovingWindowEnable.triggered.connect(self.setEnableMovingWindow)
 
         qActionMovingWindowSize = ContextLineEditAction(min=0, max=10000, current=self.getMovingWindowWidth(),
@@ -136,9 +137,7 @@ class PlotChart(PlotWidget):
             self.disableAutoRange(axis="x")
             self.enableAutoRange(axis="y")
         else:
-            self.autoRange()
-            self.enableAutoRange(axis="x")
-            self.enableAutoRange(axis="y")
+            self.setAutoRange()
 
     def setMovingWindowWidth(self, movingWindowWidth):
         self.movingWindowWidth = int(movingWindowWidth)

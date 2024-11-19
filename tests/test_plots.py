@@ -5,6 +5,7 @@ import string
 import sys
 import time
 import unittest
+from itertools import product
 
 import numpy as np
 import pyqtgraph as pg
@@ -38,12 +39,15 @@ class PlotTestCase(unittest.TestCase):
                 pickle.dump(self.dataPoints, f)
 
     def test_init(self):
-        chart = PlotChart("test", False, 30, False, None)
+        chart = PlotChart("test", {})
         chart.show()
         chart.close()
 
     def test_plot_all(self):
-        chart = PlotChart("test", False, 30, False, None)
+        chart = PlotChart("test", {
+            "MovingWindowEnable": False,
+            "downsamplingMethod": 'peak'
+        })
         self.app.setActiveWindow(chart)
         self.app.processEvents()
         chart.show()
@@ -59,18 +63,19 @@ class PlotTestCase(unittest.TestCase):
         chart.close()
 
     def test_plot_incremental(self):
-        self._incrementaltest(True, True)
-        self._incrementaltest(True, 1)
-        self._incrementaltest(False, True)
-        self._incrementaltest(False, 1)
+        print("entering incremental test")
+        for mw, ds in product([False, True], ['peak', 'subsample', 'mean', 'off']):
+            print(f" testing {mw=}, {ds=}")
+            self._incrementaltest(mw, ds)
+        # wait for last export to finish
+        time.sleep(0.5)
 
     def _incrementaltest(self, moving, downsample):
-        print(f"Plotting with"
-              f"moving window: {moving}, "
-              f"downsampling rate: {downsample}"
-              )
-
-        chart = PlotChart("test", moving, 30, downsample, "peak")
+        chart = PlotChart("test", {
+            "MovingWindowEnable": moving,
+            "MovingWindowWidth": 30,
+            "downsamplingMethod": downsample,
+        })
         self.app.processEvents()
         chart.show()
         ncurv = len(self.dataPoints)
@@ -114,28 +119,18 @@ class PlotTestCase(unittest.TestCase):
 
     def test_update_timings(self):
         # downsampling
-        print("No windowing, no downsampling")
-        self.get_update_timings(False, 0, 1, None)
-        print("No windowing, auto downsampling with subsample mode")
-        self.get_update_timings(False, 0, True, "subsample")
-        print("No windowing, auto downsampling with mean mode")
-        self.get_update_timings(False, 0, True, "mean")
-        print("No windowing, auto downsampling with peak mode")
-        self.get_update_timings(False, 0, True, "peak")
+        for ws, ds in product([False, 10, 100], ['subsample', 'mean', 'peak', 'off']):
+            print(f"{"No " if not ws else ""}windowing{f" with {ws=}" if ws else ""}, "
+                  f"{"no " if ds == 'off' else ""}downsampling{f" with {ds} mode" if ds != 'off' else ""}")
+            self.get_update_timings(ws, ds)
 
-        # moving window
-        print("windowing with w=100, no downsampling")
-        self.get_update_timings(True, 100, 1, None)
-        print("windowing with w=1000, no downsampling")
-        self.get_update_timings(True, 1000, 1, None)
-
-
-    def get_update_timings(self, windowing, window_size, downsample, d_method):
+    def get_update_timings(self, ws, ds):
         chart = PlotChart(title="fixed window",
-                          movingWindowEnable=windowing,
-                          movingWindowWidth=window_size,
-                          downsampling=downsample,
-                          downsamplingMethod=d_method)
+                          config={
+                              "MovingWindowEnable": ws,
+                              "MovingWindowWidth": ws,
+                              "downsampling": ds,
+                          })
         for lbl, data in self.dataPoints.items():
             chart.addCurve(lbl, data)
         chart.show()

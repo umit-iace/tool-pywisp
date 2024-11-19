@@ -66,10 +66,6 @@ class MainGui(QMainWindow):
         # general config parameters
         self.config = {'TimerTime': 100, # [] = ms
                        'HeartbeatTime': 0,
-                       'MovingWindowEnable': False,
-                       'MovingWindowSize': 10,
-                       'downsampling': True,
-                       'downsamplingMode': 'mean',
                        }
         self.configDefaults = self.config.copy()
         QStyleSheet = """
@@ -896,12 +892,7 @@ class MainGui(QMainWindow):
             return
 
         # create chart
-        chart = PlotChart(title,
-                          self.config['MovingWindowEnable'],
-                          self.config['MovingWindowSize'],
-                          self.config['autoDownsampling'],
-                          self.config['downsamplingMode'],
-                          )
+        chart = PlotChart(title, self.config)
         chart.coords.connect(self.updateCoordInfo)
         self.plotCharts[title] = chart
 
