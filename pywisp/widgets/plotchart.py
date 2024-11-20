@@ -1,3 +1,4 @@
+from bisect import bisect_left
 from PyQt5.QtCore import QTimer, pyqtSignal
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QAction, QMenu, QWidget
@@ -133,11 +134,7 @@ class PlotChart(PlotWidget):
 
     def setEnableMovingWindow(self, movingWindowEnable):
         self.movingWindowEnable = movingWindowEnable
-        if movingWindowEnable:
-            self.disableAutoRange(axis="x")
-            self.enableAutoRange(axis="y")
-        else:
-            self.setAutoRange()
+        self.setAutoRange()
 
     def setMovingWindowWidth(self, movingWindowWidth):
         self.movingWindowWidth = int(movingWindowWidth)
@@ -149,18 +146,23 @@ class PlotChart(PlotWidget):
         """
         Updates all curves of the plot with the actual data in the buffers
         """
-        lastX = 0
+        lastX = [ dataPoints[name].time[-1]
+                     for name in self.plotCurves.keys()
+                     if dataPoints[name].time ]
+        if not lastX:
+            return
+        firstX = max(lastX) - self.movingWindowWidth
+
+        def xRange(time, values):
+            start = bisect_left(time, firstX)
+            return time[start:], values[start:]
+
         for name, curve in self.plotCurves.items():
             datax = dataPoints[name].time
             datay = dataPoints[name].values
+            if self.movingWindowEnable:
+                datax, datay = xRange(datax, datay)
             curve.setData(datax, datay)
-            if len(datax) != 0:
-                lastX = max(lastX, datax[-1])
-
-        if lastX and self.movingWindowEnable:
-            self.setXRange(
-                max(0, lastX - self.movingWindowWidth), lastX,
-            )
 
     def clear(self):
         """
