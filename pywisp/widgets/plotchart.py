@@ -45,7 +45,7 @@ class PlotChart(PlotWidget):
         self.getPlotItem().getAxis("bottom").setLabel(text="Time", units="s")
 
         # enable down-sampling and clipping for better performance
-        method = config.get("downsamplingMethod", 'peak')
+        method = config.get("downsamplingMethod", 'subsample')
         self.setDownsampling(ds=1 if method == 'off' else None,
                              auto=None if method == 'off' else True,
                              mode='peak' if method == 'off' else method)
