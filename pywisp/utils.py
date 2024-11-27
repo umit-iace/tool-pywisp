@@ -312,7 +312,7 @@ class Exporter(object):
         # build pandas data frame
         d = {key: pd.Series(val.values, index=val.time)
              for key, val in dataPoints.items()}
-        self.df = pd.DataFrame.from_dict(d)
+        self.df = pd.DataFrame.from_dict(d, orient='index').transpose()
         self.df.index.name = 'time'
 
     def exportPng(self, fileName):
