@@ -190,12 +190,16 @@ class DataPointBuffer(object):
     def __init__(self, time=None, values=None):
         if time is None:
             self.time = []
-        else:
+        elif isinstance(time, list):
             self.time = time
+        elif isinstance(time, np.ndarray):
+            self.time = time.tolist()
         if values is None:
             self.values = []
-        else:
+        elif isinstance(values, list):
             self.values = values
+        elif isinstance(values, np.ndarray):
+            self.values = values.tolist()
 
     def addValue(self, time, value):
         """
