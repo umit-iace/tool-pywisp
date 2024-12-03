@@ -884,6 +884,7 @@ class MainGui(QMainWindow):
     def updatePlot(self, item, dataPointBuffers):
         title = item.text(0)
         if title in self.plotCharts:
+            self.plotCharts[title].cache.clear()
             self.plotCharts[title].updateCurves(dataPointBuffers)
 
     def plotDataVector(self, item):
