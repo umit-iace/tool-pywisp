@@ -238,6 +238,12 @@ class Exporter(QObject):
     def runExport(self):
         self.worker.start()
 
+    def __del__(self):
+        try:
+            self.worker.wait()
+        except RuntimeError: # happens when ExportThread already cleaned up on C++ side
+            pass
+
     class ExportThread(QThread):
         def __init__(self, parent, data, file):
             super().__init__()
