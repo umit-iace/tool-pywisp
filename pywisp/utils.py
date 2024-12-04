@@ -314,6 +314,7 @@ class Exporter(object):
              for key, val in dataPoints.items()}
         self.df = pd.DataFrame.from_dict(d, orient='index').transpose()
         self.df.index.name = 'time'
+        self.df.sort_index(inplace=True)
 
     def exportPng(self, fileName):
         """
