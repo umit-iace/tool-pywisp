@@ -15,7 +15,6 @@
     Value4: 1
 
   Config:
-    TimerTime: 10
     MovingWindowSize: 5
     MovingWindowEnable: True
     HeartbeatTime: 100

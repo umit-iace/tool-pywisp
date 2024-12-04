@@ -153,7 +153,7 @@ Below a normal configuration with two experiments is presented:
         MplExampleVisualizer:
 
       Config:
-        TimerTime: 10
+        TimerTime: 40
         MovingWindowSize: 5
         MovingWindowEnable: True
 

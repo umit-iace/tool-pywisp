@@ -64,7 +64,7 @@ class MainGui(QMainWindow):
         QCoreApplication.setApplicationName(globals()["__package__"])
 
         # general config parameters
-        self.config = {'TimerTime': 100, # [] = ms
+        self.config = {'TimerTime': 40, # [] = ms
                        'HeartbeatTime': 0,
                        }
         self.configDefaults = self.config.copy()
