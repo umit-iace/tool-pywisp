@@ -268,6 +268,7 @@ class Exporter(QObject):
                 self.exportPng()
             else:
                 self.parent.failed.emit(f"Unsupported file extension '{ext}'.")
+                return
             self.parent.finished.emit()
 
         def _buildFrame(self):
