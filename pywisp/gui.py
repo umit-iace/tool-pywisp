@@ -1111,7 +1111,7 @@ class MainGui(QMainWindow):
 
     def configureConfig(self, idx):
         self.config = self.configDefaults.copy()
-        self.config |= self._experiments[idx].get('Config', {})
+        self.config.update(self._experiments[idx].get('Config', {}))
 
     def configureRemote(self, idx):
         self.remoteWidgetLayout.clearAll()
