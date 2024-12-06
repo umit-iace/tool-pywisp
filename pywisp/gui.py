@@ -1244,6 +1244,10 @@ class MainGui(QMainWindow):
         """
         if self.isConnected:
             self.disconnect()
+        if self.exporter != None:
+            self._logger.warn("Export in progress, ignoring shutdown!")
+            QCloseEvent.ignore()
+            return
         self._logger.info("Close Event received, shutting down.")
         logging.getLogger().removeHandler(self.textLogger)
         super().closeEvent(QCloseEvent)
