@@ -153,8 +153,7 @@ Below a normal configuration with two experiments is presented:
         MplExampleVisualizer:
 
       Config:
-        TimerTime: 10
-        InterpolationPoints: 0
+        TimerTime: 40
         MovingWindowSize: 5
         MovingWindowEnable: True
 
@@ -169,8 +168,7 @@ Plot Configuration
 
 Additionally the plot and visualization have some configuration parameters. These are:
 
-* TimerTime: Update intervall of the visualization/plot data
-* InterpolationPoints: Count of grid points to interpolation plot data
+* TimerTime: Update interval of the visualization/plot data
 * MovingWindow: Moving Window of the plot visualization
 
 The can be set by a right click of the plot in the GUI or about the Config menu.
@@ -179,7 +177,6 @@ To save the configuration the `defaults.sreg` can be extended by a `Config secti
 .. code-block:: yaml
 
     TimerTime:           <time in ms>
-    InterpolationPoints: <0..no interpolation, >0..grid points for interpolation>
     MovingWindowSize:    <time in s>
     MovingWindowEnable:  <True..enable moving window, False..disable moving window>
 

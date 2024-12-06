@@ -416,7 +416,6 @@ class ExperimentInteractor(QObject):
         for mod, name, settings in self.activeModules():
 
             if self.modSets[name] == settings:
-                print('continuing')
                 continue
             self.modSets[name] = cp.copy(settings)
             vals = list(settings.values())
