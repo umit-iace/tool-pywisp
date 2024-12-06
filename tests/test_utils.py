@@ -56,6 +56,16 @@ class ExporterTestCase(unittest.TestCase):
         e.worker.wait()
         self.assertTrue(os.path.exists(self.png_name))
 
+    def test_export_abort(self):
+        # use the png test since one takes some time
+        e = Exporter(dataPoints=self.dataPoints, fileName=self.csv_name)
+        e.runExport()
+        del e
+        # normally, the __del__ method should make us wait for the worker
+        # to finish, however that does not happen and the file is not
+        # created
+        self.assertTrue(os.path.exists(self.png_name))
+
     def test_timings(self):
         e = Exporter(dataPoints=self.dataPoints, fileName=self.csv_name)
 

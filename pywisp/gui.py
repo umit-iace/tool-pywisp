@@ -928,7 +928,7 @@ class MainGui(QMainWindow):
 
     def exportDone(self, success):
         if success:
-            self.statusbarLabel.setText("Export succesful.")
+            self.statusbarLabel.setText("Export successful.")
         self.exporter = None
 
     @pyqtSlot(QModelIndex)
