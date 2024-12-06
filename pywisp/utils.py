@@ -223,8 +223,7 @@ class Exporter(QObject):
     """
     Class exports data points from GUI to different formats (csv, png) as pandas dataframe.
     """
-    finished = pyqtSignal()
-    failed = pyqtSignal(str)
+    done = pyqtSignal(bool)
 
     def __init__(self, **kwargs):
         super().__init__()
@@ -234,6 +233,12 @@ class Exporter(QObject):
         ).getSaveFileName()
 
         self.worker = self.ExportThread(self, dataPoints, fileName)
+        self.logger = logging.getLogger("Exporter")
+        def handleLog(done, lvl, msg):
+            self.logger.log(lvl, msg)
+            if done:
+                self.done.emit(lvl != logging.ERROR)
+        self.worker.info.connect(handleLog)
 
     def runExport(self):
         self.worker.start()
@@ -245,6 +250,7 @@ class Exporter(QObject):
             pass
 
     class ExportThread(QThread):
+        info = pyqtSignal(bool,int,str)
         def __init__(self, parent, data, file):
             super().__init__()
             self.dataPoints = data
@@ -253,11 +259,12 @@ class Exporter(QObject):
 
         def run(self):
             if self.dataPoints is None:
-                self.parent.failed.emit("No data given")
+                self.info.emit(True, logging.ERROR, f"Export failed: No data given")
                 return
             if self.fileName is None:
-                self.parent.failed.emit("No file name given")
+                self.info.emit(True, logging.ERROR, f"Export failed: No file name given")
                 return
+            self.info.emit(False, logging.INFO, f"Export to {self.fileName} started.")
             self._buildFrame()
             if self.df is None:
                 return
@@ -267,9 +274,9 @@ class Exporter(QObject):
             elif ext == '.png':
                 self.exportPng()
             else:
-                self.parent.failed.emit(f"Unsupported file extension '{ext}'.")
+                self.info.emit(True, logging.ERROR, f"Export failed: Unsupported file extension '{ext}'.")
                 return
-            self.parent.finished.emit()
+            self.info.emit(True, logging.INFO, f"Export successful.")
 
         def _buildFrame(self):
             # build pandas data frame

@@ -783,9 +783,7 @@ class MainGui(QMainWindow):
         expData = deepcopy(dataPoints)
         self.data_mutex.unlock()
         self.exporter = Exporter(dataPoints=expData)
-        self.exporter.failed.connect(self.exportFailed)
-        self.exporter.finished.connect(self.exportFinished)
-        self._logger.info(f"Export to {self.exporter.worker.fileName} started.")
+        self.exporter.done.connect(self.exportDone)
         self.exporter.runExport()
 
     def removeDatapointFromTree(self):
@@ -928,15 +926,9 @@ class MainGui(QMainWindow):
         if len(openDocks) == 0:
             self.disableCoord()
 
-    @pyqtSlot()
-    def exportFinished(self):
-        self.statusbarLabel.setText("Export succesful.")
-        self._logger.info("Export successful.")
-        self.exporter = None
-
-    @pyqtSlot(str)
-    def exportFailed(self, msg):
-        self._logger.error(f"Export failed with: {msg}.")
+    def exportDone(self, success):
+        if success:
+            self.statusbarLabel.setText("Export succesful.")
         self.exporter = None
 
     @pyqtSlot(QModelIndex)
