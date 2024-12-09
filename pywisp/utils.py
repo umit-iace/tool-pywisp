@@ -169,15 +169,11 @@ class PlainTextLogger(logging.Handler):
     def emit(self, record):
         msg = self.format(record)
         if self.cb:
-            if self.cb:
-                self.settings.beginGroup('log_colors')
-                clr = QColor(self.settings.value(record.levelname,
-                                                 "#000000"))
-                self.settings.endGroup()
-                self.cb.setTextColor(clr)
+            clr = self.settings.color(record.levelname, 'log')
+            self.cb.setTextColor(clr)
 
-                self.cb.append(msg)
-                self.cb.moveCursor(QTextCursor.End)
+            self.cb.append(msg)
+            self.cb.moveCursor(QTextCursor.End)
         else:
             logging.getLogger().error("No callback configured!")
 

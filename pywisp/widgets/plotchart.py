@@ -6,25 +6,7 @@ from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QAction, QMenu, QWidget
 from pyqtgraph import PlotWidget, TextItem, mkPen
 from pywisp.utils import ContextLineEditAction, DataPointBuffer, Exporter
-from .utils import settings
-
-_default = {
-    "plot_colors": [
-        ("blue", "#1f77b4"),
-        ("orange", "#ff7f0e"),
-        ("green", "#2ca02c"),
-        ("red", "#d62728"),
-        ("purple", "#9467bd"),
-        ("brown", "#8c564b"),
-        ("pink", "#e377c2"),
-        ("gray", "#7f7f7f"),
-        ("olive", "#bcbd22"),
-        ("cyan", "#17becf"),
-    ],
-    "view": [
-        ("show_coordinates", "True")
-    ]
-}
+from ..settings import Settings
 
 class PlotChart(PlotWidget):
     """
@@ -38,7 +20,7 @@ class PlotChart(PlotWidget):
         self.plotCurves = {}
 
         # plot settings
-        self.settings = settings(_default)
+        self.settings = Settings()
         self.movingWindowEnable = config.get("MovingWindowEnable", True)
         self.movingWindowWidth = config.get("MovingWindowWidth", 30)
 
@@ -111,13 +93,7 @@ class PlotChart(PlotWidget):
         Args:
             dataPoint(DataPointBuffer): Data point which contains the data be added
         """
-        # get plot color
-        self.settings.beginGroup('plot_colors')
-        cKeys = self.settings.childKeys()
-        colorIdxItem = len(self.plotCurves) % len(cKeys)
-        colorItem = QColor(self.settings.value(cKeys[colorIdxItem]))
-        self.settings.endGroup()
-
+        color = self.settings.color(len(self.plotCurves))
         # add the actual curve
         self.plotCurves[name] = self.plot(name=name,
                                           pen=mkPen(colorItem, width=1),

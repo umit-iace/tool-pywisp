@@ -29,7 +29,7 @@ try:
     from yaml import CLoader as Loader, CDumper as Dumper
 except ImportError:
     from yaml import Loader, Dumper
-from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QSettings, QCoreApplication, QMutex
+from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QCoreApplication, QMutex
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from pyqtgraph.dockarea import *
@@ -44,6 +44,7 @@ from .utils import getResource, PlainTextLogger, DataPointBuffer, Exporter, Data
 from .visualization import MplVisualizer, VtkVisualizer
 from .gamepad import getGamepadByIndex
 from .gamepad import getAllGamepads
+from .settings import Settings
 from .widgets.plotchart import PlotChart
 
 
@@ -105,8 +106,7 @@ class MainGui(QMainWindow):
         self._logger = logging.getLogger(self.__class__.__name__)
 
         # load settings
-        self._settings = QSettings()
-        self._initSettings()
+        self._settings = Settings()
 
         # create experiment
         self._experiments = []
@@ -624,38 +624,11 @@ class MainGui(QMainWindow):
         """
         Sets the timer time in settings with a dialog.
         """
-        self._settings.beginGroup('plot')
         timerTime, ok = DataIntDialog.getData(parent=self,title="Timer Time", min=2, max=10000, unit='ms',
                                               current=self.config['TimerTime'])
-
         if ok:
             self.config['TimerTime'] = timerTime
             self._logger.info("Set timer time to {}".format(timerTime))
-
-        self._settings.endGroup()
-
-    def _addSetting(self, group, setting, value):
-        """
-        Adds a setting, if setting is present, no changes are made.
-        :param setting (str): Setting to add.
-        :param value: Value to be set.
-        """
-        if not self._settings.contains(group + '/' + setting):
-            self._settings.beginGroup(group)
-            self._settings.setValue(setting, value)
-            self._settings.endGroup()
-
-    def _initSettings(self):
-        """
-        Provides initial settings for log management.
-        """
-        # log management
-        self._addSetting("log_colors", "CRITICAL", "#DC143C")
-        self._addSetting("log_colors", "ERROR", "#B22222")
-        self._addSetting("log_colors", "WARNING", "#DAA520")
-        self._addSetting("log_colors", "INFO", "#101010")
-        self._addSetting("log_colors", "DEBUG", "#4682B4")
-        self._addSetting("log_colors", "NOTSET", "#000000")
 
     def updateCoordInfo(self, coord_text):
         self.coordLabel.setText(coord_text)
@@ -749,12 +722,7 @@ class MainGui(QMainWindow):
                 toplevelItem.addChild(child)
 
         for i in range(toplevelItem.childCount()):
-            self._settings.beginGroup('plot_colors')
-            cKeys = self._settings.childKeys()
-            colorIdxItem = i % len(cKeys)
-            colorItem = QColor(self._settings.value(cKeys[colorIdxItem]))
-            self._settings.endGroup()
-            toplevelItem.child(i).setBackground(0, colorItem)
+            toplevelItem.child(i).setBackground(0, self._settings.color(i))
 
         self.updatePlotChart(toplevelItem)
 
@@ -799,12 +767,7 @@ class MainGui(QMainWindow):
         toplevelItem.takeChild(toplevelItem.indexOfChild(self.dataPointTreeWidget.selectedItems()[0]))
 
         for i in range(toplevelItem.childCount()):
-            self._settings.beginGroup('plot_colors')
-            cKeys = self._settings.childKeys()
-            colorIdxItem = i % len(cKeys)
-            colorItem = QColor(self._settings.value(cKeys[colorIdxItem]))
-            self._settings.endGroup()
-            toplevelItem.child(i).setBackground(0, colorItem)
+            toplevelItem.child(i).setBackground(0, self._settings.color(i))
 
         self.updatePlotChart(toplevelItem)
 
@@ -946,9 +909,6 @@ class MainGui(QMainWindow):
         """
         self._currentExperimentIndex = self.experimentList.row(self._currentExpListItem)
         self._currentExperimentName = self._experiments[self._currentExperimentIndex]["Name"]
-
-        self._settings.beginGroup('plot')
-        self._settings.endGroup()
 
         if self._currentExperimentIndex is None:
             expName = ""
