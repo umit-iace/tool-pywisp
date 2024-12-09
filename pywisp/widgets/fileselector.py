@@ -32,8 +32,8 @@ class FileSelector(QFileDialog):
         if not selext:
             selext = self._extFromFilter(selfilt)
             selpath += selext
-        elif selext not in selfilt:
-            self.logger.error(f"Extension '{selext}' doesn't match used filter. Aborting!")
+        elif selext not in self.exts:
+            self.logger.error(f"Extension '{selext}' unknown. Aborting!")
             return
 
         seldir = os.path.dirname(selpath)
