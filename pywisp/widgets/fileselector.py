@@ -19,7 +19,7 @@ class FileSelector(QFileDialog):
     def getSaveFileName(self, text="Export as ..."):
         path = self.st.value("export_dir")
         ext = self.st.value("export_ext")
-        file = os.path.join(path, "export")
+        file = os.path.join(path, "export" + ext)
         filterStr = ";;".join(self.formats)
         ix = [ ext in fmt for fmt in self.formats ].index(True)
 
