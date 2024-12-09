@@ -1202,13 +1202,12 @@ class MainGui(QMainWindow):
         Is called by closing the GUI. Disconnects all connections and sends close event.
         :param QCloseEvent:
         """
+        self._logger.info("Close Event received, shutting down.")
         if self.isConnected:
             self.disconnect()
         if self.exporter != None:
-            self._logger.warn("Export in progress, ignoring shutdown!")
-            QCloseEvent.ignore()
-            return
-        self._logger.info("Close Event received, shutting down.")
+            self._logger.warn("Export in progress, waiting!")
+            self.exporter.wait()
         logging.getLogger().removeHandler(self.textLogger)
         super().closeEvent(QCloseEvent)
 

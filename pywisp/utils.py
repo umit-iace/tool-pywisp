@@ -239,7 +239,7 @@ class Exporter(QObject):
     def runExport(self):
         self.worker.start()
 
-    def __del__(self):
+    def wait(self):
         try:
             self.worker.wait()
         except RuntimeError: # happens when ExportThread already cleaned up on C++ side
