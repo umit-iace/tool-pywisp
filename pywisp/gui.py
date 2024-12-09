@@ -29,22 +29,23 @@ try:
     from yaml import CLoader as Loader, CDumper as Dumper
 except ImportError:
     from yaml import Loader, Dumper
-from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QSettings, QCoreApplication
+from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QCoreApplication, QMutex
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from pyqtgraph import PlotWidget, TextItem
 from pyqtgraph.dockarea import *
 
 from .connection import SerialConnection, SocketConnection, IACEConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
-from .utils import getResource, PlainTextLogger, DataPointBuffer, PlotChart, Exporter, DataIntDialog, \
+from .utils import getResource, PlainTextLogger, DataPointBuffer, Exporter, DataIntDialog, \
     DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, PinnedDock, \
     ContextLineEditAction, TreeWidgetStyledItemDelegate, IACEConnDialog
 
 from .visualization import MplVisualizer, VtkVisualizer
 from .gamepad import getGamepadByIndex
 from .gamepad import getAllGamepads
+from .settings import Settings
+from .widgets.plotchart import PlotChart
 
 
 class MainGui(QMainWindow):
@@ -64,11 +65,8 @@ class MainGui(QMainWindow):
         QCoreApplication.setApplicationName(globals()["__package__"])
 
         # general config parameters
-        self.config = {'TimerTime': 100,
+        self.config = {'TimerTime': 40, # [] = ms
                        'HeartbeatTime': 0,
-                       'InterpolationPoints': 100,
-                       'MovingWindowEnable': False,
-                       'MovingWindowSize': 10,
                        }
         self.configDefaults = self.config.copy()
         QStyleSheet = """
@@ -108,8 +106,7 @@ class MainGui(QMainWindow):
         self._logger = logging.getLogger(self.__class__.__name__)
 
         # load settings
-        self._settings = QSettings()
-        self._initSettings()
+        self._settings = Settings()
 
         # create experiment
         self._experiments = []
@@ -431,7 +428,7 @@ class MainGui(QMainWindow):
         self._currentExpListItem = None
         self._currentLastMeasItem = None
         self._currentDataPointBuffers = None
-        self.plotCharts = []
+        self.plotCharts = {}
 
         loadExpFromFileSuccess = self.loadExpFromFile(fileName)
 
@@ -453,6 +450,9 @@ class MainGui(QMainWindow):
         if loadExpFromFileSuccess:
             self._applyFirstExperiment()
             self.selectedExp = True
+
+        self.data_mutex = QMutex()
+        self.exporter = None
 
         # close splash screen
         self.splashScreen.finish(self)
@@ -624,76 +624,19 @@ class MainGui(QMainWindow):
         """
         Sets the timer time in settings with a dialog.
         """
-        self._settings.beginGroup('plot')
         timerTime, ok = DataIntDialog.getData(parent=self,title="Timer Time", min=2, max=10000, unit='ms',
                                               current=self.config['TimerTime'])
-
         if ok:
             self.config['TimerTime'] = timerTime
             self._logger.info("Set timer time to {}".format(timerTime))
 
-        self._settings.endGroup()
-
-    def _addSetting(self, group, setting, value):
-        """
-        Adds a setting, if setting is present, no changes are made.
-        :param setting (str): Setting to add.
-        :param value: Value to be set.
-        """
-        if not self._settings.contains(group + '/' + setting):
-            self._settings.beginGroup(group)
-            self._settings.setValue(setting, value)
-            self._settings.endGroup()
-
-    def _initSettings(self):
-        """
-        Provides initial settings for view, plot and log management.
-        """
-        # path management
-        self._addSetting("path", "previous_plot_export", os.path.curdir)
-        self._addSetting("path", "previous_plot_format", ".csv")
-
-        # view management
-        self._addSetting("view", "show_coordinates", "True")
-
-        # log management
-        self._addSetting("log_colors", "CRITICAL", "#DC143C")
-        self._addSetting("log_colors", "ERROR", "#B22222")
-        self._addSetting("log_colors", "WARNING", "#DAA520")
-        self._addSetting("log_colors", "INFO", "#101010")
-        self._addSetting("log_colors", "DEBUG", "#4682B4")
-        self._addSetting("log_colors", "NOTSET", "#000000")
-
-        # plot management
-        self._addSetting("plot_colors", "blue", "#1f77b4")
-        self._addSetting("plot_colors", "orange", "#ff7f0e")
-        self._addSetting("plot_colors", "green", "#2ca02c")
-        self._addSetting("plot_colors", "red", "#d62728")
-        self._addSetting("plot_colors", "purple", "#9467bd")
-        self._addSetting("plot_colors", "brown", "#8c564b")
-        self._addSetting("plot_colors", "pink", "#e377c2")
-        self._addSetting("plot_colors", "gray", "#7f7f7f")
-        self._addSetting("plot_colors", "olive", "#bcbd22")
-        self._addSetting("plot_colors", "cyan", "#17becf")
-
-    def updateCoordInfo(self, pos, widget, coordItem):
+    def updateCoordInfo(self, coord_text):
+        self.coordLabel.setText(coord_text)
         self.coordLabel.setVisible(True)
         self.coordTimer.start(5000)
-        mouseCoords = widget.getPlotItem().vb.mapSceneToView(pos)
-        coordItem.setPos(mouseCoords.x(), mouseCoords.y())
-        coord_text = "x={:.3e} y={:.3e}".format(mouseCoords.x(),
-                                                mouseCoords.y())
-        self.coordLabel.setText(coord_text)
-
-        show_info = self._settings.value("view/show_coordinates") == "True"
-        if widget.sceneBoundingRect().contains(pos) and show_info:
-            coordItem.setText(coord_text.replace(" ", "\n"))
-            coordItem.show()
-        else:
-            coordItem.hide()
 
     def disableCoord(self):
-        self.coordLabel.setVisible(False)
+        self.coordLabel.setText("")
         self.coordTimer.stop()
 
     # event functions
@@ -776,20 +719,18 @@ class MainGui(QMainWindow):
             if dataPoint.text() not in topLevelItemList:
                 child = QTreeWidgetItem()
                 child.setText(1, dataPoint.text())
-
                 toplevelItem.addChild(child)
 
         for i in range(toplevelItem.childCount()):
-            self._settings.beginGroup('plot_colors')
-            cKeys = self._settings.childKeys()
-            colorIdxItem = i % len(cKeys)
-            colorItem = QColor(self._settings.value(cKeys[colorIdxItem]))
-            self._settings.endGroup()
-            toplevelItem.child(i).setBackground(0, colorItem)
+            toplevelItem.child(i).setBackground(0, self._settings.color(i))
 
-        self.plots(toplevelItem)
+        self.updatePlotChart(toplevelItem)
 
     def exportDataPointFromTree(self):
+        if self.exporter is not None:
+            self._logger.error("There is already an export job running")
+            return
+
         if not self.dataPointListWidget.selectedIndexes():
             self._logger.error("Can't export data set: no data set selected.")
             return
@@ -801,14 +742,17 @@ class MainGui(QMainWindow):
         idx = self.lastMeasList.row(self._currentLastMeasItem)
         dataPointBuffers = self.measurements[idx]['dataPointBuffers']
 
-        dataPoints = dict()
-        for item in self.dataPointListWidget.selectedItems():
-            for key, value in dataPointBuffers.items():
-                if key == item.text():
-                    dataPoints[key] = value
-                    break
+        exp_lbls = [item.text()
+                    for item in self.dataPointListWidget.selectedItems()]
+        self._logger.info(f"Measurements selected for export are: {exp_lbls}")
+        dataPoints = {lbl: dataPointBuffers[lbl] for lbl in exp_lbls}
 
-        self.export(dataPoints)
+        self.data_mutex.lock()
+        expData = deepcopy(dataPoints)
+        self.data_mutex.unlock()
+        self.exporter = Exporter(dataPoints=expData)
+        self.exporter.done.connect(self.exportDone)
+        self.exporter.runExport()
 
     def removeDatapointFromTree(self):
         items = self.dataPointTreeWidget.selectedItems()
@@ -823,16 +767,11 @@ class MainGui(QMainWindow):
         toplevelItem.takeChild(toplevelItem.indexOfChild(self.dataPointTreeWidget.selectedItems()[0]))
 
         for i in range(toplevelItem.childCount()):
-            self._settings.beginGroup('plot_colors')
-            cKeys = self._settings.childKeys()
-            colorIdxItem = i % len(cKeys)
-            colorItem = QColor(self._settings.value(cKeys[colorIdxItem]))
-            self._settings.endGroup()
-            toplevelItem.child(i).setBackground(0, colorItem)
+            toplevelItem.child(i).setBackground(0, self._settings.color(i))
 
-        self.plots(toplevelItem)
+        self.updatePlotChart(toplevelItem)
 
-    def plots(self, item):
+    def updatePlotChart(self, item):
         title = item.text(0)
 
         if self._currentLastMeasItem is None:
@@ -853,11 +792,23 @@ class MainGui(QMainWindow):
             # check if plot has already been opened
             openDocks = [dock.title() for dock in self.findAllPlotDocks()]
             if title in openDocks:
-                self.updatePlot(item, dataPointBuffers)
+                chart = self.plotCharts[title]
+
+                # check if all items are present as curves
+                req_lbls = []
+                for idx in range(item.childCount()):
+                    curve_lbl = item.child(idx).text(1)
+                    req_lbls.append(curve_lbl)
+                    if curve_lbl not in chart.plotCurves.keys():
+                        chart.addCurve(curve_lbl, dataPointBuffers[curve_lbl])
+
+                # clear all curves that are no longer required by items
+                ub_lbls = [lbl for lbl in chart.plotCurves.keys()
+                    if lbl not in req_lbls]
+                [chart.removeCurve(lbl) for lbl in ub_lbls]
 
     def plotVectorClicked(self, item):
-
-        # check if a top level item has been clicked
+        # ignore non-top level items
         if item.parent():
             return
 
@@ -871,16 +822,8 @@ class MainGui(QMainWindow):
         # check if plot has already been opened
         openDocks = [dock.title() for dock in self.findAllPlotDocks()]
         if title in openDocks:
-            if self._currentLastMeasItem is None:
-                dataPointNames = self.exp.getDataPoints()
-                dataPointBuffers = dict()
-                for data in dataPointNames:
-                    dataPointBuffers[data] = DataPointBuffer()
-            else:
-                idx = self.lastMeasList.row(self._currentLastMeasItem)
-                dataPointBuffers = self.measurements[idx]['dataPointBuffers']
-
-            self.updatePlot(item, dataPointBuffers)
+            # dataPointBuffers = self.getCurrentDataPoints()
+            # self.updatePlot(item, dataPointBuffers)
             try:
                 self.area.docks[title].raiseDock()
             except:
@@ -888,120 +831,44 @@ class MainGui(QMainWindow):
         else:
             self.plotDataVector(item)
 
-    def updatePlot(self, item, dataPointBuffers):
-        title = item.text(0)
-
-        # get the new datapoints
-        newDataPoints = dict()
-        for indx in range(item.childCount()):
-            for key, value in dataPointBuffers.items():
-                if key == item.child(indx).text(1):
-                    newDataPoints[key] = value
-
-        # set the new datapoints
-        for chart in self.plotCharts:
-            if chart.title == title:
-                chart.clear()
-                for key, value in newDataPoints.items():
-                    chart.addPlotCurve(key, value)
-                chart.updatePlot()
-                break
-
-    def plotDataVector(self, item):
-        title = str(item.text(0))
-
-        # create plot widget
-        widget = PlotWidget()
-        chart = PlotChart(title,
-                          self._settings,
-                          self.config['InterpolationPoints'],
-                          self.config['MovingWindowEnable'],
-                          self.config['MovingWindowSize'])
-        chart.plotWidget = widget
-        widget.showGrid(True, True)
-        widget.getPlotItem().getAxis("bottom").setLabel(text="Time", units="s")
-
+    def getCurrentDataPoints(self):
         if self._currentLastMeasItem is None:
             dataPointNames = self.exp.getDataPoints()
             dataPointBuffers = dict()
-            for name in dataPointNames:
-                dataPointBuffers[name] = DataPointBuffer()
+            for data in dataPointNames:
+                dataPointBuffers[data] = DataPointBuffer()
         else:
             idx = self.lastMeasList.row(self._currentLastMeasItem)
             dataPointBuffers = self.measurements[idx]['dataPointBuffers']
+        return dataPointBuffers
 
+    def updatePlot(self, item, dataPointBuffers):
+        title = item.text(0)
+        if title in self.plotCharts:
+            self.plotCharts[title].cache.clear()
+            self.plotCharts[title].updateCurves(dataPointBuffers)
+
+    def plotDataVector(self, item):
+        title = str(item.text(0))
+        if title in self.plotCharts.keys():
+            self._logger.error(f"Plot chart name '{title}' is already taken.")
+            return
+
+        # create chart
+        chart = PlotChart(title, self.config)
+        chart.coords.connect(self.updateCoordInfo)
+        self.plotCharts[title] = chart
+
+        # add curves
+        dataPointBuffers = self.getCurrentDataPoints()
         for idx in range(item.childCount()):
             for key, value in dataPointBuffers.items():
                 if key == item.child(idx).text(1):
-                    chart.addPlotCurve(key, value)
-
-        # before adding the PlotChart object to the list check if the plot contains any data points
-        if chart.dataPoints is not None:
-            self.plotCharts.append(chart)
-        else:
-            return
-
-        chart.updatePlot()
-
-        coordItem = TextItem(text='', anchor=(0, 1))
-        widget.getPlotItem().addItem(coordItem, ignoreBounds=True)
-
-        def infoWrapper(pos):
-            self.updateCoordInfo(pos, widget, coordItem)
-
-        widget.scene().sigMouseMoved.connect(infoWrapper)
-
-        qActionSep1 = QAction("", self)
-        qActionSep1.setSeparator(True)
-        qActionSep2 = QAction("", self)
-        qActionSep2.setSeparator(True)
-        qActionSep3 = QAction("", self)
-        qActionSep3.setSeparator(True)
-
-        qActionMovingWindowEnable = QAction('Enable', self, checkable=True)
-        qActionMovingWindowEnable.setChecked(self.config['MovingWindowEnable'])
-        qActionMovingWindowEnable.triggered.connect(lambda state, _chart=chart: self.enableMovingWindow(state, _chart))
-
-        qActionMovingWindowSize = ContextLineEditAction(min=0, max=10000, current=chart.getMovingWindowWidth(),
-                                                        unit='s', title='Size', parent=self)
-        qActionMovingWindowSize.dataEmit.connect(lambda data,
-                                                        _chart=chart,
-                                                        _widget=widget: self.setMovingWindowWidth(data, _chart,
-                                                                                                  _widget))
-
-        qActionInterpolationPoints = ContextLineEditAction(min=0, max=10000, current=chart.getInterpolataionPoints(),
-                                                           unit='', title='Size', parent=self)
-        qActionInterpolationPoints.dataEmit.connect(lambda data,
-                                                           _chart=chart: self.setInterpolationPoints(data, _chart))
-
-        qMenuMovingWindow = QMenu('Moving Window', self)
-        qMenuMovingWindow.addAction(qActionMovingWindowSize)
-        qMenuMovingWindow.addAction(qActionMovingWindowEnable)
-
-        qMenuInterpolation = QMenu('Interpolation Points', self)
-        qMenuInterpolation.addAction(qActionInterpolationPoints)
-
-        widget.scene().contextMenu = [qActionSep1,
-                                      QAction("Auto Range All", self),
-                                      qActionSep2,
-                                      QAction("Export as ...", self),
-                                      qActionSep3,
-                                      qMenuMovingWindow,
-                                      qMenuInterpolation,
-                                      ]
-
-        def _export_wrapper(export_func):
-            def _wrapper():
-                return export_func(widget.getPlotItem(), )
-
-            return _wrapper
-
-        widget.scene().contextMenu[1].triggered.connect(lambda: self.setAutoRange(widget))
-        widget.scene().contextMenu[3].triggered.connect(_export_wrapper(self.exportPlotItem))
+                    chart.addCurve(key, value)
 
         # create dock container and add it to dock area
         dock = Dock(title, closable=True)
-        dock.addWidget(widget)
+        dock.addWidget(chart)
         dock.sigClosed.connect(self.closedDock)
 
         plotWidgets = self.findAllPlotDocks()
@@ -1010,84 +877,22 @@ class MainGui(QMainWindow):
         else:
             self.area.addDock(dock, "bottom", self.animationDock)
 
-    def setInterpolationPoints(self, data, chart):
-        """
-        Sets the interpolation points in settings with a dialog.
-        """
-        chart.setInterpolationPoints(int(data))
-
-    def setMovingWindowWidth(self, data, chart, widget):
-        """
-        Sets the moving window width and autorange.
-        """
-        chart.setMovingWindowWidth(int(data))
-        widget.autoRange()
-        widget.enableAutoRange()
-
-    def enableMovingWindow(self, state, chart):
-        chart.setEnableMovingWindow(state)
-
     def closedDock(self):
         """
         Gets called when a dock was closed, if it was a plot dock remove the corresponding PlotChart object
         form the list
-
         """
         openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-        for indx, plot in enumerate(self.plotCharts):
-            if not plot.title in openDocks:
-                self.plotCharts.pop(indx)
+        d_lbls = [lbl for lbl in self.plotCharts.keys() if lbl not in openDocks]
+        [self.plotCharts.pop(lbl, None) for lbl in d_lbls]
 
-        if len(self.findAllPlotDocks()) == 0:
+        if len(openDocks) == 0:
             self.disableCoord()
 
-    def setAutoRange(self, widget):
-        widget.autoRange()
-        widget.enableAutoRange()
-
-    def exportPlotItem(self, plotItem):
-        dataPoints = dict()
-        for i, c in enumerate(plotItem.curves):
-            if c.getData() is None:
-                continue
-            if len(c.getData()) > 2:
-                self._logger.warning('Can not handle the amount of data!')
-                continue
-            dataPoints[c.name()] = DataPointBuffer(time=c.getData()[0], values=c.getData()[1])
-
-        self.export(dataPoints)
-
-    def export(self, dataPoints):
-        try:
-            exporter = Exporter(dataPoints=dataPoints)
-        except Exception as e:
-            self._logger.error("Can't instantiate exporter! " + str(e))
-            return
-
-        lastPath = self._settings.value("path/previous_plot_export")
-        lastFormat = self._settings.value("path/previous_plot_format")
-        exportFormats = ["CSV Data (*.csv)", "PNG Image (*.png)"]
-        if lastFormat == ".png":
-            exportFormats[:] = exportFormats[::-1]
-        formatStr = ";;".join(exportFormats)
-        defaultFile = os.path.join(lastPath, "export" + lastFormat)
-        filename = QFileDialog.getSaveFileName(self,
-                                               "Export as ...",
-                                               defaultFile,
-                                               formatStr)
-
-        if filename[0]:
-            file, ext = os.path.splitext(filename[0])
-            self._settings.setValue("path/previous_plot_export",
-                                    os.path.dirname(file))
-            if ext == '.csv':
-                exporter.exportCsv(filename[0])
-            elif ext == '.png':
-                exporter.exportPng(filename[0])
-            else:
-                self._logger.error("Wrong extension used!")
-                return
-            self._logger.info("Export successful as '{}.".format(filename[0]))
+    def exportDone(self, success):
+        if success:
+            self.statusbarLabel.setText("Export successful.")
+        self.exporter = None
 
     @pyqtSlot(QModelIndex)
     def targetViewChanged(self, index=None):
@@ -1104,9 +909,6 @@ class MainGui(QMainWindow):
         """
         self._currentExperimentIndex = self.experimentList.row(self._currentExpListItem)
         self._currentExperimentName = self._experiments[self._currentExperimentIndex]["Name"]
-
-        self._settings.beginGroup('plot')
-        self._settings.endGroup()
 
         if self._currentExperimentIndex is None:
             expName = ""
@@ -1136,9 +938,6 @@ class MainGui(QMainWindow):
         else:
             return
 
-        for chart in self.plotCharts:
-            chart.updatePlot()
-
         data = {}
         data.update({'dataPointBuffers': self._currentDataPointBuffers})
         data.update({'exp': deepcopy(self.exp.getExperiment())})
@@ -1150,7 +949,9 @@ class MainGui(QMainWindow):
         self.lastMeasList.scrollToItem(item)
         self.copyLastMeas(item)
 
-        self.timer.start(max(int(self.config['TimerTime']), 40)) # ~25 fps should be plenty
+        # cap the plot updates at 25 fps
+        timeout = max(int(self.config['TimerTime']), 40)
+        self.timer.start(timeout)
         if self.config['HeartbeatTime']:
             self.heartbeatTimer.start(int(self.config['HeartbeatTime']))
         self.exp.runExperiment()
@@ -1262,14 +1063,7 @@ class MainGui(QMainWindow):
 
     def configureConfig(self, idx):
         self.config = self.configDefaults.copy()
-        if 'Config' not in self._experiments[idx]:
-            return
-        for key, value in self._experiments[idx]['Config'].items():
-            if key in self.config:
-                self.config[key] = value
-            else:
-                self._logger.warning("Experiment config key '{}' does not exist.\n\
-                Possible keys: {}".format(key, [key for key in self.config.keys()]))
+        self.config.update(self._experiments[idx].get('Config', {}))
 
     def configureRemote(self, idx):
         self.remoteWidgetLayout.clearAll()
@@ -1408,9 +1202,12 @@ class MainGui(QMainWindow):
         Is called by closing the GUI. Disconnects all connections and sends close event.
         :param QCloseEvent:
         """
+        self._logger.info("Close Event received, shutting down.")
         if self.isConnected:
             self.disconnect()
-        self._logger.info("Close Event received, shutting down.")
+        if self.exporter != None:
+            self._logger.warn("Export in progress, waiting!")
+            self.exporter.wait()
         logging.getLogger().removeHandler(self.textLogger)
         super().closeEvent(QCloseEvent)
 
@@ -1490,8 +1287,10 @@ class MainGui(QMainWindow):
         dataPoints = data['DataPoints']
         names = data['DataPoints'].keys()
 
+        self.data_mutex.lock()
         for key in names:
             self._currentDataPointBuffers[key].addValue(time, dataPoints[key])
+        self.data_mutex.unlock()
 
         time_text = "Exp time={}".format(timeString(time))
         self.expTimeLabel.setText(time_text)
@@ -1502,8 +1301,8 @@ class MainGui(QMainWindow):
             if self.vtkWidget is not None:
                 self.vtkWidget.GetRenderWindow().GetInteractor().Render()
 
-        for chart in self.plotCharts:
-            chart.updatePlot()
+        for lbl, chart in self.plotCharts.items():
+            chart.updateCurves(self._currentDataPointBuffers)
 
     def heartbeat(self):
         self.writeToConnection({'id': 1,
