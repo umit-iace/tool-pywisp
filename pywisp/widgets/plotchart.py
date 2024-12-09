@@ -96,7 +96,7 @@ class PlotChart(PlotWidget):
         color = self.settings.color(len(self.plotCurves))
         # add the actual curve
         self.plotCurves[name] = self.plot(name=name,
-                                          pen=mkPen(colorItem, width=1),
+                                          pen=mkPen(color),
                                           skipFiniteCheck=True
                                           )
         self.updateCurves({name:data})
@@ -107,6 +107,10 @@ class PlotChart(PlotWidget):
         if name in self.cache:
             del self.cache[name]
         self.getPlotItem().removeItem(curve)
+        # update colors of remaining curves
+        for ix, curve in enumerate(self.plotCurves.values()):
+            color = self.settings.color( ix )
+            curve.setPen(mkPen(color))
 
     def setAutoRange(self):
         self.autoRange()
