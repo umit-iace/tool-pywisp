@@ -15,17 +15,29 @@ class DoublePendulum(ExperimentModule):
         'u',
     ]
 
-    publicSettings = OrderedDict()
+    publicSettings = OrderedDict([
+        ("Config", 0),
+    ])
 
     connection = Connection.__name__
 
-    def __init__(self):
-        ExperimentModule.__init__(self)
+    def getParams(self, data):
+        payloadConfig = struct.pack('<B',
+                                    int(data[0]),
+                                    )
+
+        dataPoints = [
+            {'id': 10,
+             'msg': payloadConfig
+             },
+        ]
+
+        return dataPoints
 
     def handleFrame(self, frame):
         dataPoints = {}
         fid = frame.min_id
-        if fid == 10:
+        if fid == 15:
             data = struct.unpack(f'<L{len(DoublePendulum.dataPoints)}d', frame.payload)
             dataPoints['Time'] = data[0]
             dataPoints['DataPoints'] = dict(zip(DoublePendulum.dataPoints, data[1:]))

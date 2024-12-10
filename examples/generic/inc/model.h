@@ -5,54 +5,81 @@
 #ifndef MODEL_H
 #define MODEL_H
 
-#include <comm/series.h>
+#include <comm/min.h>
 #include <core/experiment.h>
-#include <ctrl/trajectory.h>
 #include <utils/later.h>
+#include <comm/series.h>
+
+#include "support.h"
+#include "Pendulum.h"
+#include "TrajType.h"
 
 
 struct Model {
-    Sink<Frame> &out;
-    Pendulum p{
-        .u = (Later<Pendulum::Input>)
-            traj,
+    enum Config {TRAJ};
+
+    Pendulum doublePendulum {
+        .input = (Later<Pendulum::Input>) trajType.out,
     };
-    Trajectory traj;
+
+    TrajType trajType;
+
+    FrameRegistry &fr {support.min.reg};
+    Min::Out &out {support.min.out};
 
     void reset(uint32_t) {
-        p.state = Pendulum::State{0, 0, -0.1, 0.1,  -0.1, 0.1};
-        traj.ref = Trajectory::Reference{};
+        doublePendulum.reset();
+        trajType.reset();
     }
 
-    void init(FrameRegistry &min) {
-        // resets
+    void init() {
+        // reset
         e.onEvent(e.INIT).call(*this, &Model::reset);
+
+        e.during(e.RUN).every(1, doublePendulum, &Pendulum::tick);
+
         // timesteps
-        e.during(e.RUN).every(200, traj, &Trajectory::step);
-        e.during(e.RUN).every(1, p, &Pendulum::step);
+        e.during(e.RUN).every(2, trajType, &TrajType::step);
 
-        e.during(e.RUN).every(25, *this, &Model::sendData);
-        // frames
-        min.setHandler(21, *this, &Model::getTrajData);
+        e.during(e.RUN).every(20, *this, &Model::sendModelData);
+        e.during(e.RUN).every(20, *this, &Model::sendTrajData);
+
+        fr.setHandler(10, *this, &Model::setModelData);
+        fr.setHandler(20, *this, &Model::setTrajType);
+        fr.setHandler(21, trajType, &TrajType::setData);
     }
 
-    void sendData(uint32_t t, uint32_t dt) {
-            Frame f{10};
-            f.pack(t);
-            f.pack<double>(p.state[0]);
-            f.pack<double>(p.state[2]);
-            f.pack<double>(p.state[4]);
-            f.pack<double>(traj.ref[0]);
-            out.push(std::move(f));
-
+    void sendModelData(uint32_t time, uint32_t) {
+        Frame f{15};
+        f.pack(time);
+        f.pack(doublePendulum.state(0));
+        f.pack(doublePendulum.state(2));
+        f.pack(doublePendulum.state(4));
+        f.pack(doublePendulum.in);
+        out.push(f);
     }
 
-    void getTrajData(Frame &f) {
-        static SeriesUnpacker<double> su;
-        auto buf = su.unpack(f);
-        if (buf) {
-            traj.interp.setData(std::move(*buf));
+    void sendTrajData(uint32_t time, uint32_t) {
+        Frame f{25};
+        f.pack(time);
+        f.pack(trajType.des[0]);
+        f.pack(trajType.des[1]);
+        out.push(f);
+    }
+
+    void setModelData(Frame &f) {
+        auto config = f.unpack<uint8_t>();
+
+        switch (config) {
+            case Config::TRAJ: {
+                doublePendulum.input = (Later<Pendulum::Input>) trajType.out;
+                break;
+            }
         }
+    }
+
+    void setTrajType(Frame &f) {
+        trajType.mkType(f.unpack<TrajType::Type>());
     }
 };
 

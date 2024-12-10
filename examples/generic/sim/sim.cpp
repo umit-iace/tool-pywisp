@@ -6,10 +6,12 @@
 #include <sys/comm.h>
 #include <sys/sim.h>
 #include "model.h"
+#include "Pendulum.h"
 #include "NonLinDoublePendulum.h"
 
 TTY tty{"/dev/tty"};
 UDP udp{"127.0.0.1", 45670};
+Pendulum::Input u;
 
 void Pendulum::updateState(uint32_t time, uint32_t dt_ms) {
     double dt = dt_ms / 1000.;
@@ -26,8 +28,11 @@ void Pendulum::updateState(uint32_t time, uint32_t dt_ms) {
 }
 
 void Pendulum::reset() {
-    state.setZero();
-    input.setZero();
+    state = Pendulum::State{0, 0, -0.1, 0.1,  -0.1, 0.1};
+}
+
+void Pendulum::setInput(double val) {
+    u = val;
 }
 
 Support::Support() : min{.in = udp, .out = udp }{}
@@ -46,11 +51,7 @@ Kernel k;
 Support support;
 Experiment e{&support.min.reg};
 
-Kernel k;
-Support support;
-Experiment e{&support.min.reg};
-
-int main() {
+int main(int argc, char *argv[]) {
     k.initLog(tty);
     k.setTimeStep(getSimTimeStep(argc, argv));
     k.every(1, support.min, &Min::poll);
