@@ -9,8 +9,8 @@ Requirements
 ------------
 
 * >=Python 3.8
-* >= uv
-* Eigen library
+* >=uv 0.5.6-1
+* >=Eigen 3.3
 
 Simulation
 ----------
