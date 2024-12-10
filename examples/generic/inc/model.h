@@ -1,35 +1,15 @@
-#pragma once
+/** @file Model.h
+ *
+ * Copyright (c) 2024 IACE
+ */
+#ifndef MODEL_H
+#define MODEL_H
 
 #include <comm/series.h>
 #include <core/experiment.h>
 #include <ctrl/trajectory.h>
 #include <utils/later.h>
 
-#include "doublependulum.h"
-
-struct Pendulum {
-    using Input = DoublePendulum::Input;
-    using State = DoublePendulum::State;
-
-    Later<Input> u;
-    DoublePendulum p{};
-    State& state{p.state};
-    operator const State&() { return state; }
-    void step(uint32_t, uint32_t dt) {
-        p.setInput(u.get());
-        p.compute(dt);
-    }
-};
-
-struct Trajectory {
-    using Reference = Pendulum::Input;
-    Reference ref{};
-    LinearTrajectory interp{};
-    operator Reference&() { return ref; }
-    void step(uint32_t time, uint32_t) {
-        ref(0) = interp(time/1000.)[0];
-    }
-};
 
 struct Model {
     Sink<Frame> &out;
@@ -55,6 +35,7 @@ struct Model {
         // frames
         min.setHandler(21, *this, &Model::getTrajData);
     }
+
     void sendData(uint32_t t, uint32_t dt) {
             Frame f{10};
             f.pack(t);
@@ -65,6 +46,7 @@ struct Model {
             out.push(std::move(f));
 
     }
+
     void getTrajData(Frame &f) {
         static SeriesUnpacker<double> su;
         auto buf = su.unpack(f);
@@ -73,3 +55,5 @@ struct Model {
         }
     }
 };
+
+#endif //MODEL_H
