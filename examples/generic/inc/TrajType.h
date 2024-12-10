@@ -11,13 +11,13 @@
 #include "Pendulum.h"
 
 struct TrajType {
-    using Des = Reference<5>;
+    using Des = Reference<2>;
     using Out = Pendulum::Input;
 
     Des des;
     Out out{};
 
-    std::variant<LinearTrajectory, SmoothTrajectory> traj{5};
+    std::variant<LinearTrajectory, SmoothTrajectory> traj{2};
     enum Type:uint8_t {NONE, LIN, POLY} type{NONE};
 
     void step(uint32_t time, uint32_t) {
@@ -39,7 +39,7 @@ struct TrajType {
 
     void reset() {
         this->out = {};
-        this->des = {0, 0, 0, 0, 0};
+        this->des = {0, 0};
     }
 
     void mkType(Type t) {
@@ -49,11 +49,11 @@ struct TrajType {
 
         switch(t) {
             case LIN: {
-                traj = LinearTrajectory(5);
+                traj = LinearTrajectory(2);
                 break;
             }
             case POLY: {
-                traj = SmoothTrajectory({126, -420, 540, -315, 70}, 9);
+                traj = SmoothTrajectory({3, -2}, 3);
                 break;
             }
             case NONE: break;

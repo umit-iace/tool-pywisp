@@ -5,16 +5,28 @@
 #ifndef PENDULUM_H
 #define PENDULUM_H
 
-struct Pendulum {
-    using Input = DoublePendulum::Input;
-    using State = DoublePendulum::State;
+#include <utils/later.h>
+#include <Eigen/Dense>
 
-    Later<Input> u;
-    DoublePendulum p{};
-    State& state{p.state};
-    operator const State&() { return state; }
-    void step(uint32_t, uint32_t dt) {
-        p.setInput(u.get());
-        p.compute(dt);
-    }
+struct Pendulum {
+    using State = Eigen::Matrix<double, 6, 1>;
+    State state{};
+
+    using Input = double;
+    Later<Input> input;
+    double in;
+
+    void tick(uint32_t time, uint32_t dt) {
+        this->in = input.get();
+        auto u = this->in;
+        setInput(u);
+
+        updateState(time, dt);
+    };
+
+    void reset();
+    void setInput(double);
+    void updateState(uint32_t time, uint32_t dt);
 };
+
+#endif //PENDULUM_H

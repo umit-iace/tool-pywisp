@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
-from collections import OrderedDict
-from pywisp.connection import *
+from pywisp import connection
 
 
-class Connection(UdpConnection):
+class Connection(connection.UdpConnection):
     settings = {
-        "ip", '127.0.0.1',
-        "port", '45670',
+        "ip": '127.0.0.1',
+        "port": 45670,
     }
 
     def __init__(self):

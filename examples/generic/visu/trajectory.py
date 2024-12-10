@@ -11,9 +11,6 @@ class Trajectory(ExperimentModule):
     dataPoints = [
         'T: y',
         'T: dy',
-        'T: d2y',
-        'T: d3y',
-        'T: d4y',
     ]
     publicSettings = OrderedDict([
         ("Type", 0),
