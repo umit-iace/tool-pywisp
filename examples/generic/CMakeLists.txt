@@ -20,7 +20,7 @@ else()
 endif()
 
 add_custom_target(visu
-    COMMAND pipenv run python visu/main.py
+    COMMAND uv run visu/main.py
     COMMENT "run Pendulum visualization"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
