@@ -15,7 +15,6 @@ if (NOT SIM)
     add_subdirectory(stm)
 else()
     message("preparing build for host system")
-    add_subdirectory(bindings)
     add_subdirectory(sim)
 endif()
 

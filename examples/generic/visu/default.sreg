@@ -4,6 +4,11 @@
 
   DoublePendulum:
 
+  Trajectory:
+    Type: 1
+    times: [0, 1]
+    values: [0, 0.15]
+
   Visu:
     MplDoublePendulumVisualizer:
 

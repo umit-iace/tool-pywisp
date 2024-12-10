@@ -9,14 +9,14 @@ namespace NonLinDoublePendulum {
     using State = Pendulum::State;
     using Input = Pendulum::Input;
 
-    void step(State x, Input u) {
-        auto p = state(0);
-        auto dp = state(1);
-        auto phi1 = state(2);
-        auto dphi1 = state(3);
-        auto phi2 = state(4);
-        auto dphi2 = state(5);
-        auto F = u(0);
+    State step(State x, Input u) {
+        auto p = x(0);
+        auto dp = x(1);
+        auto phi1 = x(2);
+        auto dphi1 = x(3);
+        auto phi2 = x(4);
+        auto dphi2 = x(5);
+        auto F = u;
 
         State dx {
             dp,
