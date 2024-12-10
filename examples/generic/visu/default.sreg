@@ -2,10 +2,10 @@
 
 - Name: RunSystem
 
-  TwoPendulum:
+  DoublePendulum:
 
   Visu:
-    MplTwoPendulumVisualizer:
+    MplDoublePendulumVisualizer:
 
   Config:
     MovingWindowSize: 10
