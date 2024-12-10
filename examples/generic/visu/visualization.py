@@ -72,7 +72,7 @@ class MplDoublePendulumVisualizer(MplVisualizer):
         x = phi1 = phi2 = 0
         for name, buffer in dataPoints.items():
             if buffer.values:
-                if name == 'x':
+                if name == 'pos':
                     x = buffer.values[-1]
                 elif name == 'phi1':
                     phi1 = -buffer.values[-1]

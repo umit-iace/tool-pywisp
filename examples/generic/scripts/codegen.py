@@ -2,7 +2,7 @@ import sympy as sp
 from sympy import cos, sin, Matrix
 import numpy as np
 import settings as st
-x, dx, phi1, dphi1, phi2, dphi2 = sp.symbols('x, dx, phi1, dphi1, phi2, dphi2')
+p, d, phi1, dphi1, phi2, dphi2 = sp.symbols('p, dp, phi1, dphi1, phi2, dphi2')
 F, = sp.symbols('F,')
 
 m = st.cartMass
@@ -25,11 +25,11 @@ B = Matrix([[F + (m1 + 2 * m2) * l1 * sin(phi1) * dphi1 ** 2 + m2 * l2 * sin(phi
             [m2 * g * l2 * sin(phi2) + 2 * m2 * l1 * l2 * sin(phi1 - phi2) * dphi1 ** 2]])
 
 solution = M.solve(B)
-solution = solution.row_insert(0, Matrix([dx]))
+solution = solution.row_insert(0, Matrix([dp]))
 solution = solution.row_insert(2, Matrix([dphi1]))
 solution = solution.row_insert(4, Matrix([dphi2]))
 
-stateVars = np.array([x, dx, phi1, dphi1, phi2, dphi2])
+stateVars = np.array([p, dp, phi1, dphi1, phi2, dphi2])
 inputVars = np.array([F])
 
 from sympy.printing import ccode
@@ -37,10 +37,10 @@ from sympy.printing import ccode
 newline = '\n'
 
 print(f"""{f"{newline}".join([
-f"        auto {x} = state({i});" for i, x in enumerate(stateVars)
+f"        auto {p} = state({i});" for i, p in enumerate(stateVars)
 ])}
 {f"{newline}".join([
-f"        auto {x} = u({i});" for i, x in enumerate(inputVars)
+f"        auto {p} = u({i});" for i, p in enumerate(inputVars)
 ])}
     {ccode(solution, assign_to="tmp")}
     }};
