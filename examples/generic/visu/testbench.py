@@ -1,21 +1,23 @@
 # -*- coding: utf-8 -*-
+import struct
 from collections import OrderedDict
 
-import struct
-from connection import ConnTestTCP
 from pywisp.experimentModules import ExperimentModule
 
+from connection import Connection
 
-class TwoPendulum(ExperimentModule):
-    dataPoints = ['x',
-                  'phi1',
-                  'phi2',
-                  'u',
-                  ]
+
+class DoublePendulum(ExperimentModule):
+    dataPoints = [
+        'pos',
+        'phi1',
+        'phi2',
+        'u',
+    ]
 
     publicSettings = OrderedDict()
 
-    connection = ConnTestTCP.__name__
+    connection = Connection.__name__
 
     def __init__(self):
         ExperimentModule.__init__(self)
@@ -24,13 +26,9 @@ class TwoPendulum(ExperimentModule):
         dataPoints = {}
         fid = frame.min_id
         if fid == 10:
-            data = struct.unpack('<L4d', frame.payload[:36])
+            data = struct.unpack(f'<L{len(DoublePendulum.dataPoints)}d', frame.payload)
             dataPoints['Time'] = data[0]
-            dataPoints['DataPoints'] = {'x': data[1],
-                                        'phi1': data[2],
-                                        'phi2': data[3],
-                                        'u': data[4],
-                                        }
+            dataPoints['DataPoints'] = dict(zip(DoublePendulum.dataPoints, data[1:]))
         else:
             dataPoints = None
 
