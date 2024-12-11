@@ -1,8 +1,8 @@
 ======================
-Tcp/IP - Communication
+TCP/IP - Communication
 ======================
 
-Currently two implementation variants are available for:
+Currently one implementation variant is available for:
 
 .. contents:: :local:
 
