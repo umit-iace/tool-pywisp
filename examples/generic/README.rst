@@ -1,6 +1,8 @@
 Tool-Libs example: Double Pendulum
 ==================================
 
+.. sphinx-marker
+
 This is an example of how a testing rig can be implemented using the tool-libs
 framework. The system equations are generated using a sympy c-printer, after
 solving the system equations there.
