@@ -40,14 +40,6 @@ struct board {
         .tx = AFIO {GPIO_PIN_9, GPIOA, GPIO_AF7_USART1},
         .baudrate = 115200,
     }};
-    TIMER::Encoder enc{{
-        .tim = TIM4,
-        .a = AFIO {GPIO_PIN_6, GPIOB, GPIO_AF2_TIM4},
-        .b = AFIO {GPIO_PIN_7, GPIOB, GPIO_AF2_TIM4},
-        .factor =  2 * M_PI / 8000,
-        .filter = 0xf,
-    }};
-    Filter::MACD diff { 7, 30, 1 };
     struct {
         DIO powergood {GPIO_PIN_9, GPIOB, GPIO_MODE_INPUT, GPIO_PULLUP};
         TIMER::HW tim {TIM5, 83, 1000}; // 84MHz/(83+1)/1000 == 1kHz
@@ -58,37 +50,16 @@ struct board {
         }};
     } supply;
 
-    struct {
-        TIMER::HW tim {TIM2, 41, 1000}; // 84MHz/(41+1)/1000 == 2kHz
-        MotorDriver driver {{
-            .pwm = TIMER::PWM {{
-                .tim = &tim,
-                .chan = TIM_CHANNEL_4,
-                .pin = AFIO {GPIO_PIN_3, GPIOA, GPIO_AF1_TIM2},
-            }},
-            .enA = DIO {GPIO_PIN_4, GPIOA},
-            .enB = DIO {GPIO_PIN_5, GPIOA},
-        }};
-        TIMER::Encoder enc {{
-            .tim = TIM3,
-            .a = AFIO {GPIO_PIN_6, GPIOA, GPIO_AF2_TIM3},
-            .b = AFIO {GPIO_PIN_7, GPIOA, GPIO_AF2_TIM3},
-            .factor = -2 * M_PI / 2096 / 4,
-            .filter = 0xf,
-        }};
-        Filter::MACD diff { 7, 30, 1 };
-    } motor;
-} board{};
+    TIMER::HW pwmTim{TIM3, (2 - 1), 1500}; // APB1=84MHz/2 -> 42MHz; -> 42MHz/1500 = ~28kHz
 
-void handleHWFrame(Frame &f) {
-    auto enable = f.unpack<bool>();
-    if (enable) {
-        board.motor.driver.enable();
-    } else {
-        board.motor.driver.disable();
-    }
-}
-void sendHWFrame(uint32_t t, uint32_t);
+    TIMER::PWM input = TIMER::PWM{{
+             .tim = &pwmTim,
+             .chan = TIM_CHANNEL_1,
+             .pin = AFIO{GPIO_PIN_6, GPIOC, GPIO_AF2_TIM3,
+                 GPIO_PULLDOWN
+             },
+     }};
+} board{};
 
 Support::Support()
     : min{.in{board.serialMin}, .out{board.serialMin}} {}
@@ -96,10 +67,6 @@ Support::Support()
 void Support::init() {
     board.supply.fan.pwm(0.8);
     k.every(1, [](uint32_t, uint32_t) {
-            board.enc.measure();
-            board.diff(board.enc.getPosition());
-            board.motor.enc.measure();
-            board.motor.diff(board.motor.enc.getPosition());
     });
     e.during(e.RUN).every(500, [](uint32_t, uint32_t) {
             board.led.toggle();
@@ -108,39 +75,23 @@ void Support::init() {
             board.led.toggle();
     });
     e.onEvent(e.STOP).call([](uint32_t) {
-            board.motor.driver.disable();
+            board.input.pwm(0);
     });
-    min.reg.setHandler(5, handleHWFrame);
-    e.during(e.RUN).every(20, sendHWFrame);
 }
 
-void Furuta::reset() {
-    board.enc.zero();
-    board.motor.enc.zero();
-    board.diff.reset();
-    board.motor.diff.reset();
+void Pendulum::reset() {
 }
 
-void Furuta::setPwm(double val) {
-    board.motor.driver.pwm(val);
+void Pendulum::setInput(double val) {
+    board.input.pwm(fmin(1, fmax(0, val)));
 }
 
-void Furuta::updateState(uint32_t t, uint32_t dt) {
-    state.th1(0) = board.motor.enc.getPosition();
-    state.th1(1) = board.motor.diff();
-    state.th2(0) = board.enc.getPosition();
-    state.th2(1) = board.diff();
+void Pendulum::updateState(uint32_t t, uint32_t dt) {
 }
 
 Kernel k;
 Support support;
 Experiment e{&support.min.reg};
-
-void sendHWFrame(uint32_t t, uint32_t) {
-    Frame f{7};
-    f.pack(t).pack(!board.motor.driver.disabled);
-    support.min.out.push(f);
-}
 
 int main() {
     k.every(1, support.min, &Min::poll);
