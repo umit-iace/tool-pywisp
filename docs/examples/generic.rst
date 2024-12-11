@@ -10,5 +10,5 @@ Currently one implementation variant is available for:
 Generic
 -------
 
-.. include:: ../../examples/generic/server/README.rst
+.. include:: ../../examples/generic/README.rst
    :start-after: sphinx-marker
