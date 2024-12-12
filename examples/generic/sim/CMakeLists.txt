@@ -13,7 +13,6 @@ target_include_directories(sim PUBLIC .
     ../inc
 )
 target_link_libraries(sim
-    tool-libs
     tool-libs-linux
     Eigen3::Eigen
 )
