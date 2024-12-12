@@ -9,7 +9,7 @@ __pycache__/
 # Distribution / packaging
 .Python
 env/
-build/
+*build*
 develop-eggs/
 dist/
 downloads/
@@ -53,9 +53,6 @@ coverage.xml
 *.log
 local_settings.py
 
-# Sphinx documentation
-docs/_build/
-
 # PyBuilder
 target/
 
@@ -70,9 +67,6 @@ target/
 
 # Pycharm / Clion
 .idea
-
-# CMake
-cmake-build-*/
 
 # MacOSX Files
 .DS_Store
@@ -94,16 +88,6 @@ slprj/
 *.autosave
 *.asv
 Thumbs.db
-
-# Arduino
-build-uno
-
-CMakeCache.txt
-CMakeFiles
-Makefile
-*.cmake
-
-server
 
 sh.exe.stackdump
 
