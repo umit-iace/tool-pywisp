@@ -46,25 +46,30 @@ class ExporterTestCase(unittest.TestCase):
 
     def test_export_csv(self):
         e = Exporter(dataPoints=self.dataPoints, fileName=self.csv_name)
+        # this will spawn a new thread
         e.runExport()
-        e.worker.wait()
+        # wait until that is finished
+        e.wait()
+        del e
         self.assertTrue(os.path.exists(self.csv_name))
 
     def test_export_png(self):
         e = Exporter(dataPoints=self.dataPoints, fileName=self.png_name)
+        # this will spawn a new thread
         e.runExport()
-        e.worker.wait()
+        # wait until that is finished
+        e.wait()
+        del e
         self.assertTrue(os.path.exists(self.png_name))
 
-    def test_export_abort(self):
-        # use the png test since one takes some time
-        e = Exporter(dataPoints=self.dataPoints, fileName=self.csv_name)
+    def test_export_png_no_abort(self):
+        e = Exporter(dataPoints=self.dataPoints, fileName=self.png_name)
+        # this will spawn a new thread
         e.runExport()
+        # do not wait (simulates closing the gui while exporting)
         del e
-        # normally, the __del__ method should make us wait for the worker
-        # to finish, however that does not happen and the file is not
-        # created
-        self.assertTrue(os.path.exists(self.png_name))
+        # file should not be there as thread was killed
+        self.assertFalse(os.path.exists(self.png_name))
 
     def test_timings(self):
         e = Exporter(dataPoints=self.dataPoints, fileName=self.csv_name)
