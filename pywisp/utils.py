@@ -7,17 +7,19 @@ import subprocess
 from pathlib import Path
 import importlib.util
 
+import matplotlib
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from PyQt5.QtCore import Qt, QRegExp, QSize, pyqtSignal, QRect
+from PyQt5.QtCore import Qt, QObject, QRegExp, QSize, pyqtSignal, pyqtSlot, QRect, QThread
 from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator, QKeySequence, QFont, QPen, \
     QPainter, QTextCursor
-from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
+from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QAction, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
     QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction, QShortcut, QStyledItemDelegate, QStyle
-from pyqtgraph import mkPen
 from pyqtgraph.dockarea import Dock
+
+from .widgets.fileselector import FileSelector
 
 __all__ = ["createDir", "getResource", "packArrayToFrame", "coroutine", "pipe"]
 
@@ -167,15 +169,11 @@ class PlainTextLogger(logging.Handler):
     def emit(self, record):
         msg = self.format(record)
         if self.cb:
-            if self.cb:
-                self.settings.beginGroup('log_colors')
-                clr = QColor(self.settings.value(record.levelname,
-                                                 "#000000"))
-                self.settings.endGroup()
-                self.cb.setTextColor(clr)
+            clr = self.settings.color(record.levelname, 'log')
+            self.cb.setTextColor(clr)
 
-                self.cb.append(msg)
-                self.cb.moveCursor(QTextCursor.End)
+            self.cb.append(msg)
+            self.cb.moveCursor(QTextCursor.End)
         else:
             logging.getLogger().error("No callback configured!")
 
@@ -188,12 +186,16 @@ class DataPointBuffer(object):
     def __init__(self, time=None, values=None):
         if time is None:
             self.time = []
-        else:
+        elif isinstance(time, list):
             self.time = time
+        elif isinstance(time, np.ndarray):
+            self.time = time.tolist()
         if values is None:
             self.values = []
-        else:
+        elif isinstance(values, list):
             self.values = values
+        elif isinstance(values, np.ndarray):
+            self.values = values.tolist()
 
     def addValue(self, time, value):
         """
@@ -213,139 +215,107 @@ class DataPointBuffer(object):
         del self.time[:]
 
 
-class PlotChart(object):
-    """
-    Object containing the plot widgets and the associated plot curves
-    """
-
-    def __init__(self, title, settings, interpolationPoints, movingWindowEnable, movingWindowWidth):
-        self.title = title
-        self.dataPoints = dict()
-        self.plotWidget = None
-        self.plotCurves = []
-        self.interpolationPoints = interpolationPoints
-        self.settings = settings
-        self.movingWindowEnable = movingWindowEnable
-        self.movingWindowWidth = movingWindowWidth
-
-    def addPlotCurve(self, name, data):
-        """
-        Adds a curve to the plot widget
-        Args:
-            dataPoint(DataPointBuffer): Data point which contains the data be added
-        """
-        self.dataPoints[name] = data
-
-        self.settings.beginGroup('plot_colors')
-        cKeys = self.settings.childKeys()
-        colorIdxItem = len(self.plotCurves) % len(cKeys)
-        colorItem = QColor(self.settings.value(cKeys[colorIdxItem]))
-        self.settings.endGroup()
-
-        self.plotCurves.append(self.plotWidget.plot(name=name, pen=mkPen(colorItem, width=2)))
-
-    def setInterpolationPoints(self, interpolationPoints):
-        self.interpolationPoints = int(interpolationPoints)
-
-    def setEnableMovingWindow(self, movingWindowEnable):
-        self.movingWindowEnable = movingWindowEnable
-
-    def setMovingWindowWidth(self, movingWindowWidth):
-        self.movingWindowWidth = int(movingWindowWidth)
-
-    def getMovingWindowWidth(self):
-        return self.movingWindowWidth
-
-    def getInterpolataionPoints(self):
-        return self.interpolationPoints
-
-    def updatePlot(self):
-        """
-        Updates all curves of the plot with the actual data in the buffers
-        """
-        if self.plotWidget:
-            startPlotRange = 0
-            for indx, curve in enumerate(self.plotCurves):
-                # check if data is multidimensional
-                if self.dataPoints[curve.name()].values:
-                    if isinstance(self.dataPoints[curve.name()].values[-1], (list, np.ndarray)):
-                        continue
-                if self.movingWindowEnable:
-                    timeLen = len(self.dataPoints[curve.name()].time)
-                    if timeLen > 0:
-                        startPlotRange = bisect_left(self.dataPoints[curve.name()].time,
-                                                     self.dataPoints[curve.name()].time[-1]
-                                                     - self.movingWindowWidth)
-                    if startPlotRange < 0 or startPlotRange > timeLen:
-                        startPlotRange = 0
-                datax = self.dataPoints[curve.name()].time[startPlotRange:]
-                datay = self.dataPoints[curve.name()].values[startPlotRange:]
-                if datax:
-                    if self.interpolationPoints == 0 or len(datax) < self.interpolationPoints:
-                        curve.setData(datax, datay)
-                    else:
-                        interpx = np.linspace(datax[0], datax[-1], self.interpolationPoints)
-                        interpy = np.interp(interpx, datax, datay)
-                        curve.setData(interpx, interpy)
-
-    def clear(self):
-        """
-        Clears the data point and curve lists and the plot items
-        """
-        if self.plotWidget:
-            self.plotWidget.getPlotItem().clear()
-            self.dataPoints.clear()
-            del self.plotCurves[:]
-
-
-class Exporter(object):
+class Exporter(QObject):
     """
     Class exports data points from GUI to different formats (csv, png) as pandas dataframe.
     """
+    done = pyqtSignal(bool)
 
     def __init__(self, **kwargs):
-        dataPoints = kwargs.get('dataPoints', None)
+        super().__init__()
+        dataPoints = kwargs.get("dataPoints", None)
+        fileName = kwargs.get("fileName", None) or FileSelector(
+            ["CSV Data (*.csv)", "PNG Image (*.png)"]
+        ).getSaveFileName()
 
-        if dataPoints is None:
-            raise Exception("Given data points are None!")
+        self.worker = self.ExportThread(self, dataPoints, fileName)
+        self.logger = logging.getLogger("Exporter")
+        def handleLog(done, lvl, msg):
+            self.logger.log(lvl, msg)
+            if done:
+                self.done.emit(lvl != logging.ERROR)
+        self.worker.info.connect(handleLog)
 
-        # build pandas data frame
-        d = {key: pd.Series(val.values, index=val.time)
-             for key, val in dataPoints.items()}
-        self.df = pd.DataFrame.from_dict(d, orient='index').transpose()
-        self.df.index.name = 'time'
-        self.df.sort_index(inplace=True)
+    def runExport(self):
+        self.worker.start()
 
-    def exportPng(self, fileName):
-        """
-        Exports the data point dataframe as png with matplotlib.
-        :param fileName: name of file with extension
-        """
-        fig = plt.figure(figsize=(10, 6))
-        gs = gridspec.GridSpec(1, 1, hspace=0.1)
-        axes = plt.Subplot(fig, gs[0])
+    def wait(self):
+        try:
+            self.worker.wait()
+        except RuntimeError: # happens when ExportThread already cleaned up on C++ side
+            pass
 
-        for col in self.df.columns:
-            self.df[col].plot(ax=axes, label=col)
+    class ExportThread(QThread):
+        info = pyqtSignal(bool,int,str)
+        def __init__(self, parent, data, file):
+            super().__init__()
+            self.dataPoints = data
+            self.fileName = file
+            self.parent = parent
 
-        axes.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=4,
-                    ncol=4, mode="expand", borderaxespad=0., framealpha=0.5)
+        def run(self):
+            if self.dataPoints is None:
+                self.info.emit(True, logging.ERROR, f"Export failed: No data given")
+                return
+            if self.fileName is None:
+                self.info.emit(True, logging.ERROR, f"Export failed: No file name given")
+                return
+            self.info.emit(False, logging.INFO, f"Export to {self.fileName} started.")
+            self._buildFrame()
+            if self.df is None:
+                return
+            file, ext = os.path.splitext(self.fileName)
+            if ext == '.csv':
+                self.exportCsv()
+            elif ext == '.png':
+                self.exportPng()
+            else:
+                self.info.emit(True, logging.ERROR, f"Export failed: Unsupported file extension '{ext}'.")
+                return
+            self.info.emit(True, logging.INFO, f"Export successful.")
 
-        axes.grid(True)
-        if self.df.index.name == 'time':
-            axes.set_xlabel(r"Time (s)")
+        def _buildFrame(self):
+            # build pandas data frame
+            d = {key: pd.Series(val.values, index=val.time)
+                 for key, val in self.dataPoints.items()}
+            try:
+                self.df = pd.DataFrame.from_dict(d, orient='index').transpose()
+                self.df.index.name = 'time'
+                self.df.sort_index(inplace=True)
+            except BaseException:
+                self.parent.failed.emit()
+                self.df = None
 
-        fig.add_subplot(axes)
+        def exportPng(self):
+            """
+            Exports the data point dataframe as png with matplotlib.
+            :param fileName: name of file with extension
+            """
 
-        fig.savefig(fileName, dpi=300)
+            matplotlib.use('agg')
+            fig = plt.figure(figsize=(10, 6))
+            gs = gridspec.GridSpec(1, 1, hspace=0.1)
+            axes = plt.Subplot(fig, gs[0])
 
-    def exportCsv(self, fileName, sep=','):
-        """
-        Exports the data point dataframe as csv
-        :param fileName: name of file with extension
-        :param sep: separator for csv (default: ,)
-        """
-        self.df.to_csv(fileName, sep=sep)
+            for col in self.df.columns:
+                self.df[col].plot(ax=axes, label=col)
+
+            axes.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=4,
+                        ncol=4, mode="expand", borderaxespad=0., framealpha=0.5)
+
+            axes.grid(True)
+            if self.df.index.name == 'time':
+                axes.set_xlabel(r"Time (s)")
+
+            fig.add_subplot(axes)
+            fig.savefig(self.fileName, dpi=300)
+
+        def exportCsv(self, sep=','):
+            """
+            Exports the data point dataframe as csv
+            :param sep: separator for csv (default: ,)
+            """
+            self.df.to_csv(self.fileName, sep=sep)
 
 
 class DataIntDialog(QDialog):

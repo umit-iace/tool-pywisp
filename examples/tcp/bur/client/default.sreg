@@ -48,8 +48,6 @@
     MplExampleVisualizer:
 
   Config:
-    TimerTime: 10
-    InterpolationPoints: 0
     MovingWindowSize: 5
     MovingWindowEnable: True
     HeartbeatTime: 0
