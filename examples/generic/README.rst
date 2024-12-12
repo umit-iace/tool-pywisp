@@ -15,7 +15,6 @@ Requirements
 * >=Eigen 3.3
 * >=cmake 3.24
 * >=arm-none-eabi-* 14.2.0
-* ncat (from ``nmap`` project)
 
 Simulation
 ----------
@@ -63,7 +62,7 @@ STM
         $ make -C build-stm stm
 
 
-* Upload
+* Upload via ST-Link programmer
 
     .. code-block:: bash
 
@@ -74,7 +73,7 @@ STM
 
     .. code-block:: bash
 
-        $ make -C build-stm pload_ota UPLOAD=<IP>
+        $ make -C build-stm upload_ota UPLOAD=<IP>
 
 
 * Connect via PyWisp and control the simulation
