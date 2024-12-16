@@ -9,7 +9,7 @@ import settings as st
 from pywisp.visualization import MplVisualizer
 
 
-class MplTwoPendulumVisualizer(MplVisualizer):
+class MplDoublePendulumVisualizer(MplVisualizer):
     def __init__(self, q_widget, q_layout):
         MplVisualizer.__init__(self, q_widget, q_layout)
         self.axes.set_xlim(st.xMinPlot, st.xMaxPlot)
@@ -72,7 +72,7 @@ class MplTwoPendulumVisualizer(MplVisualizer):
         x = phi1 = phi2 = 0
         for name, buffer in dataPoints.items():
             if buffer.values:
-                if name == 'x':
+                if name == 'pos':
                     x = buffer.values[-1]
                 elif name == 'phi1':
                     phi1 = -buffer.values[-1]

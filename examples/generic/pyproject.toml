@@ -1,0 +1,13 @@
+[project]
+name = "doublePendulum"
+version = "0.1.0"
+description = "Tool-Libs/PyWisp Example using double pendulum"
+readme = "README.rst"
+requires-python = ">=3.10"
+dependencies = [
+    "pywisp",
+    "sympy>=1.13.3",
+]
+
+[tool.uv.sources]
+pywisp = { path = "../../", editable = true }
