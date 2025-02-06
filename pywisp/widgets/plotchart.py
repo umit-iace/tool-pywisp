@@ -179,7 +179,7 @@ class PlotChart(PlotWidget):
             view_range = view.viewRect()  # this is always up-to-date
         if view_range is None:
             view_range = self.viewRect()
-        if view_range is not None:
+        if view_range is not None and len(X) > 1:
             dx = float(X[-1]-X[0]) / (len(X)-1)
             if dx != 0.0:
                 width = self.getViewBox().width()
