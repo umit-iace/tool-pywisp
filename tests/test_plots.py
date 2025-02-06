@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import os
 import pickle
 import random
@@ -120,8 +121,14 @@ class PlotTestCase(unittest.TestCase):
     def test_update_timings(self):
         # downsampling
         for ws, ds in product([False, 10, 100], ['subsample', 'mean', 'peak', 'off']):
-            print(f"{"No " if not ws else ""}windowing{f" with {ws=}" if ws else ""}, "
-                  f"{"no " if ds == 'off' else ""}downsampling{f" with {ds} mode" if ds != 'off' else ""}")
+            if ws:
+                print(f"windowing with {ws=}")
+            else:
+                print(f"No windowing")
+            if ds == 'off':
+                print("no downsampling")
+            else:
+                print(f"downsampling with '{ds}' mode")
             self.get_update_timings(ws, ds)
 
     def get_update_timings(self, ws, ds):
