@@ -169,8 +169,9 @@ class PlotChart(PlotWidget):
         self.exporter.runExport()
 
     def _samplestep(self, X):
+        ds = 1
         if not X:
-            return 1
+            return ds
         view = self.getViewBox()
         if view is None:
             view_range = None
