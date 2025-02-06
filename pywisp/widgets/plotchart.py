@@ -157,13 +157,14 @@ class PlotChart(PlotWidget):
 
     def export(self, filename=None):
         dataPoints = dict()
-        for i, c in enumerate(self.getPlotItem().curves):
-            if c.getData() is None:
+        for c in self.getPlotItem().curves:
+            data, name = c.getData(), c.name()
+            if data is None:
                 continue
-            if len(c.getData()) > 2:
+            if len(data) > 2:
                 self._logger.warning('Can not handle the amount of data!')
                 continue
-            dataPoints[c.name()] = DataPointBuffer(time=c.getData()[0], values=c.getData()[1])
+            dataPoints[name] = DataPointBuffer(time=data[0], values=data[1])
 
         self.exporter = Exporter(dataPoints=dataPoints, fileName=filename)
         self.exporter.runExport()
