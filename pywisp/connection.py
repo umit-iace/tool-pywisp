@@ -10,7 +10,7 @@ from abc import abstractmethod
 import serial
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
 
-from .min import Packer, Unpacker, Frame, Bytewise
+from .min import Packer, Unpacker, Frame, Bytewise, HDRStuf
 from .utils import coroutine, pipe
 
 __all__ = ["Connection", "UdpConnection", "TcpConnection", "SerialConnection", "IACEConnection"]
@@ -39,7 +39,7 @@ class ConnReader(QObject):
                 pass
             except Exception as e:
                 if not self.stop:
-                    self.err.emit(f"connection dropped: {e}")
+                    self.err.emit(f"connection dropped: {repr(e)} / {e}")
                 break
 
     def quit(self):
@@ -239,7 +239,7 @@ class UdpConnection(SocketConnection):
 
     def __init__(self, ip, port, **kwargs):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        super().__init__(sock, ip, port, tx=Packer, rx=[Bytewise, Unpacker], **kwargs)
+        super().__init__(sock, ip, port, tx=Packer, rx=[Bytewise, HDRStuf, Unpacker], **kwargs)
 
 class IACEConnection(UdpConnection):
     def __init__(self, *args, **kwargs):
