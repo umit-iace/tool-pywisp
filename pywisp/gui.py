@@ -1129,6 +1129,9 @@ class MainGui(QMainWindow):
         Apply the selected experiment to the current target and set it bold.
         :param item: item of the experiment in the `ExperimentList`
         """
+        if self.isConnected and self.actStopExperiment.isEnabled():
+            self._logger.info("stop the running experiment to change experiments")
+            return
         idx = self.experimentList.row(item)
         success = self._applyExperimentByIdx(idx)
         self._currentExpListItem = item
@@ -1354,6 +1357,9 @@ class MainGui(QMainWindow):
         Loads the measurement data from the measurement dict by given item from last measurement list
         :param item: last measurement list item
         """
+        if self.isConnected and self.actStopExperiment.isEnabled():
+            self._logger.info("stop the running experiment to view past measurements")
+            return
         self.actStartExperiment.setDisabled(True)
         self.selectedExp = False
         self.remoteWidgetLayout.clearAll()
