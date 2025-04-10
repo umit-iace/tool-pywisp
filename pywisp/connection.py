@@ -145,7 +145,7 @@ class SerialConnection(Connection):
         self.serial = serial.Serial(timeout=0.01)
         self.serial.baudrate = baud
         self.serial.port = port
-        super().__init__(tx=Packer, rx=[Bytewise, Unpacker])
+        super().__init__(tx=Packer, rx=[Bytewise, HDRStuf, Unpacker])
 
     def _connect(self):
         try:
