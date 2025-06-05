@@ -10,7 +10,7 @@ solving the system equations there.
 Requirements
 ------------
 
-* >=Python 3.8
+* >=Python 3.10
 * >=uv 0.5.6-1
 * >=Eigen 3.3
 * >=cmake 3.24
@@ -81,3 +81,31 @@ STM
     .. code-block:: bash
 
         $ make -C build-sim visu
+
+Windows
+-------
+
+Using of `WSL` (Windows-Subsystem for Linux) at the command line::
+
+
+    $ wsl -- install archlinux
+
+After installation is done, you can switch in the `WSL` enviroment with::
+
+    $ wsl
+
+and install the following packages::
+
+    $ pacman -Syu
+    $ pacman -S python3 uv eigen cmake arm-none-eabi-gcc git make gcc libgl qt5-base
+
+Switch to correct folder and install enviroment::
+
+    $ cd tool-pywisp/examples/generic
+    $ uv venv
+    $ uv sync
+
+If you are using `WSL` Version 1, you need to install an `X11` window server, for example `VcXsrv <https://vcxsrv.com/>`
+In some cases, it is necessary to set the display variable with::
+
+    $ export DISPLAY=:0

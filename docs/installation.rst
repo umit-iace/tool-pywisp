@@ -5,39 +5,35 @@ Installation
 General Options
 ---------------
 
-At the command line with virtualenvwrapper installed::
+At the command line with `uv` installed::
 
-    $ mkvirtualenv pywisp
-    $ git clone https://github.com/umit-iace/pywisp
-    $ python -m pip install .
+    $ git clone https://github.com/umit-iace/tool-pywisp
+    $ cd tool-pywisp
+    $ uv venv
+    $ uv sync
 
 
 For Windows
 -----------
 
-PyWisp depends on Qt5.
+Using of `WSL` (Windows-Subsystem for Linux) at the command line::
 
-Qt5 is already included in the most python distributions, to have an easy start
-we recommend to use Winpython_ .
 
-.. _Winpython: https://winpython.github.io/
+    $ wsl -- install archlinux
 
-Troubleshooting
----------------
+After installation is done, you can switch in the `WSL` enviroment with::
 
-**Missing dependencies (windows)**
+    $ wsl
 
-If the provided packages on your system are to old, pip may feel obligated to
-update them. Since the majority of packages now provide ready to use wheels
-for windows on pypi_ this should work automatically.
-If for some reason this process fails, you will most certainly find an
-appropriate wheel here_ . After downloading just navigate your shell into the
-directory and call::
+and install the following packages::
 
-    $ pip install PACKAGE_NAME.whl
+    $ pacman -Syu
+    $ pacman -S python3 uv eigen cmake arm-none-eabi-gcc git make gcc libgl qt5-base
 
-to install it.
+Finally::
 
-.. _pypi: https://pypi.python.org/pypi
-.. _here: https://www.lfd.uci.edu/~gohlke/pythonlibs/
+    $ git clone https://github.com/umit-iace/tool-pywisp
+    $ cd tool-pywisp
+    $ uv venv
+    $ uv sync
 

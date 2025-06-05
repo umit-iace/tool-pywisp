@@ -7,18 +7,17 @@ docu:
   tags:
     - shell
   script:
-    - virtualenv _venv
-    - source _venv/bin/activate
-    - python -m pip install -e .
+    - uv venv
+    - uv sync
     - cd docs
     - export DISPLAY=:0
-    - xvfb-run -a -s "-screen 0 1400x900x24 +extension RANDR" make html
+    - xvfb-run -a -s "-screen 0 1400x900x24 +extension RANDR" uv run make html
     - rm -rf /srv/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
     - mkdir -p /srv/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
     - mv _build/html/* /srv/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
     - cd ..
-    - pip uninstall -y pywisp
-    - deactivate
+    - uv clean
+    - rm -rf .venv/
     - rm -rf *
   only:
     - master
@@ -28,13 +27,12 @@ deploy:
   tags:
     - shell
   script:
-    - virtualenv _venv
-    - source _venv/bin/activate
-    - pip install -U twine
-    - python -m pip install .
-    - python -m build
-    - twine upload dist/* --config-file /etc/pypirc
-    - pip uninstall -y pywisp
+    - uv venv
+    - uv sync
+    - uv build
+    - uv publish
+    - uv clean
+    - rm -rf .venv/
     - rm -rf *
   only:
     - tags

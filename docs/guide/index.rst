@@ -17,16 +17,16 @@ ExperimentModule
 The experiment module class is needed to implement the different parts of the test rig, like trajectory, controller and
 testbench handling itself.
 
-2 members must be specified:
+3 members must be specified:
 
 - `dataPoints`: Data points, that come from the test rig.
 - `publicSettings`: Settings, that can be changed by the user in the GUI.
 - `connection`: Connection name, that is required to read and write to the correct connection.
 
-4 functions must be implemented:
+4 functions can be implemented:
 
 - `getStartParams`: Function to handle parameter, that should be set on experiment start.
-- `getStoparams`: Function to handle parameter, that should be set on experiment end.
+- `getStopParams`: Function to handle parameter, that should be set on experiment end.
 - `getParams`: Function to handle parameter, that should be set on start or during the experiment.
 - `handleFrame`: Function to handle frames from test rig and sets the data points to show in the GUI.
 

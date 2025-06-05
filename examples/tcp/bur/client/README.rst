@@ -19,42 +19,42 @@ For the communication the following frames are used:
     :header-rows: 1
 
     * - ID
-      - Datentyp
-      - Verwendung
-      - Richtung
-      - Klasse
+      - Data type
+      - Usage
+      - Direction
+      - Class
     * - 1
       - 1x byte
-      - Experiment starten/beenden
-      - zum Server
+      - Start/stop experiment
+      - to server
       -
     * - 10
       - unsigned long + 1x byte + 1x long + 1x float + 1x real
-      - Zeit + Wert1 + Wert2 + Wert3 + Wert4
-      - vom Server
+      - time + value1 + value2 + value3 + value4
+      - from server
       - TestTCP (TestBench)
     * - 11
       - unsigned long + 1x double
-      - Zeit + Traj. Ausgang
-      - vom Server
+      - time + trajectory output
+      - from Server
       - RampTrajectory (Trajectory)
     * - 12
       - 1x byte + 1x int + 1x float + 1x double
-      - Zeit + Value1 + Value2 + Value3 + Value4
-      - zum Server
+      - time + value1 + value2 + value3 + value4
+      - to Server
       - TestTCP (TestBench)
     * - 13
       - 2x long + 2x double
       - StartValue, StartTime, EndValue, EndTime
-      - zum Server
+      - to Server
       - RampTrajectory (Trajectory)
     * - 14
       - 1x uint, 2x double*
       - series length, time and data series
-      - zum Server
+      - to Server
       - SeriesTrajectory (Trajectory)
     * - 15
       - unsigned long + 1x double
-      - Zeit + Traj. Ausgang
-      - vom Server
+      - time + trajectory output
+      - from Server
       - SeriesTrajectory (Trajectory)

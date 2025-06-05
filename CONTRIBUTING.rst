@@ -60,14 +60,14 @@ Ready to contribute? Here's how to set up pywisp_ for local development.
 1. Fork the pywisp_ repo on GitHub.
 2. Clone your fork locally::
 
-    $ git clone git@github.com:your_name_here/pywisp.git
+    $ git clone git@github.com:your_name_here/tool-pywisp.git
 
-3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper
+3. Install your local copy into a virtual enviroment. Assuming you have `uv`
    installed, this is how you set up your fork for local development::
 
-    $ mkvirtualenv pywisp
-    $ cd pywisp/
-    $ python -m pip install -e .
+    $ cd tool-pywisp
+    $ uv venv
+    $ uv sync
 
 4. Create a branch for local development::
 

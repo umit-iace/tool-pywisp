@@ -10,7 +10,9 @@ Development Lead
 Contributors
 ------------
 
-* Thomas Gruber
 * Jonathan Halmen
+* Stefan Ecklebe
+* Thomas Mariacher
+* Thomas Gruber
 * Florian Alber
 * Simon Bachler
