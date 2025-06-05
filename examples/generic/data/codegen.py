@@ -2,7 +2,7 @@ import sympy as sp
 from sympy import cos, sin, Matrix
 from sympy.printing import ccode
 import numpy as np
-import settings as st
+from exampleData import settings as st
 
 p, dp, phi1, dphi1, phi2, dphi2 = sp.symbols('p, dp, phi1, dphi1, phi2, dphi2')
 F, = sp.symbols('F,')

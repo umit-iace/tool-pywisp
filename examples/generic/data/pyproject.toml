@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "exampleData"
+version = "0.1.0"
+description = "Tool-Libs/PyWisp Example using double pendulum/Data"
+requires-python = ">=3.10"
+dependencies = [
+    "sympy>=1.13.3",
+]
+
+[tool.setuptools]
+packages = ["exampleData"]
+[tool.setuptools.package-dir]
+exampleData = "."

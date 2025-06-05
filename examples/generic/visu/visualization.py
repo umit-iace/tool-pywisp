@@ -4,7 +4,7 @@ import matplotlib as mpl
 import matplotlib.patches
 import matplotlib.transforms
 import numpy as np
-import settings as st
+from exampleData import settings as st
 
 from pywisp.visualization import MplVisualizer
 

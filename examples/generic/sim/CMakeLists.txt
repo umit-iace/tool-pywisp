@@ -2,10 +2,10 @@ add_executable(sim sim.cpp NonLinDoublePendulum.h)
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/NonLinDoublePendulum.h
-    COMMAND uv run ../scripts/codegen.py
+    COMMAND uv run ../data/codegen.py
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/settings.py
-            ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/codegen.py
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../data/settings.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/../data/codegen.py
     VERBATIM
     )
 
