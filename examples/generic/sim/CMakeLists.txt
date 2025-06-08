@@ -14,7 +14,6 @@ target_include_directories(sim PUBLIC .
 )
 target_link_libraries(sim
     tool-libs-linux
-    Eigen3::Eigen
 )
 
 add_custom_target(run

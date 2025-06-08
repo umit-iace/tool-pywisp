@@ -16,19 +16,22 @@ Pendulum::Input u;
 void Pendulum::updateState(uint32_t time, uint32_t dt_ms) {
     double dt = dt_ms / 1000.;
 
-    state = state + dt * NonLinDoublePendulum::step(state, u);
+    Pendulum::State dx = NonLinDoublePendulum::step(state, u);
+    for(uint8_t i; i < 6; i++) {
+        state[i] += dt * dx[i];
+    }
 
     k.log.print("%g, %g, %g, %g, %g, %g, %g, %g\n",
-                state(0), state(1),
-                state(2), state(3),
-                state(4), state(5),
+                state[0], state[1],
+                state[2], state[3],
+                state[4], state[5],
                 u,
                 dt
     );
 }
 
 void Pendulum::reset() {
-    state = Pendulum::State{0, 0, -0.1, 0.1,  -0.1, 0.1};
+    state = {0, 0, -0.1, 0.1,  -0.1, 0.1};
 }
 
 void Pendulum::setInput(double val) {

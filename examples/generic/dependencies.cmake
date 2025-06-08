@@ -16,4 +16,3 @@ FetchContent_Declare(tool-libs
 	GIT_PROGRESS TRUE
 )
 FetchContent_MakeAvailable(tool-libs)
-find_package(Eigen3 3.3 REQUIRED NO_MODULE)

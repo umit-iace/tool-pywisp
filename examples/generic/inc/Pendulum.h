@@ -6,10 +6,10 @@
 #define PENDULUM_H
 
 #include <utils/later.h>
-#include <Eigen/Dense>
+#include <array>
 
 struct Pendulum {
-    using State = Eigen::Matrix<double, 6, 1>;
+    using State = std::array<double, 6>;
     State state{};
 
     using Input = double;

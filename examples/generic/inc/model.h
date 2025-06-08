@@ -52,9 +52,9 @@ struct Model {
     void sendModelData(uint32_t time, uint32_t) {
         Frame f{15};
         f.pack(time);
-        f.pack(doublePendulum.state(0));
-        f.pack(doublePendulum.state(2));
-        f.pack(doublePendulum.state(4));
+        f.pack(doublePendulum.state[0]);
+        f.pack(doublePendulum.state[2]);
+        f.pack(doublePendulum.state[4]);
         f.pack(doublePendulum.in);
         out.push(f);
     }

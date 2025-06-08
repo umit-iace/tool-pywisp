@@ -34,7 +34,6 @@ target_link_libraries(stm
 	HAL::STM32::F4::UART
 	STM32::NoSys
 	tool-libs-stm-uart
-	Eigen3::Eigen
 )
 
 add_custom_target(upload

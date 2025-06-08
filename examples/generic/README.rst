@@ -12,7 +12,6 @@ Requirements
 
 * >=Python 3.10
 * >=uv 0.5.6-1
-* >=Eigen 3.3
 * >=cmake 3.24
 * >=arm-none-eabi-* 14.2.0
 
