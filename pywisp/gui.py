@@ -177,6 +177,7 @@ class MainGui(QMainWindow):
         # animation dock
         self.animationWidget = QWidget()
         self.animationLayout = QVBoxLayout()
+        self.animationFrame = None
         self.animationDock.addWidget(self.animationWidget)
 
         # experiment dock
@@ -1102,8 +1103,9 @@ class MainGui(QMainWindow):
         elif issubclass(vis, VtkVisualizer):
             if vtk_available:
                 # vtk window
-                self.animationFrame = QFrame()
-                self.vtkWidget = QVTKRenderWindowInteractor(self.animationFrame)
+                if self.animationFrame is None:
+                    self.animationFrame = QFrame()
+                    self.vtkWidget = QVTKRenderWindowInteractor(self.animationFrame)
                 self.animationLayout.addWidget(self.vtkWidget)
                 self.animationFrame.setLayout(self.animationLayout)
                 self.animationDock.addWidget(self.animationFrame)
