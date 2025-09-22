@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pywisp"
 description = "Python based Weird visualisation for test bench prototypes."
-version = "1.1.0"
+dynamic = ["version"]
 authors = [
     { name = "Jens Wurm", email = "jens.wurm@umit-tirol.at"},
     { name = "Jonathan Halmen", email = "jonathan.halmen@umit-tirol.at"},
@@ -13,16 +13,12 @@ authors = [
 readme = "README.rst"
 requires-python = ">=3.10"
 keywords = ["pywisp"]
-license = {file = "LICENSE"}
+license-files = ["LICENSE"]
 classifiers = [
-    "Development Status :: 1 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: GPL V3 License",
+    "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
     'numpy>1.24.4',
@@ -46,6 +42,8 @@ include-package-data = true
 packages = ["pywisp"]
 [tool.setuptools.package-dir]
 pywisp = "pywisp"
+[tool.setuptools.dynamic]
+version = {attr = "pywisp.__version__"}
 
 [tool.uv.workspace]
 members = ["examples/generic/doublePendulum"]
