@@ -33,8 +33,6 @@ dependencies = [
     'build',
 ]
 
-[tool.distutils.bdist_wheel]
-universal = true
 [tool.hatch.metadata]
 allow-direct-references = true
 [tool.setuptools]
