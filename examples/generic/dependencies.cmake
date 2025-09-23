@@ -12,7 +12,7 @@ endif()
 
 FetchContent_Declare(tool-libs
 	GIT_REPOSITORY https://github.com/umit-iace/tool-libs
-	GIT_TAG master
+	GIT_TAG v0.1.0
 	GIT_PROGRESS TRUE
 )
 FetchContent_MakeAvailable(tool-libs)
