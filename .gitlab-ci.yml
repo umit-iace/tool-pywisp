@@ -29,8 +29,11 @@ deploy:
   script:
     - uv venv
     - uv sync
+    - uv add twine
+    - uv add uv-publish
     - uv build
-    - uv publish
+    - uv run twine check --strict dist/*
+    - uv uv-publish
     - uv clean
     - rm -rf .venv/
     - rm -rf *
