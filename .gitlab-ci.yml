@@ -33,7 +33,7 @@ deploy:
     - uv add uv-publish
     - uv build
     - uv run twine check --strict dist/*
-    - uv uv-publish
+    - uv run uv-publish
     - uv clean
     - rm -rf .venv/
     - rm -rf *
