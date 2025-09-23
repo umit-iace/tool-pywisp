@@ -12,7 +12,7 @@ authors = [
 ]
 readme = "README.rst"
 requires-python = ">=3.10"
-keywords = ["pywisp"]
+keywords = ["pywisp", "visualisation", "lab", "prototyping"]
 license-files = ["LICENSE"]
 classifiers = [
     "Development Status :: 3 - Alpha",
