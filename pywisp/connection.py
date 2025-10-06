@@ -141,8 +141,18 @@ class SerialConnection(Connection):
     Simple Serial Connection
     """
 
+    supported_baudrates = (
+            1200, 1800, 2400, 4800, 9600, 
+            19200, 38400, 57600, 
+            115200, 230400, 460800, 500000, 576000, 921600,
+            1000000, 1152000, 1500000, 2000000, 2500000, 3000000, 3500000,4000000,
+            )
+
     def __init__(self, port, baud):
         self.serial = serial.Serial(timeout=0.01)
+        if baud not in self.supported_baudrates:
+            raise ValueError(f"Baudrate {baud} not supported. " 
+                             f"Choose one of {self.supported_baudrates}")
         self.serial.baudrate = baud
         self.serial.port = port
         super().__init__(tx=Packer, rx=[Bytewise, HDRStuf, Unpacker])
