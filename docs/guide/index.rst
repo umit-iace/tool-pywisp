@@ -2,16 +2,21 @@
 Guide
 =====
 
+This guide shows how to configure the remote part for a test rig.
+Most of the time this is some kind of PC that is connected to the rig an can be used
+to start and stop experiments as well as to collect and visualize measurements.
+Regarding the code on the test rig itself, please refer to the `tool-libs` documentation.
+
 To visualize and control a test rig with PyWisp some files are needed that are summarized in a project. Each project
 must include the following files:
 
-- main.py: Main file to register all needed :mod:`pywisp.experimentModules`, :mod:`pywisp.connection`,
-  :mod:`pywisp.visualization` and starts the GUI.
-- defaults.sreg: The definition of all experiments.
 - connection.py: The implementation of all :mod:`pywisp.connection`.
-- visualization.py: The implementation of all :mod:`pywisp.visualization`.
 - Files for the :mod:`pywisp.experimentModules`: It is recommended to have one file for each module, i.e. `controller`,
   `testbench`. For detailed information see :ref:`chapter_examples`.
+- visualization.py: The implementation of all :mod:`pywisp.visualization`.
+- defaults.sreg: The definition of all experiments.
+- main.py: Main file to register all needed :mod:`pywisp.experimentModules`, :mod:`pywisp.connection`,
+  :mod:`pywisp.visualization` and starts the GUI.
 
 Connection
 ----------
@@ -168,12 +173,12 @@ Below a normal configuration with two experiments is presented:
         MplExampleVisualizer:
 
       Config:
-        TimerTime: 40
-        MovingWindowSize: 5
+        TimerTime: 40  # [] = ms, update interval of the GUI plots
+        MovingWindowSize: 5  # [] = s
         MovingWindowEnable: True
 
 In this example `Test` and `SeriesTrajectory` are derived :mod:`pywisp.experimentModules` classes. The settings below
-of `Remote` configurates a Push Button, that is connected to ´Value1` of the :mod:`pywisp.experimentModules` class
+of `Remote` configures a Push Button, that is connected to ´Value1` of the :mod:`pywisp.experimentModules` class
 `Test`. The 'Config' section shows the settings for the plot configuration.
 
 For detailed information see the :ref:`chapter_examples` section.

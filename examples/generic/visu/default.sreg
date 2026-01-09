@@ -13,6 +13,6 @@
     MplDoublePendulumVisualizer:
 
   Config:
-    MovingWindowSize: 10
-    MovingWindowEnable: True
-    HeartbeatTime: 0
+    MovingWindowEnable: True  # Enable windowing
+    MovingWindowSize: 10 # Show past 10 seconds of measurements
+    HeartbeatTime: 0  # disable keep-alive packets
