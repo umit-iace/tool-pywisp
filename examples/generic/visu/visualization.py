@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-
 import matplotlib as mpl
 import matplotlib.patches
 import matplotlib.transforms
 import numpy as np
-from exampleData import settings as st
 
 from pywisp.visualization import MplVisualizer
+
+from exampleData import settings as st
 
 
 class MplDoublePendulumVisualizer(MplVisualizer):
@@ -16,15 +16,15 @@ class MplDoublePendulumVisualizer(MplVisualizer):
         self.axes.set_ylim(st.yMinPlot, st.yMaxPlot)
         self.axes.set_aspect("equal")
 
-        self.beam = mpl.patches.Rectangle(xy=[-st.beamLength / 2,
+        self.beam = mpl.patches.Rectangle(xy=(-st.beamLength / 2,
                                               -(st.beamHeight
-                                                + st.cartHeight / 2)],
+                                                + st.cartHeight / 2)),
                                           width=st.beamLength,
                                           height=st.beamHeight,
                                           color="lightgrey")
 
-        self.cart = mpl.patches.Rectangle(xy=[-st.cartLength / 2,
-                                              -st.cartHeight / 2],
+        self.cart = mpl.patches.Rectangle(xy=(-st.cartLength / 2,
+                                              -st.cartHeight / 2),
                                           width=st.cartLength,
                                           height=st.cartHeight,
                                           color="dimgrey")
@@ -36,7 +36,7 @@ class MplDoublePendulumVisualizer(MplVisualizer):
             zorder=3)
 
         self.pendulum1 = mpl.patches.Rectangle(
-            xy=[-st.pendulum1Radius, 0],
+            xy=(-st.pendulum1Radius, 0),
             width=2 * st.pendulum1Radius,
             height=st.pendulum1Height,
             color="#E87B14",  # TUD CD HKS 07_K
@@ -47,7 +47,7 @@ class MplDoublePendulumVisualizer(MplVisualizer):
             color="#000000",  # TUD CD HKS 07_K
             zorder=3)
         self.pendulum2 = mpl.patches.Rectangle(
-            xy=[-st.pendulum2Radius, st.pendulum1Height],
+            xy=(-st.pendulum2Radius, st.pendulum1Height),
             width=2 * st.pendulum2Radius,
             height=st.pendulum2Height,
             color="#0059A3",  # TUD CD HKS 44_K

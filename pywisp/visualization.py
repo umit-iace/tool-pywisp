@@ -37,9 +37,8 @@ except ImportError as e:
 
 class Visualizer(metaclass=ABCMeta):
     """
-    Base Class for animation
+    Base class for all visualizations
     """
-
     def __init__(self):
         self.frameCounter = 0
         self.fileNameCounter = 0
@@ -62,14 +61,16 @@ class Visualizer(metaclass=ABCMeta):
         self.picturePath = createDir('ani_' + self.expName)
 
     @abstractmethod
-    def saveIfChecked(self):
+    def saveIfChecked(self) -> bool:
         pass
 
     @abstractmethod
-    def update(self, dataPoints):
+    def update(self, dataPoints: dict):
         """
-        Abstract method to update the canvas with new measurement values.
-        :param dataPoints: All the measured data points
+        Update the canvas with new measurement values.
+
+        :param dataPoints: All measurements from the current time step
+        :type dataPoints: dict
         """
         pass
 
@@ -154,13 +155,9 @@ class MplVisualizer(Visualizer):
     def saveIfChecked(self):
         """
         Must be called after self.draw_idle() in implementation.
-        :return:
         """
         if self.saveAnimation:
             fileName = self.picturePath + os.path.sep + self.timeStamp + "%04d" % self.fileNameCounter + '.png'
             self.fig.savefig(fileName, format='png', dpi=self.dpi)
             self.fileNameCounter += 1
             self.frameCounter += 1
-
-    def update(self, dataPoints):
-        pass

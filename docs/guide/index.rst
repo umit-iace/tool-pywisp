@@ -67,10 +67,13 @@ For actual implementations please refer to the :ref:`chapter_examples` section.
 Visualizer
 ----------
 
-It is possible to have different visualizers registered. They can be selected in GUI at runtime. Currently only
-visualizers based on matplotlib are available. For the implementation the base class
-:class:`~pywisp.visualization.MplVisualizer` must be derived and the method
-:func:`~pywisp.visualization.MplVisualizer.update` should be implemented. It is recommented to use
+It is possible to have different visualizers registered.
+They can be selected in GUI at runtime.
+Currently only visualizers based on matplotlib are available.
+To visualize your rig, derive from
+:class:`~pywisp.visualization.MplVisualizer` and implement
+:func:`~pywisp.visualization.MplVisualizer.update`.
+It is recommented to use
 
 .. code-block:: python
 
