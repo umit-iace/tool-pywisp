@@ -2,35 +2,49 @@
 Guide
 =====
 
-To visulize and control a test rig with PyWisp some files are needed that are summarized in a project. Each project
+To visualize and control a test rig with PyWisp some files are needed that are summarized in a project. Each project
 must include the following files:
 
-- main.py: Main file to register all needed :mod:`pywisp.experimentModules`, :mod:`pywisp.connection`, :mod:`pywisp.visualization` and starts the GUI.
+- main.py: Main file to register all needed :mod:`pywisp.experimentModules`, :mod:`pywisp.connection`,
+  :mod:`pywisp.visualization` and starts the GUI.
 - defaults.sreg: The definition of all experiments.
-- connection.py: The implementation of all ::mod:`pywisp.connection`.
+- connection.py: The implementation of all :mod:`pywisp.connection`.
 - visualization.py: The implementation of all :mod:`pywisp.visualization`.
-- Files for the :mod:`pywisp.experimentModules`: It is recommended to have one file each module, i.e. `controller`, `testbench`. For detailed information see :ref:`chapter_examples`.
+- Files for the :mod:`pywisp.experimentModules`: It is recommended to have one file for each module, i.e. `controller`,
+  `testbench`. For detailed information see :ref:`chapter_examples`.
 
 ExperimentModule
 ----------------
 
 The experiment module class is needed to implement the different parts of the test rig, like trajectory, controller and
-testbench handling itself.
+testbench handling itself. To implement your functionality, derive from it and then implement the following:
 
-3 members must be specified:
+First, declare the following member variables:
 
-- `dataPoints`: Data points, that come from the test rig.
-- `publicSettings`: Settings, that can be changed by the user in the GUI.
-- `connection`: Connection name, that is required to read and write to the correct connection.
+- :attr:`connection` (str): The name of a class (derived from :class:`pywisp.connection.Connection`) that shall be used to
+  communicate with the test rig.
+- :attr:`publicSettings` (dict): Settings for the module that will be exposed in the GUI and can be changed by the user (e.g. your
+  controller gains).
+- :attr:`dataPoints` (list[str]): Labels of the measurements that come from the test rig to be used for plots.
 
-4 functions can be implemented:
+Then, implement the following methods that are invoked when data is send *form* PyWisp down *to* the test rig:
 
-- `getStartParams`: Function to handle parameter, that should be set on experiment start.
-- `getStopParams`: Function to handle parameter, that should be set on experiment end.
-- `getParams`: Function to handle parameter, that should be set on start or during the experiment.
-- `handleFrame`: Function to handle frames from test rig and sets the data points to show in the GUI.
+- :meth:`getStartParams`: Function to handle parameter, that should be set on experiment start.
+- :meth:`getStopParams`: Function to handle parameter, that should be set on experiment end.
+- :meth:`getParams`: Function to handle parameter, that should be set on start or during the experiment.
 
-For detailed information see the :ref:`chapter_examples` section.
+All of these 3 functions must return a list of dicts each representing a data frame to be send down to the rig.
+For more information on data frames, please refer to :meth:`getParams`. To just send one bool value, an implementation
+could look like
+
+.. literalinclude:: ../../examples/generic/visu/testbench.py
+   :language: python
+   :lines: 24-35
+
+Finally, the measurement data from the rig must be processed, to do so implement :meth:`handleFrame`
+to handle frames from test rig and sets the data points to show in the GUI.
+
+For actual implementations please refer to the :ref:`chapter_examples` section.
 
 Connection
 ----------
