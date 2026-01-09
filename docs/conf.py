@@ -21,9 +21,14 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.viewcode',
     'sphinx.ext.imgmath',
+    'sphinxcontrib.plantuml',
 ]
 
 numfig = True
+
+# define the command to build plantuml diagrams
+# plantuml = 'java -jar /path/to/plantuml.jar'
+plantuml = 'plantuml'
 
 # Add napoleon to the extension (to write/precompile google style docstrings)
 
