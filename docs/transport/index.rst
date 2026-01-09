@@ -9,18 +9,10 @@ Currently only for wired serial connected devices, like Arduino or STMs, the `MI
 On devices where a `TCP`-based approach or a wifi serial connection is used, only the frame handling by `MIN` is
 applied.
 
-Transport Class
----------------
-
-The primary task of the class is to handle the in and output data. The input data is converted from byte array frame
-structure to matching data type and sets the program variables. The output data is capsuled in frames by converting the
-data in byte arrays and sends out. Additionally to this, on serial used devices, it handles the communication (read and
-write operations of serial).
-
 MIN-Frame
 ---------
 
-Each `MIN-Frame` data has the structure:
+The smallest unit in the communication stack, each `MIN-Frame` data has the structure:
 
 .. list-table::
     :widths: 50 50
@@ -31,4 +23,38 @@ Each `MIN-Frame` data has the structure:
     * - unique identifier, packed as one byte
       - data, packed as byte array
 
-The byte array length differs at each device. On `Arduino UNO` the limit is at 50 bytes, because of the intern memory.
+Note that the maximum possible length of a frame differs on each device.
+On `Arduino UNO` the limit is at 50 bytes due to the internal memory.
+When manually packing the frames, this limit should be respected otherwise
+packet loss may occur.
+
+Packing a frame
+---------------
+
+To send data to the test rig, it has to ba packed into MIN-Frames before it can be handed over
+to the connection.
+Using the :mod:`struct` module from the standard library, the payload can be created as follows
+
+.. literalinclude:: ../../examples/generic/visu/trajectory.py
+   :language: python
+   :lines: 27-29
+
+However, if more than just a handful of parameters are to be sent (for example when sending the interpolation points of
+a trajectory), the helper function :meth:`pywisp.utils.packArrayToFrame` may be used:
+
+.. literalinclude:: ../../examples/generic/visu/trajectory.py
+   :language: python
+   :lines: 31-34
+
+
+Unpacking a frame
+-----------------
+
+When a frame is received by pywisp, it has to be unpacked to further process the information therein.
+
+.. literalinclude:: ../../examples/generic/visu/trajectory.py
+   :language: python
+   :lines: 42-44
+
+Note that currently no logic is available in pywisp to unpack a series of frames
+and join them into one set of measurements.

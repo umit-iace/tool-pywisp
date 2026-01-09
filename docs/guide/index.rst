@@ -64,10 +64,9 @@ could look like
    :lines: 24-35
 
 Finally, the measurement data from the rig must be processed, to do so implement :meth:`handleFrame`
-to handle frames from test rig and sets the data points to show in the GUI.
+to handle frames from test rig such that it can be shown in the GUI.
 
 For actual implementations please refer to the :ref:`chapter_examples` section.
-
 
 Visualizer
 ----------
