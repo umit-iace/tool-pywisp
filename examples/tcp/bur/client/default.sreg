@@ -21,26 +21,26 @@
     Value4: 1
 
   Remote:
-    PushExample:
-      Module: Test
-      Parameter: Value1
-      valueOn: '99.99'
+    PushExample:  # A push button
+      Module: Test  # Name of the ExperimentModule to target
+      Parameter: Value1  # Name of the setting to change
       widgetType: PushButton
+      valueOn: '99.99'
       shortcut: P
-    SwitchExample:
-      Module: Test
-      Parameter: Value2
+    SwitchExample: # A switch
+      Module: Test  # Name of the ExperimentModule to target
+      Parameter: Value2  # Name of the setting to change
+      widgetType: Switch
       valueOff: '11.1'
       valueOn: '22.2'
-      widgetType: Switch
       shortcut: O
-    SliderExample:
-      Module: Test
-      Parameter: Value3
+    SliderExample:  # A slider
+      Module: Test  # Name of the ExperimentModule to target
+      Parameter: Value3  # Name of the setting to change
+      widgetType: Slider
       maxSlider: 255
       minSlider: 0
       stepSlider: 1
-      widgetType: Slider
       shortcutPlus: H
       shortcutMinus: G
 

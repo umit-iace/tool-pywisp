@@ -86,27 +86,41 @@ For detailed information see the :ref:`chapter_examples` section.
 Remote Widgets
 --------------
 
-The `Remote Widgets` give the opportunity to control direct `publicSettings` of
-:mod:`pywisp.experimentModules`. It can be added different types of widgets. Currently the following
-types are available:
+The `Remote Widgets` give the opportunity to change the `publicSettings` of the
+:mod:`pywisp.experimentModules` without editing them in the tree view.
+
+Currently the following types are available:
 
 * Push Button
 * Slider
 * Switch Button
 
-To save the configuration by means of right click the code can be exported and added to the `defaults.sreg`.
+To use such widgets, either right click in the *Remote* dock container in the GUI,
+select `Add widget` and follow the wizard or manually define them under the `Remote` part
+of your experiment configuration  (an `.sreg` as explained below) like so:
+
+.. literalinclude:: ../../examples/tcp/bur/client/default.sreg
+   :language: yaml
+   :lines: 23-45
+
+To export the Widgets created by the wizard right click the `Remote` dock,
+select `Copy remote source` and then paste the code into your sreg file.
 
 Heartbeat
 ---------
 
-`PyWisp` provides the possibility to send a heartbeat on `ID 1` at bit 1. For the configuration `Config` section of the
-`defaults.sreg` must be extended by the setting
+If an experiment shall be stopped if the connection to the rig is interrupted,
+`PyWisp` provides the possibility to send a so-called heartbeat.
+This basically is a frame with the special ID 1 at bit 1.
+To use this feature, the `Config` section of the of your `.sreg` file must be extended by the setting
 
 .. code-block:: yaml
 
-    Heartbeat: <time in ms>
+    Heartbeat: 100  # send a heartbeat every 100ms
 
-It can be diabled by set the parameter to zero.
+It can be disabled by setting the parameter to zero or omitting the entry.
+Note that the embedded code on the rig itself also has to be configured to expect such a packet,
+otherwise you will not obtain the desired behaviour.
 
 For detailed information see the :ref:`chapter_examples` section.
 
@@ -163,6 +177,7 @@ of `Remote` configurates a Push Button, that is connected to ´Value1` of the :m
 `Test`. The 'Config' section shows the settings for the plot configuration.
 
 For detailed information see the :ref:`chapter_examples` section.
+
 
 Plot Configuration
 ~~~~~~~~~~~~~~~~~~
