@@ -13,6 +13,23 @@ must include the following files:
 - Files for the :mod:`pywisp.experimentModules`: It is recommended to have one file for each module, i.e. `controller`,
   `testbench`. For detailed information see :ref:`chapter_examples`.
 
+Connection
+----------
+
+Before anything can happen, it is necessary to implement a communication channel to the rig.
+PyWisp already comes with generic connection types like
+:class:`pywisp.connection.SerialConnection` for communication over serial ports like USB as well
+:class:`pywisp.connection.TcpConnection` or :class:`pywisp.connection.UdpConnection` for Socket based communication.
+
+To implement your specific connection, just derive from
+:class:`pywisp.connection.Connection` or one of the classes mentioned above.
+The actual settings such as ports and baud rate can also be changed in the GUI later on.
+A simple UDP based setup could look like this:
+
+.. literalinclude:: ../../examples/generic/visu/connection.py
+   :language: python
+   :lines: 5-12
+
 ExperimentModule
 ----------------
 
@@ -46,39 +63,6 @@ to handle frames from test rig and sets the data points to show in the GUI.
 
 For actual implementations please refer to the :ref:`chapter_examples` section.
 
-Connection
-----------
-
-It is necessary to implement the used connection types, where the class name specify the name used in the GUI and the
-default settings. The settings can be changed in the GUI directly. All implementations mus derived from
-:class:`~pywisp.visualization.MplVisualizer`. Currently two connection types are available and can implemented exemplary:
-
-- Serial connection:
-
-.. code-block:: python
-
-    class ConnName(SerialConnection):
-        settings = OrderedDict([("port", '/dev/uart0'),
-                                ("baud", 115200),
-                                ])
-
-        def __init__(self):
-            SerialConnection.__init__(self,
-                                      self.settings['port'],
-                                      self.settings['baud'])
-
-
-- Tcp connection
-
-.. code-block:: python
-
-    class ConnName(TcpConnection):
-        settings = OrderedDict([("ip", '192.168.1.1'),
-                                ])
-
-        def __init__(self):
-            TcpConnection.__init__(self,
-                                   self.settings['ip'])
 
 Visualizer
 ----------

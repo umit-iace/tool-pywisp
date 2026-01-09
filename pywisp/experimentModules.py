@@ -5,7 +5,7 @@ from collections import OrderedDict
 
 from PyQt5.QtCore import QObject
 
-from min import Frame
+from .min import Frame
 
 pyqtWrapperType = type(QObject)
 
