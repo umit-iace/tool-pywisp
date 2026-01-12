@@ -28,6 +28,29 @@ On `Arduino UNO` the limit is at 50 bytes due to the internal memory.
 When manually packing the frames, this limit should be respected otherwise
 packet loss may occur.
 
+Frame IDs
+---------
+
+.. list-table::
+    :widths: 50 50
+    :header-rows: 1
+
+    * - ID
+      - Meaning
+    * - 0
+      - Unknown
+    * - 1
+      - Experiment Control:
+
+        * If byte 1 is set: Heartbeat packet from PyWisp
+        * Else: read byte 0 as desired alive state
+
+    * - 2 - 9
+      - Unknown / Reserved?
+    * - 10 - 255
+      - User defined
+
+
 Packing a frame
 ---------------
 
