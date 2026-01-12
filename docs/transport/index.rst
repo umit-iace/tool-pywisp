@@ -69,6 +69,13 @@ a trajectory), the helper function :meth:`pywisp.utils.packArrayToFrame` may be 
    :language: python
    :lines: 31-34
 
+In the end it is up to the user to guarantee that:
+
+    * No system reserved IDs are used
+    * None of several ExperimentModules do use the same frame ID
+    * Every frame ID used on the rig or the remote has an appropriate
+      handler on the other side
+
 
 Unpacking a frame
 -----------------
