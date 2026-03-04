@@ -1,18 +1,18 @@
-Transport Layer
+.. _communication_layer:
+
+Communication Layer
 ===============
 
-To handle all communication interfaces for B&R, Raspberry Pi, Arduino, ... on the same way a middle layer is implemented
-called `Transport-Layer`. Additionally to this for the data handling the frame based protocol
-`MIN-Protocol <https://github.com/min-protocol/min>`_ is used.
+To handle all communication interfaces for the different underlying hardwares in a similar way,
+a communication protocol is introduced.
+This is based on the `MIN-Protocol <https://github.com/min-protocol/min>`_.
 
-Currently only for wired serial connected devices, like Arduino or STMs, the `MIN-Protocol` itself is used.
-On devices where a `TCP`-based approach or a wifi serial connection is used, only the frame handling by `MIN` is
-applied.
+Currently the ``MIN``-specified frame packing is not used on `TCP`-based interfaces.
 
 MIN-Frame
 ---------
 
-The smallest unit in the communication stack, each `MIN-Frame` data has the structure:
+The smallest unit in the communication stack, each ``Frame`` has the structure:
 
 .. list-table::
     :widths: 50 50
@@ -20,8 +20,8 @@ The smallest unit in the communication stack, each `MIN-Frame` data has the stru
 
     * - ID
       - Payload
-    * - unique identifier, packed as one byte
-      - data, packed as byte array
+    * - unique identifier, packed as a 7-bit value (``0x0`` - ``0x7f``)
+      - data, packed as little-endian byte array
 
 Note that the maximum possible length of a frame differs on each device.
 On `Arduino UNO` the limit is at 50 bytes due to the internal memory.
@@ -37,18 +37,23 @@ Frame IDs
 
     * - ID
       - Meaning
-    * - 0
-      - Unknown
     * - 1
       - Experiment Control:
 
-        * If byte 1 is set: Heartbeat packet from PyWisp
-        * Else: read byte 0 as desired alive state
+        Payload (1 byte) is interpreted as
 
-    * - 2 - 9
-      - Unknown / Reserved?
-    * - 10 - 255
+        - ``0`` -- STOP experiment
+        - ``1`` -- START experiment
+        - ``2`` -- HEARTBEAT
+
+    * - 0, 2 - 127
       - User defined
+
+It is up to the user to guarantee that:
+
+    * No system reserved IDs are used
+    * IDs are uniquely assigned
+    * Every ID used to send data has a corresponding handler
 
 
 Packing a frame
@@ -69,22 +74,15 @@ a trajectory), the helper function :meth:`pywisp.utils.packArrayToFrame` may be 
    :language: python
    :lines: 31-34
 
-In the end it is up to the user to guarantee that:
-
-    * No system reserved IDs are used
-    * None of several ExperimentModules do use the same frame ID
-    * Every frame ID used on the rig or the remote has an appropriate
-      handler on the other side
-
 
 Unpacking a frame
 -----------------
 
-When a frame is received by pywisp, it has to be unpacked to further process the information therein.
+When a frame is received by PyWisp, it has to be unpacked to further process the information therein.
 
 .. literalinclude:: ../../examples/generic/visu/trajectory.py
    :language: python
    :lines: 38-45
 
-Note that currently no logic is available in pywisp to unpack a series of frames
+Note that currently no logic is available in PyWisp to unpack a series of frames
 and join them into one set of measurements.

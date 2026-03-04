@@ -54,7 +54,7 @@ Depending on the connection type, currently the following happens:
     end
 
 Note that all actions occur on the machine that PyWisp is running on and no actual
-data is send or received over any channel in this step.
+data is sent or received over any channel in this step.
 
 Powering on the rig
 -------------------
@@ -63,19 +63,22 @@ Powering on the rig
     :caption: Init process of the rig
 
     box "RIG" #LightGreen
-    participant Main
     participant Kernel
     participant Experiment
     participant Model
     end box
 
-    Main -> Main: Support.init()
-    Main -> Main: Model.init()
-    Main -> Kernel: run()
-    loop every 1ms
-        Kernel -> Kernel: Min.poll()
-    end
     note over Experiment: State = IDLE
+    Experiment -> Kernel: register tasks
+    == ==
+    [-> Kernel: register\ncommunication\npolling
+    [-> Model: m.init()
+    Model -> Experiment: register tasks
+    Model -> Experiment: register frame handlers
+    [-> Kernel: k.run()
+    loop every 1ms
+        Kernel -> Kernel: run scheduled tasks
+    end
 
 
 Running an experiment
@@ -94,24 +97,26 @@ Running an experiment
     participant Model
     end box
 
+    !pragma teoz true
+    note over Experiment: State = IDLE
+    &note over PyWisp: runningExperiment = False
+    note over Kernel: run scheduled tasks\nevery 1ms
+    Kernel -> Model: run IDLE tasks
+    == User starts experiment ==
     User -> PyWisp: runExperiment()
-    User <-- PyWisp: Experiment is running
+    note over PyWisp: runningExperiment = True
     PyWisp -> PyWisp: getStartParams()
     PyWisp -> PyWisp: getParams()
     PyWisp -> PyWisp: Append start frame
     PyWisp -> Kernel: Send everything
-    Kernel -> Model: Call handler for each frame
-    Kernel -> Experiment: Call handler for ID 1
+    Kernel -> Model: Communication handler:\nhandle frames
+    Kernel -> Experiment: Communication handler:\nhandle frame ID 1
     note over Experiment: State = RUN
-    Kernel <- Experiment: Schedule INIT EVENT
-    Kernel -> Model: EVENT INIT
-    Model -> Model: reset()
+    Experiment <- Experiment: Event INIT
+    Kernel -> Model: run INIT tasks
     loop
-        Model -> Model: tick()
-        Model -> Model: led.toggle()
-        Model -> Model: sendData()
+    Kernel -> Model: run RUN tasks
     end
-
 
 .. uml::
     :caption: Stopping an experiment
@@ -127,19 +132,23 @@ Running an experiment
     end box
 
     note over Experiment: State = RUN
+    Kernel -> Model: run RUN tasks
 
-    == User interacts ==
+    == User stops experiment ==
 
     User -> PyWisp: stopExperiment()
-    User <-- PyWisp: Experiment is stopped
+    note over PyWisp: runningExperiment = False
     PyWisp -> PyWisp: getStopParams()
     PyWisp -> PyWisp: Append stop frame
-    PyWisp -> Runtime: Send everything
-    Kernel -> Model: Call handler for each frame
-    Kernel -> Experiment: Call handler for ID 1
+    PyWisp -> Kernel: Send everything
+    [<-- PyWisp: emit expFinished
+    Kernel -> Model: Communication handler:\nhandle frames
+    Kernel -> Experiment: Communication handler:\nhandle frame ID 1
     note over Experiment: State = IDLE
-    Kernel <- Experiment: Schedule STOP EVENT
-    Kernel -> Model: EVENT STOP
-    Model -> Model: input.pwm(0)
+    Experiment <- Experiment: Event STOP
+    Kernel -> Model: run STOP tasks
+    loop
+    Kernel -> Model: run IDLE tasks
+    end
 
 Note, that again no messages from the rig to the pc are sent within this action and no failure modes are present.

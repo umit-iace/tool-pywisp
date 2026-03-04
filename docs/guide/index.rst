@@ -3,19 +3,20 @@ Guide
 =====
 
 This guide shows how to configure the remote part for a test rig.
-Most of the time this is some kind of PC that is connected to the rig an can be used
+Most of the time this is some kind of PC that is connected to the rig and can be used
 to start and stop experiments as well as to collect and visualize measurements.
-Regarding the code on the test rig itself, please refer to the `tool-libs` documentation.
+Regarding the code on the test rig itself, please refer to the `tool-libs
+<https://github.com/umit-iace/tool-libs>`_ documentation.
 
 To visualize and control a test rig with PyWisp some files are needed that are summarized in a project. Each project
 must include the following files:
 
-- connection.py: The implementation of all :mod:`pywisp.connection`.
+- ``connection.py``: The implementation of all :mod:`pywisp.connection`.
 - Files for the :mod:`pywisp.experimentModules`: It is recommended to have one file for each module, i.e. `controller`,
   `testbench`. For detailed information see :ref:`chapter_examples`.
-- visualization.py: The implementation of all :mod:`pywisp.visualization`.
-- defaults.sreg: The definition of all experiments.
-- main.py: Main file to register all needed :mod:`pywisp.experimentModules`, :mod:`pywisp.connection`,
+- ``visualization.py``: The implementation of all :mod:`pywisp.visualization`.
+- ``defaults.sreg``: The definition of all experiments.
+- ``main.py``: Main file to register all needed :mod:`pywisp.experimentModules`, :mod:`pywisp.connection`,
   :mod:`pywisp.visualization` and starts the GUI.
 
 Connection
@@ -43,20 +44,21 @@ testbench handling itself. To implement your functionality, derive from it and t
 
 First, declare the following member variables:
 
-- :attr:`connection` (str): The name of a class (derived from :class:`pywisp.connection.Connection`) that shall be used to
+- :attr:`connection`:``str`` -- The name of the connection class (derived from :class:`pywisp.connection.Connection`) that shall be used to
   communicate with the test rig.
-- :attr:`publicSettings` (dict): Settings for the module that will be exposed in the GUI and can be changed by the user (e.g. your
+- :attr:`publicSettings`:``dict`` -- Settings for the module that will be exposed in the GUI and can be changed by the user (e.g.
   controller gains).
-- :attr:`dataPoints` (list[str]): Labels of the measurements that come from the test rig to be used for plots.
+- :attr:`dataPoints`:``list[str]`` -- Labels of the measurements that come from the test rig to be used for plots.
 
-Then, implement the following methods that are invoked when data is send *form* PyWisp down *to* the test rig:
+Then, implement the following methods that are invoked when data is sent *from* PyWisp *to* the test rig:
 
-- :meth:`getStartParams`: Function to handle parameter, that should be set on experiment start.
-- :meth:`getStopParams`: Function to handle parameter, that should be set on experiment end.
-- :meth:`getParams`: Function to handle parameter, that should be set on start or during the experiment.
+- :meth:`getStartParams`: return parameters that should be set on experiment start.
+- :meth:`getStopParams`: return parameters that should be set on experiment end.
+- :meth:`getParams`: return parameters that should be set after start and during the experiment.
 
-All of these 3 functions must return a list of dicts each representing a data frame to be send down to the rig.
-For more information on data frames, please refer to :meth:`getParams`. To just send one bool value, an implementation
+All of these 3 functions must return a list of dicts each representing a data frame to be sent to the rig.
+They receive one positional argument, which is a list of the currently set :attr:`publicSettings` of the module.
+For more information on data frames, please refer to :ref:`communication_layer`. To just send one bool value, an implementation
 could look like
 
 .. literalinclude:: ../../examples/generic/visu/testbench.py
@@ -90,49 +92,67 @@ For detailed information see the :ref:`chapter_examples` section.
 Remote Widgets
 --------------
 
-The `Remote Widgets` give the opportunity to change the `publicSettings` of the
-:mod:`pywisp.experimentModules` without editing them in the tree view.
+The `Remote Widgets` give the opportunity to change the :attr:`publicSettings` of the
+:mod:`pywisp.experimentModules` without editing them by hand in the tree view.
 
 Currently the following types are available:
 
 * Push Button
 * Slider
-* Switch Button
+* Switch
 
-To use such widgets, either right click in the *Remote* dock container in the GUI,
-select `Add widget` and follow the wizard or manually define them under the `Remote` part
-of your experiment configuration  (an `.sreg` as explained below) like so:
+To use the widgets, either right click in the ``Remote`` dock container in the GUI,
+select ``Add widget`` and follow the wizard, or manually define them under the ``Remote`` part
+of your experiment configuration  (an ``.sreg`` as explained below) like so:
 
 .. literalinclude:: ../../examples/tcp/bur/client/default.sreg
    :language: yaml
    :lines: 23-45
 
-To export the Widgets created by the wizard right click the `Remote` dock,
-select `Copy remote source` and then paste the code into your sreg file.
+Widgets created interactively in the GUI are not automatically saved.
+To export the Widgets created by the wizard right click the ``Remote`` dock,
+select ``Copy remote source`` and paste the code into your ``.sreg`` file.
 
 Heartbeat
 ---------
 
-If an experiment shall be stopped if the connection to the rig is interrupted,
-`PyWisp` provides the possibility to send a so-called heartbeat.
-This basically is a frame with the special ID 1 at bit 1.
-To use this feature, the `Config` section of the of your `.sreg` file must be extended by the setting
+`PyWisp` provides th epossibility to automatically stop a rig if the connection
+is interrupted.
+To use this feature, the ``Config`` section of the ``.sreg`` file must include
+the setting
 
 .. code-block:: yaml
 
     Heartbeat: 100  # send a heartbeat every 100ms
 
 It can be disabled by setting the parameter to zero or omitting the entry.
-Note that the embedded code on the rig itself also has to be configured to expect such a packet,
-otherwise you will not obtain the desired behaviour.
+Note that the embedded code on the rig itself also has to be configured to expect such a packet.
+Refer to the `tool-libs <https://github.com/umit-iace/tool-libs>`_ documentation for details.
+
+Plot Configuration
+~~~~~~~~~~~~~~~~~~
+
+Additionally the plot and visualization have some configuration parameters. These are:
+
+* TimerTime: Update interval of the visualization/plot data
+* MovingWindow: Moving Window of the plot visualization
+
+They can be set interactively by right-clicking the plot in the GUI and in the Config menu.
+To save the configuration the ``defaults.sreg`` ``Config`` section can be extended with the keys:
+
+.. code-block:: yaml
+
+    TimerTime:           <time in ms>
+    MovingWindowSize:    <time in s>
+    MovingWindowEnable:  <True..enable moving window, False..disable moving window>
 
 For detailed information see the :ref:`chapter_examples` section.
 
 defaults.sreg
 -------------
 
-The `defaults.sreg` constitutes the standard configuration file for `PyWisp`. It uses a `yaml` syntax.
-Below a normal configuration with two experiments is presented:
+The ``defaults.sreg`` file constitutes the standard configuration file for `PyWisp`. It uses a ``yaml`` syntax.
+Below an example configuration with two experiments is presented:
 
 .. code-block:: yaml
 
@@ -183,21 +203,3 @@ of `Remote` configures a Push Button, that is connected to ´Value1` of the :mod
 For detailed information see the :ref:`chapter_examples` section.
 
 
-Plot Configuration
-~~~~~~~~~~~~~~~~~~
-
-Additionally the plot and visualization have some configuration parameters. These are:
-
-* TimerTime: Update interval of the visualization/plot data
-* MovingWindow: Moving Window of the plot visualization
-
-The can be set by a right click of the plot in the GUI or about the Config menu.
-To save the configuration the `defaults.sreg` can be extended by a `Config section` with the keys:
-
-.. code-block:: yaml
-
-    TimerTime:           <time in ms>
-    MovingWindowSize:    <time in s>
-    MovingWindowEnable:  <True..enable moving window, False..disable moving window>
-
-For detailed information see the :ref:`chapter_examples` section.
