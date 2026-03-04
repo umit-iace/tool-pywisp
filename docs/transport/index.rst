@@ -84,7 +84,7 @@ When a frame is received by pywisp, it has to be unpacked to further process the
 
 .. literalinclude:: ../../examples/generic/visu/trajectory.py
    :language: python
-   :lines: 42-44
+   :lines: 38-45
 
 Note that currently no logic is available in pywisp to unpack a series of frames
 and join them into one set of measurements.
