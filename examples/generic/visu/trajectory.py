@@ -36,13 +36,9 @@ class Trajectory(ExperimentModule):
         return dataPoints
 
     def handleFrame(self, frame):
-        dataPoints = {}
-        fid = frame.min_id
-        if fid == 25:
-            data = struct.unpack(f'<L{len(Trajectory.dataPoints)}d', frame.payload)
-            dataPoints['Time'] = data[0]
-            dataPoints['DataPoints'] = dict(zip(Trajectory.dataPoints, data[1:]))
-        else:
-            dataPoints = None
-
-        return dataPoints
+        if frame.id != 25: return None
+        data = struct.unpack(f'<L{len(self.dataPoints)}d', frame.payload)
+        return {
+            'Time': data[0],
+            'DataPoints': dict(zip(self.dataPoints, data[1:]))
+        }

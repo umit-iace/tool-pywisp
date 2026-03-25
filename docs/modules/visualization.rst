@@ -3,4 +3,4 @@ Visualization
 =============
 
 .. automodule:: pywisp.visualization
-    :members:
+    :members: Visualizer, MplVisualizer, VtkVisualizer

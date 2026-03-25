@@ -148,7 +148,7 @@ class SerialConnection(Connection):
             1000000, 1152000, 1500000, 2000000, 2500000, 3000000, 3500000,4000000,
             )
 
-    def __init__(self, port, baud):
+    def __init__(self, port: str, baud: int):
         self.serial = serial.Serial(timeout=0.01)
         if baud not in self.supported_baudrates:
             raise ValueError(f"Baudrate {baud} not supported. " 

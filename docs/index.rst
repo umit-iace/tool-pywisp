@@ -16,6 +16,7 @@ Contents:
 
   installation
   guide/index
+  communication/index
   transport/index
   examples/index
   modules/index

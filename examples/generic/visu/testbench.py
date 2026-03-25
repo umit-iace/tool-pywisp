@@ -21,7 +21,7 @@ class DoublePendulum(ExperimentModule):
 
     connection = Connection.__name__
 
-    def getParams(self, data):
+    def getParams(self, data) -> list[dict]:
         payloadConfig = struct.pack('<B',
                                     int(data[0]),
                                     )
@@ -34,7 +34,7 @@ class DoublePendulum(ExperimentModule):
 
         return dataPoints
 
-    def handleFrame(self, frame):
+    def handleFrame(self, frame) -> dict:
         dataPoints = {}
         fid = frame.min_id
         if fid == 15:

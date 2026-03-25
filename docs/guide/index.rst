@@ -2,118 +2,156 @@
 Guide
 =====
 
-To visulize and control a test rig with PyWisp some files are needed that are summarized in a project. Each project
+This guide shows how to configure the remote part for a test rig.
+Most of the time this is some kind of PC that is connected to the rig and can be used
+to start and stop experiments as well as to collect and visualize measurements.
+Regarding the code on the test rig itself, please refer to the `tool-libs
+<https://github.com/umit-iace/tool-libs>`_ documentation.
+
+To visualize and control a test rig with PyWisp some files are needed that are summarized in a project. Each project
 must include the following files:
 
-- main.py: Main file to register all needed :mod:`pywisp.experimentModules`, :mod:`pywisp.connection`, :mod:`pywisp.visualization` and starts the GUI.
-- defaults.sreg: The definition of all experiments.
-- connection.py: The implementation of all ::mod:`pywisp.connection`.
-- visualization.py: The implementation of all :mod:`pywisp.visualization`.
-- Files for the :mod:`pywisp.experimentModules`: It is recommended to have one file each module, i.e. `controller`, `testbench`. For detailed information see :ref:`chapter_examples`.
+- ``connection.py``: The implementation of all :mod:`pywisp.connection`.
+- Files for the :mod:`pywisp.experimentModules`: It is recommended to have one file for each module, i.e. `controller`,
+  `testbench`. For detailed information see :ref:`chapter_examples`.
+- ``visualization.py``: The implementation of all :mod:`pywisp.visualization`.
+- ``defaults.sreg``: The definition of all experiments.
+- ``main.py``: Main file to register all needed :mod:`pywisp.experimentModules`, :mod:`pywisp.connection`,
+  :mod:`pywisp.visualization` and starts the GUI.
+
+Connection
+----------
+
+Before anything can happen, it is necessary to implement a communication channel to the rig.
+PyWisp already comes with generic connection types like
+:class:`pywisp.connection.SerialConnection` for communication over serial ports like USB as well
+:class:`pywisp.connection.TcpConnection` or :class:`pywisp.connection.UdpConnection` for Socket based communication.
+
+To implement your specific connection, just derive from
+:class:`pywisp.connection.Connection` or one of the classes mentioned above.
+The actual settings such as ports and baud rate can also be changed in the GUI later on.
+A simple UDP based setup could look like this:
+
+.. literalinclude:: ../../examples/generic/visu/connection.py
+   :language: python
+   :lines: 5-12
 
 ExperimentModule
 ----------------
 
 The experiment module class is needed to implement the different parts of the test rig, like trajectory, controller and
-testbench handling itself.
+testbench handling itself. To implement your functionality, derive from it and then implement the following:
 
-3 members must be specified:
+First, declare the following member variables:
 
-- `dataPoints`: Data points, that come from the test rig.
-- `publicSettings`: Settings, that can be changed by the user in the GUI.
-- `connection`: Connection name, that is required to read and write to the correct connection.
+- :attr:`connection`:``str`` -- The name of the connection class (derived from :class:`pywisp.connection.Connection`) that shall be used to
+  communicate with the test rig.
+- :attr:`publicSettings`:``dict`` -- Settings for the module that will be exposed in the GUI and can be changed by the user (e.g.
+  controller gains).
+- :attr:`dataPoints`:``list[str]`` -- Labels of the measurements that come from the test rig to be used for plots.
 
-4 functions can be implemented:
+Then, implement the following methods that are invoked when data is sent *from* PyWisp *to* the test rig:
 
-- `getStartParams`: Function to handle parameter, that should be set on experiment start.
-- `getStopParams`: Function to handle parameter, that should be set on experiment end.
-- `getParams`: Function to handle parameter, that should be set on start or during the experiment.
-- `handleFrame`: Function to handle frames from test rig and sets the data points to show in the GUI.
+- :meth:`getStartParams`: return parameters that should be set on experiment start.
+- :meth:`getStopParams`: return parameters that should be set on experiment end.
+- :meth:`getParams`: return parameters that should be set after start and during the experiment.
 
-For detailed information see the :ref:`chapter_examples` section.
+All of these 3 functions must return a list of dicts each representing a data frame to be sent to the rig.
+They receive one positional argument, which is a list of the currently set :attr:`publicSettings` of the module.
+For more information on data frames, please refer to :ref:`communication_layer`. To just send one bool value, an implementation
+could look like
 
-Connection
-----------
+.. literalinclude:: ../../examples/generic/visu/testbench.py
+   :language: python
+   :lines: 24-35
 
-It is necessary to implement the used connection types, where the class name specify the name used in the GUI and the
-default settings. The settings can be changed in the GUI directly. All implementations mus derived from
-:class:`~pywisp.visualization.MplVisualizer`. Currently two connection types are available and can implemented exemplary:
+Finally, the measurement data from the rig must be processed, to do so implement :meth:`handleFrame`
+to handle frames from test rig such that it can be shown in the GUI.
 
-- Serial connection:
-
-.. code-block:: python
-
-    class ConnName(SerialConnection):
-        settings = OrderedDict([("port", '/dev/uart0'),
-                                ("baud", 115200),
-                                ])
-
-        def __init__(self):
-            SerialConnection.__init__(self,
-                                      self.settings['port'],
-                                      self.settings['baud'])
-
-
-- Tcp connection
-
-.. code-block:: python
-
-    class ConnName(TcpConnection):
-        settings = OrderedDict([("ip", '192.168.1.1'),
-                                ])
-
-        def __init__(self):
-            TcpConnection.__init__(self,
-                                   self.settings['ip'])
+For actual implementations please refer to the :ref:`chapter_examples` section.
 
 Visualizer
 ----------
 
-It is possible to have different visualizers registered. They can be selected in GUI at runtime. Currently only
-visualizers based on matplotlib are available. For the implementation the base class
-:class:`~pywisp.visualization.MplVisualizer` must be derived and the method
-:func:`~pywisp.visualization.MplVisualizer.update` should be implemented. It is recommented to use
+It is possible to have different visualizers registered.
+They can be selected in GUI at runtime.
+Currently, only visualizers based on matplotlib are available.
+To visualize your rig, derive from
+:class:`~pywisp.visualization.MplVisualizer` and implement
+:func:`~pywisp.visualization.MplVisualizer.update`.
+To update the canvas, it is recommended to use
 
 .. code-block:: python
 
     self.canvas.draw_idle()
 
-to update the canvas.
 
 For detailed information see the :ref:`chapter_examples` section.
 
 Remote Widgets
 --------------
 
-The `Remote Widgets` give the opportunity to control direct `publicSettings` of
-:mod:`pywisp.experimentModules`. It can be added different types of widgets. Currently the following
-types are available:
+The `Remote Widgets` give the opportunity to change the :attr:`publicSettings` of the
+:mod:`pywisp.experimentModules` without editing them by hand in the tree view.
+
+Currently, the following types are available:
 
 * Push Button
 * Slider
-* Switch Button
+* Switch
 
-To save the configuration by means of right click the code can be exported and added to the `defaults.sreg`.
+To use the widgets, either right click in the ``Remote`` dock container in the GUI,
+select ``Add widget`` and follow the wizard, or manually define them under the ``Remote`` part
+of your experiment configuration (an ``.sreg`` as explained below) like so:
+
+.. literalinclude:: ../../examples/tcp/bur/client/default.sreg
+   :language: yaml
+   :lines: 23-45
+
+Widgets created interactively in the GUI are not automatically saved.
+To export the Widgets created by the wizard right click the ``Remote`` dock,
+select ``Copy remote source`` and paste the code into your ``.sreg`` file.
 
 Heartbeat
 ---------
 
-`PyWisp` provides the possibility to send a heartbeat on `ID 1` at bit 1. For the configuration `Config` section of the
-`defaults.sreg` must be extended by the setting
+`PyWisp` provides the possibility to automatically stop a rig if the connection
+is interrupted.
+To use this feature, the ``Config`` section of the ``.sreg`` file must include
+the setting
 
 .. code-block:: yaml
 
-    Heartbeat: <time in ms>
+    Heartbeat: 100  # send a heartbeat every 100ms
 
-It can be diabled by set the parameter to zero.
+It can be disabled by setting the parameter to zero or omitting the entry.
+Note that the embedded code on the rig itself also has to be configured to expect such a packet.
+Refer to the `tool-libs <https://github.com/umit-iace/tool-libs>`_ documentation for details.
+
+Plot Configuration
+~~~~~~~~~~~~~~~~~~
+
+Additionally, the plot and visualization have some configuration parameters. These are:
+
+* TimerTime: Update interval of the visualization/plot data
+* MovingWindow: Moving Window of the plot visualization
+
+They can be set interactively by right-clicking the plot in the GUI and in the Config menu.
+To save the configuration the ``defaults.sreg`` ``Config`` section can be extended with the keys:
+
+.. code-block:: yaml
+
+    TimerTime:           <time in ms>
+    MovingWindowSize:    <time in s>
+    MovingWindowEnable:  <True..enable moving window, False..disable moving window>
 
 For detailed information see the :ref:`chapter_examples` section.
 
 defaults.sreg
 -------------
 
-The `defaults.sreg` constitutes the standard configuration file for `PyWisp`. It uses a `yaml` syntax.
-Below a normal configuration with two experiments is presented:
+The ``defaults.sreg`` file constitutes the standard configuration file for `PyWisp`. It uses a ``yaml`` syntax.
+Below an example configuration with two experiments is presented:
 
 .. code-block:: yaml
 
@@ -153,31 +191,14 @@ Below a normal configuration with two experiments is presented:
         MplExampleVisualizer:
 
       Config:
-        TimerTime: 40
-        MovingWindowSize: 5
+        TimerTime: 40  # [] = ms, update interval of the GUI plots
+        MovingWindowSize: 5  # [] = s
         MovingWindowEnable: True
 
 In this example `Test` and `SeriesTrajectory` are derived :mod:`pywisp.experimentModules` classes. The settings below
-of `Remote` configurates a Push Button, that is connected to ´Value1` of the :mod:`pywisp.experimentModules` class
+of `Remote` configures a Push Button, that is connected to ´Value1` of the :mod:`pywisp.experimentModules` class
 `Test`. The 'Config' section shows the settings for the plot configuration.
 
 For detailed information see the :ref:`chapter_examples` section.
 
-Plot Configuration
-~~~~~~~~~~~~~~~~~~
 
-Additionally the plot and visualization have some configuration parameters. These are:
-
-* TimerTime: Update interval of the visualization/plot data
-* MovingWindow: Moving Window of the plot visualization
-
-The can be set by a right click of the plot in the GUI or about the Config menu.
-To save the configuration the `defaults.sreg` can be extended by a `Config section` with the keys:
-
-.. code-block:: yaml
-
-    TimerTime:           <time in ms>
-    MovingWindowSize:    <time in s>
-    MovingWindowEnable:  <True..enable moving window, False..disable moving window>
-
-For detailed information see the :ref:`chapter_examples` section.

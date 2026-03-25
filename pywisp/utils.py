@@ -83,15 +83,19 @@ def getResource(resName, resType="icons"):
     return os.path.join(resource_path, resName)
 
 
-def getFormatedStructString(dataLenFloat, dataLenInt, lenFloat):
+def getFormatedStructString(dataLenFloat: int, dataLenInt: int , lenFloat: int) -> str:
     """
     Returns a format string for the struct package by given float and integer length and
     count of floats.
 
     :param dataLenFloat: length of float datatype
+    :type dataLenFloat: int
     :param dataLenInt: length of integer datatype
+    :type dataLenInt: int
     :param lenFloat: length of float data
-    :return:
+    :type lenFloat: int
+
+    :return: Struct-type format string that encodes the reuqired data fields.
     """
     if dataLenFloat == 4:
         floatStr = 'f'
@@ -114,16 +118,22 @@ def getFormatedStructString(dataLenFloat, dataLenInt, lenFloat):
     return fmtStr
 
 
-def packArrayToFrame(id, data, frameLen, dataLenFloat, dataLenInt):
+def packArrayToFrame(id: int, data: list[float], frameLen: int, dataLenFloat: int, dataLenInt: int) -> list[dict]:
     """
-    Packs data to an array of dataPoints with given identifier.
+    Packs a data array into a list of payloads that do not exceed a given frame length
 
-    :param id: identifier of frame
-    :param data: data of frame
-    :param frameLen: maximal data size of frame
-    :param dataLenFloat: length of float datatype
-    :param dataLenInt: length of integer datatype
-    :return: array of dataPoints (id + payload)
+    :param id: Frame ID to use
+    :type id: int
+    :param data: Data to pack
+    :type data: List of floats
+    :param frameLen: Maximum size of frame for the given architecture
+    :type frameLen: int
+    :param dataLenFloat: Size of a float on the given architecture in bytes
+    :type dataLenFloat: int
+    :param dataLenInt: Size of an int on the given architecture in bytes
+    :type dataLenInt: int
+
+    :return: List of MIN-Frames, encoded in dictionaries with keys `id` and `msg`.
     """
     completeData = len(data) * dataLenFloat + 1 * dataLenInt
     N = np.ceil(completeData / frameLen)

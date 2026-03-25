@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-from pywisp import connection
+from pywisp.connection import UdpConnection
 
 
-class Connection(connection.UdpConnection):
+class Connection(UdpConnection):
     settings = {
         "ip": '127.0.0.1',
         "port": 45670,

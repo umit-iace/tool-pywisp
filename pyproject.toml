@@ -29,7 +29,6 @@ dependencies = [
     'PyYAML',
     'python-dateutil',
     'pandas',
-    "sphinx",
     'build',
 ]
 
@@ -38,3 +37,9 @@ version = {attr = "pywisp.__version__"}
 
 [tool.uv.workspace]
 members = ["examples/generic/doublePendulum"]
+
+[dependency-groups]
+dev = [
+    "sphinx",
+    "sphinxcontrib-plantuml>=0.31",
+]
