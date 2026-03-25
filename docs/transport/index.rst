@@ -59,7 +59,7 @@ It is up to the user to guarantee that:
 Packing a frame
 ---------------
 
-To send data to the test rig, it has to ba packed into MIN-Frames before it can be handed over
+To send data to the test rig, it has to be packed into MIN-Frames before it can be handed over
 to the connection.
 Using the :mod:`struct` module from the standard library, the payload can be created as follows
 

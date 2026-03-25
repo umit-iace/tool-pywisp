@@ -53,8 +53,8 @@ Depending on the connection type, currently the following happens:
         User <-- PyWisp: Connection not possible
     end
 
-Note that all actions occur on the machine that PyWisp is running on and no actual
-data is sent or received over any channel in this step.
+Note that all actions occur on the machine that PyWisp is running on, and no
+actual data is sent or received over any channel in this step.
 
 Powering on the rig
 -------------------

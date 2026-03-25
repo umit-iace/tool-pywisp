@@ -75,17 +75,16 @@ Visualizer
 
 It is possible to have different visualizers registered.
 They can be selected in GUI at runtime.
-Currently only visualizers based on matplotlib are available.
+Currently, only visualizers based on matplotlib are available.
 To visualize your rig, derive from
 :class:`~pywisp.visualization.MplVisualizer` and implement
 :func:`~pywisp.visualization.MplVisualizer.update`.
-It is recommented to use
+To update the canvas, it is recommended to use
 
 .. code-block:: python
 
     self.canvas.draw_idle()
 
-to update the canvas.
 
 For detailed information see the :ref:`chapter_examples` section.
 
@@ -95,7 +94,7 @@ Remote Widgets
 The `Remote Widgets` give the opportunity to change the :attr:`publicSettings` of the
 :mod:`pywisp.experimentModules` without editing them by hand in the tree view.
 
-Currently the following types are available:
+Currently, the following types are available:
 
 * Push Button
 * Slider
@@ -103,7 +102,7 @@ Currently the following types are available:
 
 To use the widgets, either right click in the ``Remote`` dock container in the GUI,
 select ``Add widget`` and follow the wizard, or manually define them under the ``Remote`` part
-of your experiment configuration  (an ``.sreg`` as explained below) like so:
+of your experiment configuration (an ``.sreg`` as explained below) like so:
 
 .. literalinclude:: ../../examples/tcp/bur/client/default.sreg
    :language: yaml
@@ -116,7 +115,7 @@ select ``Copy remote source`` and paste the code into your ``.sreg`` file.
 Heartbeat
 ---------
 
-`PyWisp` provides th epossibility to automatically stop a rig if the connection
+`PyWisp` provides the possibility to automatically stop a rig if the connection
 is interrupted.
 To use this feature, the ``Config`` section of the ``.sreg`` file must include
 the setting
@@ -132,7 +131,7 @@ Refer to the `tool-libs <https://github.com/umit-iace/tool-libs>`_ documentation
 Plot Configuration
 ~~~~~~~~~~~~~~~~~~
 
-Additionally the plot and visualization have some configuration parameters. These are:
+Additionally, the plot and visualization have some configuration parameters. These are:
 
 * TimerTime: Update interval of the visualization/plot data
 * MovingWindow: Moving Window of the plot visualization
