@@ -39,6 +39,7 @@ from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .buffer import DataPointBuffer
 from .export import Exporter
+from .measurement import Measurement
 from .min import CONTROL_FRAME_ID, Control, controlFrame
 from .utils import getResource, setupLogging
 from .widgets.common import PlainTextLogger, PinnedDock, TreeWidgetStyledItemDelegate
@@ -228,7 +229,9 @@ class MainGui(QMainWindow):
         self.lastMeasList.setStyleSheet(QStyleSheet)
         self.lastMeasDock.addWidget(self.lastMeasList)
         self.lastMeasList.itemDoubleClicked.connect(self.loadLastMeas)
+        # all recorded measurements, each list item holds its measurement as user data
         self.measurements = []
+        self._runningMeasurement = None
 
         # log dock
         self.logBox = QTextEdit(self)
@@ -752,12 +755,11 @@ class MainGui(QMainWindow):
             self._logger.error("Can't export data set: no data set selected.")
             return
 
-        if self._currentLastMeasItem is None:
+        measurement = self._currentMeasurement()
+        if measurement is None:
             self._logger.error("Nothing to export!")
             return
-
-        idx = self.lastMeasList.row(self._currentLastMeasItem)
-        dataPointBuffers = self.measurements[idx]['dataPointBuffers']
+        dataPointBuffers = measurement.dataPointBuffers
 
         expLabels = [item.text()
                     for item in self.dataPointListWidget.selectedItems()]
@@ -790,12 +792,11 @@ class MainGui(QMainWindow):
     def updatePlotChart(self, item):
         title = item.text(0)
 
-        if self._currentLastMeasItem is None:
+        measurement = self._currentMeasurement()
+        if measurement is None:
             self._logger.warning("No Measurement to plot!")
             return
-
-        idx = self.lastMeasList.row(self._currentLastMeasItem)
-        dataPointBuffers = self.measurements[idx]['dataPointBuffers']
+        dataPointBuffers = measurement.dataPointBuffers
 
         # check if a top level item has been clicked
         if not item.parent():
@@ -847,15 +848,24 @@ class MainGui(QMainWindow):
             self.plotDataVector(item)
 
     def getCurrentDataPoints(self):
+        measurement = self._currentMeasurement()
+        if measurement is None:
+            return {name: DataPointBuffer() for name in self.exp.getDataPoints()}
+        return measurement.dataPointBuffers
+
+    def _currentMeasurement(self):
+        """ the measurement shown in the gui or `None` """
         if self._currentLastMeasItem is None:
-            dataPointNames = self.exp.getDataPoints()
-            dataPointBuffers = dict()
-            for data in dataPointNames:
-                dataPointBuffers[data] = DataPointBuffer()
-        else:
-            idx = self.lastMeasList.row(self._currentLastMeasItem)
-            dataPointBuffers = self.measurements[idx]['dataPointBuffers']
-        return dataPointBuffers
+            return None
+        return self._currentLastMeasItem.data(Qt.UserRole)
+
+    def _measurementItem(self, measurement):
+        """ the item of the given measurement in the list of measurements """
+        for row in range(self.lastMeasList.count()):
+            item = self.lastMeasList.item(row)
+            if item.data(Qt.UserRole) is measurement:
+                return item
+        return None
 
     def updatePlot(self, item, dataPointBuffers):
         title = item.text(0)
@@ -947,16 +957,14 @@ class MainGui(QMainWindow):
         self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.darkGreen))
         self.experimentList.repaint()
 
-        self._currentDataPointBuffers = {data: DataPointBuffer() for data in dataPointNames}
+        measurement = Measurement(len(self.measurements) + 1, self.exp.getExperiment(), dataPointNames)
+        self.measurements.append(measurement)
+        self._runningMeasurement = measurement
+        self._currentDataPointBuffers = measurement.dataPointBuffers
         self._dataWarnings = set()
 
-        data = {}
-        data.update({'dataPointBuffers': self._currentDataPointBuffers})
-        data.update({'exp': deepcopy(self.exp.getExperiment())})
-        self.measurements.append(data)
-
-        item = QListWidgetItem(str(self.lastMeasList.count() + 1) + ": "
-                               + self._currentExperimentName + " ~current~")
+        item = QListWidgetItem(measurement.label())
+        item.setData(Qt.UserRole, measurement)
         self.lastMeasList.addItem(item)
         self.lastMeasList.scrollToItem(item)
         self.copyLastMeas(item)
@@ -999,30 +1007,38 @@ class MainGui(QMainWindow):
 
         self.guiTimer.stop()
 
+    def _showsRunningExperiment(self):
+        """
+        `True` if the gui shows the running experiment, otherwise a warning is logged
+        since parameters would be sent to the wrong experiment
+        """
+        running = self._runningMeasurement
+        if running is not None and self._currentMeasurement() is running and \
+                self._currentExperimentIndex == self.experimentList.row(self._currentExpListItem):
+            return True
+        if running is None:
+            self._logger.warning("No experiment is running!")
+        else:
+            row = self.experimentList.row(self._currentExpListItem)
+            selectedName = self._experiments[row]["Name"] if row >= 0 else None
+            self._logger.warning(f"Selected Experiment '{selectedName}' doesn't match "
+                                 f"current running Experiment '{running.name}'!")
+        return False
+
     def sendParameter(self):
         """
         Sends all parameters of the current experiment with `ExperimentInteractor` function `sendParameterExperiment`
         """
-        if self._currentExperimentIndex == self.experimentList.row(self._currentExpListItem) and \
-                "~current~" in self._currentLastMeasItem.text():
+        if self._showsRunningExperiment():
             self.exp.sendParameterExperiment()
-        else:
-            runningName = self._experiments[self.experimentList.row(self._currentExpListItem)]["Name"]
-            self._logger.warning(f"Selected Experiment '{self._currentExperimentName}' doesn't match "
-                                 f"current running Experiment '{runningName}'!")
 
     def sendChangedParameter(self):
         """
         Sends changed parameters of the current experiment with `ExperimentInteractor`
         function `sendChangedParameterExperiment`
         """
-        if self._currentExperimentIndex == self.experimentList.row(self._currentExpListItem) and \
-                "~current~" in self._currentLastMeasItem.text():
+        if self._showsRunningExperiment():
             self.exp.sendChangedParameterExperiment()
-        else:
-            runningName = self._experiments[self.experimentList.row(self._currentExpListItem)]["Name"]
-            self._logger.warning(f"Selected Experiment '{self._currentExperimentName}' doesn't match "
-                                 f"current running Experiment '{runningName}'!")
 
     def loadExpFromFile(self, fileName):
         """
@@ -1384,29 +1400,24 @@ class MainGui(QMainWindow):
 
     def saveLastMeas(self):
         """
-        Saves at the end of an experiment the data in the measurements dict
+        Marks the running measurement as finished at the end of an experiment.
+        The measurement already references the buffers of the run, so nothing is copied.
         """
-        if self._currentExperimentIndex is None:
+        measurement = self._runningMeasurement
+        if measurement is None:
             return
-
-        items = self.lastMeasList.findItems('~current~', Qt.MatchContains)
-        if not items:
-            return
-        if len(items) != 1:
-            self._logger.warning('Error, more than one ~current~ measurement available. Using first one!')
-
-        # the measurement already references the buffers of the run, no need to copy them
-        item = items[0]
-        item.setText(item.text().replace(' ~current~', ''))
+        measurement.finish()
+        self._runningMeasurement = None
+        item = self._measurementItem(measurement)
+        if item is not None:
+            item.setText(measurement.label())
 
     def copyLastMeas(self, item):
         self._currentLastMeasItem = item
-        idx = self.lastMeasList.row(item)
-
-        measurement = self.measurements[idx]
+        measurement = item.data(Qt.UserRole)
 
         dataPointNames = self.exp.getDataPoints()
-        dataPointBuffers = measurement['dataPointBuffers']
+        dataPointBuffers = measurement.dataPointBuffers
         if dataPointNames:
             self.updateDataPoints(dataPointNames)
 
@@ -1425,36 +1436,27 @@ class MainGui(QMainWindow):
         self.selectedExp = False
         self.remoteWidgetLayout.clearAll()
 
-        expName = str(item.text())
+        measurement = item.data(Qt.UserRole)
+        if measurement is None:
+            self._logger.error(f"loadLastMeas(): No measurement stored for '{item.text()}'")
+            return False
         self._currentLastMeasItem = item
-        try:
-            idx = self.lastMeasList.row(item)
-        except ValueError:
-            self._logger.error(f"loadLastMeas(): No measurement called '{expName}")
-            return False
+        self._logger.info(f"Restore of measurement '{item.text()}'")
 
-        if idx >= len(self.measurements):
-            self._logger.error(f"loadLastMeas(): Invalid index '{idx}')")
-            return False
-
-        self._logger.info(f"Restore of measurement '{expName}'")
-
-        measurement = self.measurements[idx]
-
-        success = self.exp.setExperiment(measurement['exp'])
+        success = self.exp.setExperiment(measurement.experiment)
 
         self.setQListItemBold(self.lastMeasList, item, success)
         self.setQListItemBold(self.experimentList, item, success)
 
         dataPointNames = self.exp.getDataPoints()
-        dataPointBuffers = measurement['dataPointBuffers']
+        dataPointBuffers = measurement.dataPointBuffers
         if dataPointNames:
             self.updateDataPoints(dataPointNames)
 
         for i in range(self.dataPointTreeWidget.topLevelItemCount()):
             self.updatePlot(self.dataPointTreeWidget.topLevelItem(i), dataPointBuffers)
 
-        self._logger.info(f"Apply measurement '{measurement['exp']['Name']}'")
+        self._logger.info(f"Apply measurement '{measurement.name}'")
 
     def updateDataPoints(self, dataPointNames):
         """

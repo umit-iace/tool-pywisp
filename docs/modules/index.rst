@@ -18,6 +18,7 @@ access any PyWisp module, or use this contents:
     experiments
     export
     gui
+    measurement
     min
     registry
     utils

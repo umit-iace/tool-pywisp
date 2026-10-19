@@ -197,7 +197,7 @@ def test_data_path_handles_batches(gui):
     assert list(buf.values) == [1.0, 2.0]
     gui.stopExperiment()
     # the finished run keeps its data and is no longer modified
-    stored = gui.measurements[-1]['dataPointBuffers']['x']
+    stored = gui.measurements[-1].dataPointBuffers['x']
     gui.updateData([frame(3000, 3.0)], "DummyConnection")
     assert len(stored) == 2
 
@@ -386,3 +386,63 @@ def test_heartbeat_goes_to_all_connections(gui):
         gui.connections[name]['inst'] = inst
     gui.heartbeat()
     assert sent == {name: [{'id': 1, 'msg': b'\x02'}] for name in gui.connections}
+
+
+def test_measurement_list(gui):
+    startExperiment(gui)
+    item = gui.lastMeasList.item(0)
+    measurement = item.data(Qt.UserRole)
+    assert measurement is gui.measurements[0] and measurement.running
+    assert item.text() == "1: First ~current~"
+    assert gui._currentDataPointBuffers is measurement.dataPointBuffers
+
+    gui.stopExperiment()
+    assert not measurement.running
+    assert item.text() == "1: First"
+
+    startExperiment(gui)
+    assert gui.lastMeasList.item(1).text() == "2: First ~current~"
+    gui.stopExperiment()
+
+
+def test_running_measurement_does_not_depend_on_the_text(gui):
+    startExperiment(gui)
+    gui.lastMeasList.item(0).setText("renamed")
+    with mock.patch.object(gui.exp, 'sendParameterExperiment') as send:
+        gui.sendParameter()
+    send.assert_called_once()
+    gui.stopExperiment()
+    # the measurement is finished although its text has changed
+    assert not gui.measurements[0].running
+    assert gui.lastMeasList.item(0).text() == "1: First"
+
+
+def test_parameters_only_go_to_the_shown_running_experiment(gui, caplog):
+    startExperiment(gui)
+    gui.stopExperiment()
+    startExperiment(gui)
+    # show the first, finished measurement while the second one runs
+    gui._currentLastMeasItem = gui.lastMeasList.item(0)
+    with mock.patch.object(gui.exp, 'sendChangedParameterExperiment') as send:
+        gui.sendChangedParameter()
+    send.assert_not_called()
+    assert "doesn't match current running Experiment 'First'" in caplog.text
+    gui.stopExperiment()
+
+    with mock.patch.object(gui.exp, 'sendParameterExperiment') as send:
+        gui.sendParameter()
+    send.assert_not_called()
+    assert "No experiment is running" in caplog.text
+
+
+def test_load_last_measurement(gui):
+    startExperiment(gui)
+    gui.updateData([frame(1000, 1.0)], "DummyConnection")
+    gui.stopExperiment()
+
+    # switch to the second experiment, then restore the measurement of the first one
+    gui.experimentDoubleClicked(gui.experimentList.item(1))
+    gui.loadLastMeas(gui.lastMeasList.item(0))
+    assert gui.exp.getExperiment()['Name'] == 'First'
+    assert gui._currentMeasurement() is gui.measurements[0]
+    assert list(gui.getCurrentDataPoints()['x'].values) == [1.0]
