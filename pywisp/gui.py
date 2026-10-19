@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
+import shutil
 import sys
+import tempfile
 import time
 from copy import deepcopy
 
@@ -31,7 +33,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from pyqtgraph.dockarea import *
 
-from .config import validateExperiments
+from .config import dumpExperiments, validateExperiments
 from .connection import SerialConnection, SocketConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
@@ -327,6 +329,11 @@ class MainGui(QMainWindow):
 
         # menu bar
         fileMenu = self.menuBar().addMenu("&File")
+        self.actSaveExperiments = fileMenu.addAction("&Save experiments", self.saveExperiments,
+                                                     QKeySequence(QKeySequence.Save))
+        self.actSaveExperimentsAs = fileMenu.addAction("Save experiments &as ...", self.saveExperimentsAs,
+                                                       QKeySequence(QKeySequence.SaveAs))
+        fileMenu.addSeparator()
         fileMenu.addAction("&Quit", self.close, QKeySequence(Qt.CTRL + Qt.Key_W))
 
         # view
@@ -439,6 +446,10 @@ class MainGui(QMainWindow):
         self._currentDataPointBuffers = None
         self._dataWarnings = set()
         self.plotCharts = {}
+        # config file and all of its experiments, including those skipped by the validation
+        self._configFile = None
+        self._fileExperiments = []
+        self._backedUpFiles = set()
 
         loadExpFromFileSuccess = self.loadExpFromFile(fileName)
 
@@ -1042,6 +1053,9 @@ class MainGui(QMainWindow):
                 self._logger.error(f"Config file {fileName} contains no experiments!")
                 return False
 
+            # the valid experiments are normalized in place, so saving this list
+            # keeps the changes as well as the skipped experiments
+            fileExperiments = experiments
             experiments = validateExperiments(experiments,
                                               getRegisteredExperimentModules(),
                                               getRegisteredVisualizers(),
@@ -1051,6 +1065,8 @@ class MainGui(QMainWindow):
                 return False
 
             self._experiments = experiments
+            self._fileExperiments = fileExperiments
+            self._configFile = os.path.abspath(fileName)
             self._logger.info(f"Loading {len(self._experiments)} experiments")
 
         return success
@@ -1464,6 +1480,20 @@ class MainGui(QMainWindow):
             qList.item(i).setFont(newfont)
         qList.repaint()
 
+    def _remoteConfig(self, widgetName):
+        """ config of a widget of the current experiment or `None` """
+        idx = self.experimentList.row(self._currentExpListItem)
+        if idx < 0:
+            return None
+        remote = self._experiments[idx].get('Remote') or {}
+        return remote.get(widgetName)
+
+    def remoteWidgetMoved(self, widget):
+        """ store the position of a moved widget in the experiment """
+        config = self._remoteConfig(widget.widgetName)
+        if config is not None:
+            config['position'] = widget.position()
+
     def remoteRemoveWidget(self, widget):
         idx = self.experimentList.row(self._currentExpListItem)
         self._experiments[idx].get('Remote', {}).pop(widget.widgetName, None)
@@ -1499,6 +1529,7 @@ class MainGui(QMainWindow):
             widget.stepSlider = config['stepSlider']
             widget.shortcutPlus.setKey(config['shortcutPlus'])
             widget.shortcutMinus.setKey(config['shortcutMinus'])
+        config['position'] = widget.position()
         self._experiments[idx]['Remote'][config['name']] = config
         widget.updateData()
 
@@ -1574,10 +1605,13 @@ class MainGui(QMainWindow):
             widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
         else:
             return
-        widget.move((self.remoteWidgetLayout.count() % 2) * 200, (self.remoteWidgetLayout.count() // 2) * 40)
-        if sliderLabel:
-            sliderLabel.move((self.remoteWidgetLayout.count() % 2) * 200 + 80,
-                             (self.remoteWidgetLayout.count() // 2) * 40 + 30)
+        position = config.get('position')
+        if position is None:
+            # place new widgets in two columns
+            cnt = self.remoteWidgetLayout.count()
+            position = ((cnt % 2) * 200, (cnt // 2) * 40)
+        widget.placeAt(*position)
+        widget.onMoved = self.remoteWidgetMoved
         self.remoteWidgetLayout.addWidget(widget)
 
     def remotePushButtonSendParameter(self, widget):
@@ -1661,14 +1695,74 @@ class MainGui(QMainWindow):
 
                 return
 
+    def saveExperiments(self, fileName=None):
+        """
+        Writes all experiments including the remote widgets and their positions to a config file.
+
+        :param fileName: target file, defaults to the loaded config file
+        :return: `True` if successful
+        """
+        fileName = fileName or self._configFile
+        if fileName is None:
+            return self.saveExperimentsAs()
+        fileName = os.path.abspath(fileName)
+
+        # positions of widgets that have not been moved yet
+        for widget in self.remoteWidgetLayout.list:
+            self.remoteWidgetMoved(widget)
+
+        try:
+            text = dumpExperiments(self._fileExperiments or self._experiments)
+            # keep the hand written original, comments are lost when saving
+            if os.path.exists(fileName) and fileName not in self._backedUpFiles:
+                shutil.copy2(fileName, fileName + '.bak')
+                self._backedUpFiles.add(fileName)
+            # write to a temporary file first, so a failure does not destroy the config
+            fd, tmpName = tempfile.mkstemp(dir=os.path.dirname(fileName), suffix='.sreg')
+            try:
+                with os.fdopen(fd, 'w') as f:
+                    f.write(text)
+                # mkstemp creates the file only readable by the owner
+                if os.path.exists(fileName):
+                    shutil.copymode(fileName, tmpName)
+                else:
+                    umask = os.umask(0)
+                    os.umask(umask)
+                    os.chmod(tmpName, 0o666 & ~umask)
+                os.replace(tmpName, fileName)
+            except BaseException:
+                os.unlink(tmpName)
+                raise
+        except (OSError, yaml.YAMLError) as e:
+            self._logger.error(f"Cannot save experiments to {fileName}: {e}")
+            return False
+
+        self._configFile = fileName
+        self._backedUpFiles.add(fileName)
+        self._logger.info(f"Saved experiments to {fileName}")
+        return True
+
+    def saveExperimentsAs(self):
+        """ asks for a file name and saves all experiments to it """
+        start = self._configFile or os.path.join(os.getcwd(), 'default.sreg')
+        fileName, _ = QFileDialog.getSaveFileName(self, "Save experiments", start,
+                                                  "Experiment files (*.sreg);;All files (*)")
+        if not fileName:
+            return False
+        if not os.path.splitext(fileName)[1]:
+            fileName += '.sreg'
+        return self.saveExperiments(fileName)
+
     def copyRemoteSource(self):
         if self._currentExperimentIndex is None:
             self._logger.error("No experiment selected!")
             return
-        text = "  Remote:\n"
-        if 'Remote' in self._experiments[self._currentExperimentIndex]:
-            text += yaml.dump(self._experiments[self._currentExperimentIndex]['Remote'], default_flow_style=False)
-        text = text.replace("\n", "\n    ")
+        for widget in self.remoteWidgetLayout.list:
+            self.remoteWidgetMoved(widget)
+        remote = self._experiments[self._currentExperimentIndex].get('Remote') or {}
+        text = dumpExperiments([{'Remote': remote}])
+        # indented like an entry of an experiment, without the list marker
+        text = "  " + text[2:]
         clipboard = QApplication.clipboard()
         clipboard.setText(text)
 
@@ -1679,11 +1773,15 @@ class MainGui(QMainWindow):
         """
         menu = QMenu(self)
         addAction = menu.addAction("Add widget")
-        saveAction = menu.addAction("Copy remote source")
+        menu.addSeparator()
+        saveAction = menu.addAction("Save experiments")
+        copyAction = menu.addAction("Copy remote source")
         action = menu.exec_(self.remoteWidget.mapToGlobal(position))
         if action == addAction:
             self.remoteAddWidget()
         elif action == saveAction:
+            self.saveExperiments()
+        elif action == copyAction:
             self.copyRemoteSource()
 
 def logUncaughtException(excType, excValue, excTraceback):

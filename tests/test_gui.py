@@ -3,8 +3,15 @@ import struct
 from collections import OrderedDict
 from unittest import mock
 
+import os
+import stat
+import textwrap
+
 import pytest
-from PyQt5.QtWidgets import QMenu
+import yaml
+from PyQt5.QtCore import QEvent, QPoint, Qt
+from PyQt5.QtGui import QMouseEvent
+from PyQt5.QtWidgets import QApplication, QFileDialog, QMenu
 
 import pywisp as pw
 from pywisp.widgets.remote import MovablePushButton, MovableSlider, MovableSwitch, MovableWidget
@@ -30,6 +37,7 @@ SREG = """
       valueOn: '1'
       shortcut: ''
       shortcut-Gp: S
+      position: [150, 60]
 - Name: Second
   Dummy:
   Remote:
@@ -235,3 +243,136 @@ def test_plot_color_order(gui):
     st = Settings()
     expected = [v for _, v in _default["plot_colors"]]
     assert [st.color(i).name() for i in range(len(expected))] == expected
+
+
+def remoteWidget(gui, cls):
+    return next(w for w in gui.remoteWidgetLayout.list if isinstance(w, cls))
+
+
+def rightDrag(widget, delta):
+    """ move a remote widget like the user does, by dragging it with the right mouse button """
+    start = QPoint(5, 5)
+
+    def send(kind, pos, buttons):
+        event = QMouseEvent(kind, pos, widget.mapToGlobal(pos), Qt.RightButton, buttons, Qt.NoModifier)
+        QApplication.sendEvent(widget, event)
+
+    send(QEvent.MouseButtonPress, start, Qt.RightButton)
+    send(QEvent.MouseMove, start + delta, Qt.RightButton)
+    send(QEvent.MouseButtonRelease, start + delta, Qt.NoButton)
+
+
+def savedExperiments(path):
+    with open(path) as f:
+        return yaml.safe_load(f)
+
+
+def test_remote_positions_are_loaded(gui):
+    assert remoteWidget(gui, MovablePushButton).position() == [150, 60]
+    slider = remoteWidget(gui, MovableSlider)
+    # without a position the widgets are placed in two columns
+    assert slider.position() == [0, 0]
+    assert slider.label.pos() == QPoint(80, 30)
+
+
+def test_moving_a_widget_updates_the_experiment(gui):
+    button = remoteWidget(gui, MovablePushButton)
+    rightDrag(button, QPoint(30, 20))
+    assert button.position() == [180, 80]
+    assert gui._experiments[0]['Remote']['Go']['position'] == [180, 80]
+
+    # editing the widget keeps its position
+    config = dict(button.getData(), valueOn='2')
+    with mock.patch.object(pw.gui.RemoteWidgetEdit, 'getData', return_value=(config, True)):
+        gui.remoteConfigWidget(button)
+    assert gui._experiments[0]['Remote']['Go']['position'] == [180, 80]
+
+
+def test_save_experiments(gui, tmp_path):
+    configFile = tmp_path / "default.sreg"
+    original = configFile.read_text()
+    os.chmod(configFile, 0o640)
+
+    rightDrag(remoteWidget(gui, MovablePushButton), QPoint(10, 0))
+    gui.remoteRemoveWidget(remoteWidget(gui, MovableSlider))
+    assert gui.saveExperiments()
+
+    saved = savedExperiments(configFile)
+    assert [e['Name'] for e in saved] == ['First', 'Second']
+    assert saved[0]['Dummy'] == {'gain': 2.0}
+    assert saved[0]['Remote'] == {'Go': {'widgetType': 'PushButton', 'Module': 'Dummy', 'Parameter': 'gain',
+                                         'valueOn': '1', 'shortcut-Gp': 'S', 'position': [160, 60]}}
+    # the hand written file is kept once, the file mode stays
+    assert (tmp_path / "default.sreg.bak").read_text() == original
+    assert stat.S_IMODE(configFile.stat().st_mode) == 0o640
+
+    # a second save does not replace the backup
+    assert gui.saveExperiments()
+    assert (tmp_path / "default.sreg.bak").read_text() == original
+
+    # the saved file loads with the same widgets
+    form = pw.MainGui()
+    try:
+        assert [w.widgetName for w in form.remoteWidgetLayout.list] == ['Go']
+        assert form.remoteWidgetLayout.list[0].position() == [160, 60]
+    finally:
+        form.close()
+
+
+def test_save_stores_unmoved_widget_positions(gui, tmp_path):
+    assert gui.saveExperiments()
+    assert savedExperiments(tmp_path / "default.sreg")[0]['Remote']['Gain']['position'] == [0, 0]
+
+
+def test_save_keeps_skipped_experiments(qtbot, cleanRegistry, tmp_path):
+    pw.registerConnection(DummyConnection)
+    pw.registerExperimentModule(Dummy)
+    (tmp_path / "default.sreg").write_text(textwrap.dedent("""
+        - Name: Valid
+          Dummy:
+        - Name: Broken
+          NotRegistered:
+            x: 1
+    """))
+    form = pw.MainGui()
+    qtbot.addWidget(form)
+    assert form.experimentList.count() == 1
+    assert form.saveExperiments()
+    saved = savedExperiments(tmp_path / "default.sreg")
+    assert [e['Name'] for e in saved] == ['Valid', 'Broken']
+    assert saved[1]['NotRegistered'] == {'x': 1}
+
+
+def test_save_experiments_as(gui, tmp_path, monkeypatch):
+    target = tmp_path / "other"
+    monkeypatch.setattr(QFileDialog, 'getSaveFileName', lambda *args: (str(target), ''))
+    assert gui.saveExperimentsAs()
+    assert savedExperiments(tmp_path / "other.sreg")[1]['Name'] == 'Second'
+    assert gui._configFile == str(tmp_path / "other.sreg")
+    # nothing to back up for a new file
+    assert not (tmp_path / "other.sreg.bak").exists()
+
+    # aborting the dialog saves nothing
+    monkeypatch.setattr(QFileDialog, 'getSaveFileName', lambda *args: ('', ''))
+    assert not gui.saveExperimentsAs()
+
+
+def test_save_failure_keeps_file(gui, tmp_path, caplog):
+    configFile = tmp_path / "default.sreg"
+    original = configFile.read_text()
+    with mock.patch.object(pw.gui, 'dumpExperiments', side_effect=yaml.YAMLError("broken")):
+        assert not gui.saveExperiments()
+    assert "Cannot save experiments" in caplog.text
+    assert configFile.read_text() == original
+    assert not gui.saveExperiments(str(tmp_path / "missing" / "x.sreg"))
+    assert [p.name for p in tmp_path.iterdir() if p.suffix == '.sreg'] == ['default.sreg']
+
+
+def test_copy_remote_source(gui):
+    gui.copyRemoteSource()
+    text = QApplication.clipboard().text()
+    assert text.startswith("  Remote:\n    Gain:\n")
+    remote = yaml.safe_load(textwrap.dedent(text))['Remote']
+    assert set(remote) == {'Gain', 'Go'}
+    assert 'name' not in remote['Go']
+    assert remote['Go']['position'] == [150, 60]

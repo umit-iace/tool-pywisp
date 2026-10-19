@@ -68,6 +68,8 @@ class MovableWidget:
         self._gamepadConnection = None
         self._mousePressPos = None
         self._mouseMovePos = None
+        # called with the widget after it has been moved by the user
+        self.onMoved = None
 
         self.contextMenu = QMenu()
         self.removeAction = self.contextMenu.addAction("Remove")
@@ -85,9 +87,7 @@ class MovableWidget:
             globalPos = event.globalPos()
             newPos = self.pos() + (globalPos - self._mouseMovePos)
             if self.parent().rect().contains(newPos):
-                self.move(newPos)
-                if self.label:
-                    self.label.move(newPos.x() + 80, newPos.y() + 30)
+                self.placeAt(newPos.x(), newPos.y())
                 self._mouseMovePos = globalPos
 
         super().mouseMoveEvent(event)
@@ -100,6 +100,8 @@ class MovableWidget:
                 self._mouseMovePos = None
                 if moved.manhattanLength() > 0:
                     event.ignore()
+                    if self.onMoved is not None:
+                        self.onMoved(self)
                     return
                 super().mouseReleaseEvent(event)
                 self.contextMenu.exec_(self.mapToGlobal(event.pos()))
@@ -109,6 +111,15 @@ class MovableWidget:
     def contextMenuEvent(self, event):
         # the context menu is handled in mouseReleaseEvent
         event.accept()
+
+    def placeAt(self, x, y):
+        """ move the widget and its label to the given position in the remote dock """
+        self.move(int(x), int(y))
+        if self.label:
+            self.label.move(int(x) + 80, int(y) + 30)
+
+    def position(self):
+        return [self.x(), self.y()]
 
     def getData(self):
         pass
@@ -186,6 +197,7 @@ class MovablePushButton(MovableWidget, QPushButton):
         data['Parameter'] = self.parameter
         data['shortcut'] = self.shortcut.key().toString()
         data['shortcut-Gp'] = self.shortcutKeyGp
+        data['position'] = self.position()
 
         return data
 
@@ -284,6 +296,7 @@ class MovableSlider(MovableWidget, DoubleSlider):
         data['shortcutPlus'] = self.shortcutPlus.key().toString()
         data['shortcutMinus'] = self.shortcutMinus.key().toString()
         data['shortcut-Gp'] = self.shortcutKeyGp
+        data['position'] = self.position()
 
         return data
 
@@ -332,6 +345,7 @@ class MovableSwitch(MovableWidget, QPushButton):
         data['Parameter'] = self.parameter
         data['shortcut'] = self.shortcut.key().toString()
         data['shortcut-Gp'] = self.shortcutKeyGp
+        data['position'] = self.position()
 
         return data
 

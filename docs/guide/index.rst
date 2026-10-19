@@ -119,9 +119,15 @@ of your experiment configuration (an ``.sreg`` as explained below) like so:
    :language: yaml
    :lines: 23-45
 
-Widgets created interactively in the GUI are not automatically saved.
-To export the Widgets created by the wizard right click the ``Remote`` dock,
-select ``Copy remote source`` and paste the code into your ``.sreg`` file.
+Widgets can be moved by dragging them with the right mouse button. Their place is stored in the optional
+``position`` entry, given as ``[x, y]`` in pixels. Widgets without a position are arranged in two columns.
+
+Widgets created, changed, moved or removed in the GUI are not saved automatically. Use ``File`` →
+``Save experiments`` (``Ctrl+S``) or ``Save experiments`` in the context menu of the ``Remote`` dock to write all
+experiments back to the loaded ``.sreg`` file, ``Save experiments as ...`` writes them to a new file. Experiments that
+could not be loaded are written unchanged. Since comments and formatting of the file are lost, the original file is
+kept as ``.sreg.bak`` before it is overwritten for the first time. To only export the widgets of the current
+experiment, ``Copy remote source`` in the context menu copies them to the clipboard.
 
 Heartbeat
 ---------

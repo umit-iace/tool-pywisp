@@ -3,8 +3,9 @@ import logging
 from collections import OrderedDict
 
 import pytest
+import yaml
 
-from pywisp.config import validateExperiments
+from pywisp.config import dumpExperiments, validateExperiments
 
 
 class Mod:
@@ -94,3 +95,41 @@ def test_empty_sections_are_fine(validate):
 def test_unknown_visualizer_warns(validate):
     _, messages = validate([{"Name": "A", "Visu": ["Visu", "Other"]}])
     assert messages == ["Experiment 'A': Visu: 'Other' is not a registered visualizer"]
+
+
+def widget(**extra):
+    return dict({"widgetType": "PushButton", "Module": "Mod", "Parameter": "gain", "valueOn": "1"}, **extra)
+
+
+@pytest.mark.parametrize("position, valid", [
+    ([10, 20], True), ((0, 5.5), True), ([10], False), ("10, 20", False), ([-1, 0], False), ([True, 1], False),
+])
+def test_widget_position(validate, position, valid):
+    exp = {"Name": "A", "Mod": {}, "Remote": {"W": widget(position=position)}}
+    _, messages = validate([exp])
+    assert ("position" in exp["Remote"]["W"]) == valid
+    assert any("invalid position" in m for m in messages) != valid
+
+
+def test_dump_round_trip(validate):
+    exp = {"Name": "A", "Mod": {"gain": 2.0}, "Config": {"TimerTime": 40},
+           "Remote": {"W": widget(position=[10.0, 20], shortcut="P")}}
+    validate([exp])
+    # the gui stores the name in the widget config
+    exp["Remote"]["W"]["name"] = "W"
+
+    text = dumpExperiments([exp])
+    loaded = yaml.safe_load(text)
+    assert loaded == [{"Name": "A", "Mod": {"gain": 2.0}, "Config": {"TimerTime": 40},
+                       "Remote": {"W": dict(widget(position=[10, 20], shortcut="P"))}}]
+    # empty optional entries are omitted, the original is not changed
+    assert "shortcut-Gp" not in text and "valueReset" not in text
+    assert exp["Remote"]["W"]["name"] == "W"
+
+    valid, messages = validate(loaded)
+    assert valid and not messages
+
+
+def test_dump_keeps_invalid_experiments():
+    experiments = [{"Name": "A", "Unknown": {}}, "garbage", {"Mod": {}}]
+    assert yaml.safe_load(dumpExperiments(experiments)) == experiments

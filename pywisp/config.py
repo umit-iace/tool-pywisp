@@ -7,9 +7,12 @@ malformed entries are reported. Deprecated keys are renamed to their current
 name, malformed optional entries are dropped and experiments that cannot be
 used at all are skipped.
 """
+import copy
 import logging
 
-__all__ = ["validateExperiments"]
+import yaml
+
+__all__ = ["validateExperiments", "dumpExperiments"]
 
 # top level keys of an experiment that do not denote an experiment module
 RESERVED_KEYS = ('Name', 'Config', 'Remote', 'Visu')
@@ -37,8 +40,8 @@ CONFIG_ALIASES = {
 }
 
 # required and optional keys (with defaults) of the remote widgets
-# startValue is written by the widget editor
-REMOTE_COMMON_KEYS = ('widgetType', 'Module', 'Parameter', 'name', 'startValue')
+# startValue is written by the widget editor, position is the place of the widget in the remote dock
+REMOTE_COMMON_KEYS = ('widgetType', 'Module', 'Parameter', 'name', 'startValue', 'position')
 REMOTE_KEYS = {
     'PushButton': {
         'required': ('valueOn',),
@@ -219,7 +222,42 @@ def _checkWidget(report, widgetName, widget, exp, modules):
     if unknown:
         report.warning(f"Remote: widget '{widgetName}' has unknown key(s) {unknown}")
 
+    position = widget.get('position')
+    if position is not None and not (isinstance(position, (list, tuple)) and len(position) == 2
+                                     and all(_isNumber(v) and v >= 0 for v in position)):
+        report.warning(f"Remote: widget '{widgetName}' has an invalid position {position!r}, "
+                       f"expected [x, y] with non-negative numbers")
+        del widget['position']
+
     for key, default in spec['optional'].items():
         if widget.get(key) is None:
             widget[key] = default
     return None
+
+
+def dumpExperiments(experiments):
+    """
+    Converts experiments to the yaml format of the ``.sreg`` files.
+
+    The name stored in the widget configs and optional widget entries holding their
+    default value are omitted.
+
+    :param experiments: list of experiments
+    :return: yaml text
+    """
+    experiments = copy.deepcopy(experiments)
+    for exp in experiments:
+        remote = exp.get('Remote') if isinstance(exp, dict) else None
+        if not isinstance(remote, dict):
+            continue
+        for widget in remote.values():
+            if not isinstance(widget, dict):
+                continue
+            widget.pop('name', None)
+            spec = REMOTE_KEYS.get(widget.get('widgetType'), {'optional': {}})
+            for key, default in spec['optional'].items():
+                if key in widget and widget[key] in (None, default):
+                    del widget[key]
+            if 'position' in widget:
+                widget['position'] = [int(v) for v in widget['position']]
+    return yaml.safe_dump(experiments, sort_keys=False, default_flow_style=None, allow_unicode=True)
