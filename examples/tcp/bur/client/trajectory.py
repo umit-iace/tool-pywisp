@@ -43,7 +43,7 @@ class RampTrajectory(ExperimentModule):
 
     def handleFrame(self, frame):
         dataPoints = {}
-        fid = frame.min_id
+        fid = frame.id
         if fid == self.ids[0]:
             data = struct.unpack('<Ld', frame.payload[:12])
             dataPoints['Time'] = data[0]
@@ -112,7 +112,7 @@ class SeriesTrajectory(ExperimentModule):
 
     def handleFrame(self, frame):
         dataPoints = {}
-        fid = frame.min_id
+        fid = frame.id
         if fid == self.ids[0]:
             data = struct.unpack('<Qd', frame.payload[:16])
             dataPoints['Time'] = data[0]

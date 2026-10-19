@@ -9,16 +9,16 @@ import serial.tools.list_ports
 import yaml
 
 # vtk
-vtk_error_msg = ""
+vtkErrorMsg = ""
 try:
     from vtk import vtkRenderer
     # import patched class that fixes scroll problem
     from .visualization import QVTKRenderWindowInteractor
 
-    vtk_available = True
+    vtkAvailable = True
 except ImportError as e:
-    vtk_available = False
-    vtk_error_msg = e
+    vtkAvailable = False
+    vtkErrorMsg = e
     vtkRenderer = None
     QVTKRenderWindowInteractor = None
 
@@ -195,7 +195,7 @@ class MainGui(QMainWindow):
         self.experimentList.setStyleSheet(QStyleSheet)
         self.experimentList.setSelectionMode(QAbstractItemView.SingleSelection)
         self.experimentDock.addWidget(self.experimentList)
-        self.experimentList.itemDoubleClicked.connect(self.experimentDclicked)
+        self.experimentList.itemDoubleClicked.connect(self.experimentDoubleClicked)
         self._currentExperimentIndex = None
         self._currentExperimentName = None
         self._experimentStartTime = 0
@@ -232,7 +232,7 @@ class MainGui(QMainWindow):
         self.logBox.ensureCursorVisible()
         self.logDock.addWidget(self.logBox)
 
-        # daten dock
+        # data dock
         self.dataWidget = QWidget()
         self.dataLayout = QHBoxLayout()
 
@@ -252,7 +252,7 @@ class MainGui(QMainWindow):
         self.dataPointRightButton.setToolTip(
             "Add the selected data set from the left to the selected plot "
             "on the right.")
-        self.dataPointRightButton.clicked.connect(self.addDatapointToTree)
+        self.dataPointRightButton.clicked.connect(self.addDataPointToTree)
         self.dataPointLabel = QLabel('DataPoint', self)
         self.dataPointLabel.setAlignment(Qt.AlignCenter)
         self.dataPointManipulationLayout.addWidget(self.dataPointLabel)
@@ -263,7 +263,7 @@ class MainGui(QMainWindow):
         self.dataPointLeftButton.setToolTip(
             "Remove the selected data set from the plot on the right."
         )
-        self.dataPointLeftButton.clicked.connect(self.removeDatapointFromTree)
+        self.dataPointLeftButton.clicked.connect(self.removeDataPointFromTree)
         self.dataPointManipulationLayout.addWidget(self.dataPointLeftButton)
         self.dataPointExportButton = QPushButton(chr(0x25BC), self)
         self.dataPointExportButton.setToolTip(
@@ -318,14 +318,14 @@ class MainGui(QMainWindow):
         # remote dock
         self.remoteWidget = QWidget()
         self.remoteWidget.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.remoteWidget.customContextMenuRequested.connect(self.remoteWidgetMenue)
+        self.remoteWidget.customContextMenuRequested.connect(self.remoteWidgetMenu)
         self.remoteWidgetLayout = FreeLayout()
         self.remoteWidget.setLayout(self.remoteWidgetLayout)
         self.remoteDock.addWidget(self.remoteWidget)
 
         # menu bar
-        dateiMenu = self.menuBar().addMenu("&File")
-        dateiMenu.addAction("&Quit", self.close, QKeySequence(Qt.CTRL + Qt.Key_W))
+        fileMenu = self.menuBar().addMenu("&File")
+        fileMenu.addAction("&Quit", self.close, QKeySequence(Qt.CTRL + Qt.Key_W))
 
         # view
         self.viewMenu = self.menuBar().addMenu('&View')
@@ -514,7 +514,7 @@ class MainGui(QMainWindow):
 
         baud = int(settings['baud'])
         connMenu.clear()
-        for _baud in SerialConnection.supported_baudrates:
+        for _baud in SerialConnection.supportedBaudrates:
             baudAction = QAction(str(_baud), self)
             baudAction.setCheckable(True)
             baudAction.setChecked(_baud == baud)
@@ -626,7 +626,7 @@ class MainGui(QMainWindow):
     def updateRemoteGamepad(self):
         """ (re-)connect all remote widgets to the current gamepad """
         for wid in self.remoteWidgetLayout.list:
-            wid.updateGamePad(self.gamepad)
+            wid.updateGamepad(self.gamepad)
 
     def setTimerTime(self):
         """
@@ -640,8 +640,8 @@ class MainGui(QMainWindow):
             self.config['TimerTime'] = timerTime
             self._logger.info("Set timer time to {}".format(timerTime))
 
-    def updateCoordInfo(self, coord_text):
-        self.coordLabel.setText(coord_text)
+    def updateCoordInfo(self, coordText):
+        self.coordLabel.setText(coordText)
         self.coordLabel.setVisible(True)
         self.coordTimer.start(5000)
 
@@ -701,7 +701,7 @@ class MainGui(QMainWindow):
 
             self.dataPointTreeWidget.takeTopLevelItem(self.dataPointTreeWidget.indexOfTopLevelItem(item))
 
-    def addDatapointToTree(self):
+    def addDataPointToTree(self):
         if not self.dataPointListWidget.selectedIndexes():
             self._logger.error("Cannot add datapoint: No datapoint selected.")
             return
@@ -752,10 +752,10 @@ class MainGui(QMainWindow):
         idx = self.lastMeasList.row(self._currentLastMeasItem)
         dataPointBuffers = self.measurements[idx]['dataPointBuffers']
 
-        exp_lbls = [item.text()
+        expLabels = [item.text()
                     for item in self.dataPointListWidget.selectedItems()]
-        self._logger.info(f"Measurements selected for export are: {exp_lbls}")
-        dataPoints = {lbl: dataPointBuffers[lbl] for lbl in exp_lbls}
+        self._logger.info(f"Measurements selected for export are: {expLabels}")
+        dataPoints = {lbl: dataPointBuffers[lbl] for lbl in expLabels}
 
         # snapshots share the memory, but are not affected by data that is still being added
         expData = {lbl: buf.snapshot() for lbl, buf in dataPoints.items()}
@@ -763,7 +763,7 @@ class MainGui(QMainWindow):
         self.exporter.done.connect(self.exportDone)
         self.exporter.runExport()
 
-    def removeDatapointFromTree(self):
+    def removeDataPointFromTree(self):
         items = self.dataPointTreeWidget.selectedItems()
         if not items:
             self._logger.error("Cannot delete dataset: No dataset selected.")
@@ -804,17 +804,17 @@ class MainGui(QMainWindow):
                 chart = self.plotCharts[title]
 
                 # check if all items are present as curves
-                req_lbls = []
+                reqLabels = []
                 for idx in range(item.childCount()):
-                    curve_lbl = item.child(idx).text(1)
-                    req_lbls.append(curve_lbl)
-                    if curve_lbl not in chart.plotCurves.keys():
-                        chart.addCurve(curve_lbl, dataPointBuffers[curve_lbl])
+                    curveLabel = item.child(idx).text(1)
+                    reqLabels.append(curveLabel)
+                    if curveLabel not in chart.plotCurves.keys():
+                        chart.addCurve(curveLabel, dataPointBuffers[curveLabel])
 
                 # clear all curves that are no longer required by items
-                ub_lbls = [lbl for lbl in chart.plotCurves.keys()
-                    if lbl not in req_lbls]
-                [chart.removeCurve(lbl) for lbl in ub_lbls]
+                ubLabels = [lbl for lbl in chart.plotCurves.keys()
+                    if lbl not in reqLabels]
+                [chart.removeCurve(lbl) for lbl in ubLabels]
 
     def plotVectorClicked(self, item):
         # ignore non-top level items
@@ -891,8 +891,8 @@ class MainGui(QMainWindow):
         form the list
         """
         openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-        d_lbls = [lbl for lbl in self.plotCharts.keys() if lbl not in openDocks]
-        [self.plotCharts.pop(lbl, None) for lbl in d_lbls]
+        dLabels = [lbl for lbl in self.plotCharts.keys() if lbl not in openDocks]
+        [self.plotCharts.pop(lbl, None) for lbl in dLabels]
 
         if len(openDocks) == 0:
             self.disableCoord()
@@ -1127,7 +1127,7 @@ class MainGui(QMainWindow):
                                   self.animationLayout)
             self.animationDock.addWidget(self.animationWidget)
         elif issubclass(vis, VtkVisualizer):
-            if vtk_available:
+            if vtkAvailable:
                 # vtk window
                 if self.animationFrame is None:
                     self.animationFrame = QFrame()
@@ -1152,7 +1152,7 @@ class MainGui(QMainWindow):
         self.actSaveAnimation.toggled.connect(self.visualizer.checkSaveAnimation)
 
     @pyqtSlot(QListWidgetItem)
-    def experimentDclicked(self, item):
+    def experimentDoubleClicked(self, item):
         """
         Apply the selected experiment to the current target and set it bold.
         :param item: item of the experiment in the `ExperimentList`
@@ -1472,7 +1472,7 @@ class MainGui(QMainWindow):
     def remoteRemoveWidget(self, widget):
         idx = self.experimentList.row(self._currentExpListItem)
         self._experiments[idx].get('Remote', {}).pop(widget.widgetName, None)
-        widget.updateGamePad(None)
+        widget.updateGamepad(None)
         self.remoteWidgetLayout.removeWidget(widget)
 
     def remoteConfigWidget(self, widget, editWidget=True):
@@ -1677,7 +1677,7 @@ class MainGui(QMainWindow):
         clipboard = QApplication.clipboard()
         clipboard.setText(text)
 
-    def remoteWidgetMenue(self, position):
+    def remoteWidgetMenu(self, position):
         """
         Gets called when a user opens the context menu from the remoteDock
         :param position: the position where the user opened the context menu

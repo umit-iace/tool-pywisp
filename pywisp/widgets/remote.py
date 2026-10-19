@@ -25,7 +25,7 @@ class FreeLayout(QLayout):
     def sizeHint(self):
         return QSize()
 
-    def itemAt(self, p_int):
+    def itemAt(self, index):
         return
 
     def addItem(self, QLayoutItem):
@@ -116,7 +116,7 @@ class MovableWidget:
     def updateData(self):
         pass
 
-    def updateGamePad(self, gamepad):
+    def updateGamepad(self, gamepad):
         """
         (Re-)connect the widget to the given gamepad, `None` disconnects it.
         """
@@ -145,11 +145,11 @@ class MovableWidget:
 
         prefix = 'abs' if isAbsolute else 'btn'
         signal = getattr(gamepad, prefix + self.shortcutKeyGp)
-        slot = self._onGamePad
+        slot = self._onGamepad
         signal.connect(slot)
         self._gamepadConnection = (signal, slot)
 
-    def _onGamePad(self, *args):
+    def _onGamepad(self, *args):
         pass
 
 
@@ -174,7 +174,7 @@ class MovablePushButton(MovableWidget, QPushButton):
 
         self.updateData()
 
-    def _onGamePad(self):
+    def _onGamepad(self):
         self.click()
 
     def getData(self):
@@ -265,7 +265,7 @@ class MovableSlider(MovableWidget, DoubleSlider):
 
         self.updateData()
 
-    def _onGamePad(self, absVal):
+    def _onGamepad(self, absVal):
         """ map the axis value in [-0.5, 0.5] onto the slider range """
         lower, upper = float(self.minSlider), float(self.maxSlider)
         if self.invertSlider:
@@ -320,7 +320,7 @@ class MovableSwitch(MovableWidget, QPushButton):
 
         self.updateData()
 
-    def _onGamePad(self):
+    def _onGamepad(self):
         self.click()
 
     def getData(self):

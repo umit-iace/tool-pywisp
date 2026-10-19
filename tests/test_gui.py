@@ -79,7 +79,7 @@ def test_experiments_are_loaded(gui):
 
 
 def test_empty_remote_section(gui):
-    gui.experimentDclicked(gui.experimentList.item(1))
+    gui.experimentDoubleClicked(gui.experimentList.item(1))
     assert gui.remoteWidgetLayout.list == []
 
 
@@ -137,11 +137,11 @@ def test_failed_connection_closes_others(gui):
 
 def test_gamepad_slider_mapping(gui):
     slider = next(w for w in gui.remoteWidgetLayout.list if isinstance(w, MovableSlider))
-    slider._onGamePad(-0.5)
+    slider._onGamepad(-0.5)
     assert slider.value == 0
-    slider._onGamePad(0.0)
+    slider._onGamepad(0.0)
     assert slider.value == 5
-    slider._onGamePad(0.5)
+    slider._onGamepad(0.5)
     assert slider.value == 10
 
 

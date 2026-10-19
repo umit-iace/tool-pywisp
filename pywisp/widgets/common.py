@@ -102,7 +102,7 @@ class TreeWidgetStyledItemDelegate(QStyledItemDelegate):
     """
 
     def paint(self, painter, option, index):
-        def draw_my(option, painter, brush, text, icon):
+        def drawSelected(option, painter, brush, text, icon):
             if brush is None:
                 brush = QColor(255, 255, 255,
                                0)  # This is original background color. I just set alpha to 0 which means it is transparent
@@ -136,6 +136,6 @@ class TreeWidgetStyledItemDelegate(QStyledItemDelegate):
             text = index.data(Qt.DisplayRole)
             icon = index.data(Qt.DecorationRole)
 
-            draw_my(option=option, painter=painter, brush=brush, text=text, icon=icon)
+            drawSelected(option=option, painter=painter, brush=brush, text=text, icon=icon)
         else:
             QStyledItemDelegate.paint(self, painter, option, index)

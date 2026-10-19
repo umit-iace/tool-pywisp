@@ -41,7 +41,7 @@ class Test(ExperimentModule):
 
     def handleFrame(self, frame):
         dataPoints = {}
-        fid = frame.min_id
+        fid = frame.id
         if fid == self.ids[0]:
             data = struct.unpack('<Ldfhb2d', frame.payload[:35])
             dataPoints['Time'] = data[0]

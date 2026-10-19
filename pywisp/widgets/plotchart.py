@@ -50,14 +50,14 @@ class PlotChart(PlotWidget):
 
         def coordWrapper(pos):
             coords = self.getPlotItem().vb.mapSceneToView(pos)
-            coord_text = "x={:.3e} y={:.3e}".format(coords.x(), coords.y())
+            coordText = "x={:.3e} y={:.3e}".format(coords.x(), coords.y())
             if self.settings.value("view/show_coordinates", type=bool):
-                coordItem.setText(coord_text.replace(" ", "\n"))
+                coordItem.setText(coordText.replace(" ", "\n"))
                 coordItem.setPos(coords.x(), coords.y())
                 coordItem.show()
                 self.timer.start(5000)
 
-            self.coords.emit(coord_text)
+            self.coords.emit(coordText)
 
         self.scene().sigMouseMoved.connect(coordWrapper)
 
@@ -154,10 +154,10 @@ class PlotChart(PlotWidget):
             datay = dataPoints[name].values
             if self.movingWindowEnable:
                 datax, datay = xRange(datax, datay)
-                ds = self._samplestep(datax)
+                ds = self._sampleStep(datax)
                 x, y = self._downsample(ds, datax, datay)
             else:
-                x, y = self._cachedsample(name, datax, datay)
+                x, y = self._cachedSample(name, datax, datay)
             self.plotCurves[name].setData(x, y)
 
 
@@ -173,32 +173,32 @@ class PlotChart(PlotWidget):
         self.exporter = Exporter(dataPoints=dataPoints, fileName=filename)
         self.exporter.runExport()
 
-    def _samplestep(self, X):
+    def _sampleStep(self, X):
         ds = 1
         if len(X) == 0:
             return ds
         view = self.getViewBox()
         if view is None:
-            view_range = None
+            viewRange = None
         else:
-            view_range = view.viewRect()  # this is always up-to-date
-        if view_range is None:
-            view_range = self.viewRect()
-        if view_range is not None and len(X) > 1:
+            viewRange = view.viewRect()  # this is always up-to-date
+        if viewRange is None:
+            viewRange = self.viewRect()
+        if viewRange is not None and len(X) > 1:
             dx = float(X[-1]-X[0]) / (len(X)-1)
             if dx != 0.0:
                 width = self.getViewBox().width()
                 if width != 0.0:  # autoDownsampleFactor _should_ be > 1.0
-                    ds_float = max(
+                    dsFloat = max(
                         1.0,
                         abs(
-                            view_range.width() /
+                            viewRange.width() /
                             dx /
                             (width * 3)
                         )
                     )
-                    if math.isfinite(ds_float):
-                        ds = int(ds_float)
+                    if math.isfinite(dsFloat):
+                        ds = int(dsFloat)
         return ds
 
     def _downsample(self, ds, x, y):
@@ -229,14 +229,14 @@ class PlotChart(PlotWidget):
             y[1::2] = blocks.min(axis=1)
         return x, y
 
-    def _cachedsample(self, name, x, y):
+    def _cachedSample(self, name, x, y):
         """
         Downsamples the complete data set, reusing the result of the last call.
         Only the samples added since then are processed.
         """
         x = np.asarray(x)
         y = np.asarray(y)
-        ds = self._samplestep(x)
+        ds = self._sampleStep(x)
         cached = self.cache.get(name)
         if cached is not None and cached[0] == ds and cached[1] <= len(x):
             _, used, cx, cy = cached

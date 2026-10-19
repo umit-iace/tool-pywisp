@@ -63,12 +63,12 @@ def getResource(resName, resType="icons"):
     :param resType: sub directory
     :return: path to resource
     """
-    own_path = os.path.dirname(__file__)
-    resource_path = os.path.abspath(os.path.join(own_path, "resources", resType))
-    return os.path.join(resource_path, resName)
+    ownPath = os.path.dirname(__file__)
+    resourcePath = os.path.abspath(os.path.join(ownPath, "resources", resType))
+    return os.path.join(resourcePath, resName)
 
 
-def getFormatedStructString(dataLenFloat: int, dataLenInt: int , lenFloat: int) -> str:
+def getFormattedStructString(dataLenFloat: int, dataLenInt: int , lenFloat: int) -> str:
     """
     Returns a format string for the struct package by given float and integer length and
     count of floats.
@@ -105,6 +105,10 @@ def getFormatedStructString(dataLenFloat: int, dataLenInt: int , lenFloat: int) 
     return fmtStr
 
 
+# former misspelled name, kept for compatibility
+getFormatedStructString = getFormattedStructString
+
+
 def packArrayToFrame(id: int, data: list[float], frameLen: int, dataLenFloat: int, dataLenInt: int) -> list[dict]:
     """
     Packs a data array into a list of payloads that do not exceed a given frame length
@@ -132,11 +136,11 @@ def packArrayToFrame(id: int, data: list[float], frameLen: int, dataLenFloat: in
     values = [float(d) for d in data]
     first, rest = values[:firstCnt], values[firstCnt:]
 
-    fmtStr = getFormatedStructString(dataLenFloat, dataLenInt, len(first))
+    fmtStr = getFormattedStructString(dataLenFloat, dataLenInt, len(first))
     dataPoints = [{'id': id, 'msg': struct.pack(fmtStr, len(values), *first)}]
     for i in range(0, len(rest), restCnt):
         chunk = rest[i:i + restCnt]
-        fmtStr = getFormatedStructString(dataLenFloat, 0, len(chunk))
+        fmtStr = getFormattedStructString(dataLenFloat, 0, len(chunk))
         dataPoints.append({'id': id, 'msg': struct.pack(fmtStr, *chunk)})
     return dataPoints
 

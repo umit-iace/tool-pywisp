@@ -156,9 +156,9 @@ class ExperimentInteractor(QObject):
         settings = self._readSettings(moduleName)
 
         for key, val in settings.items():
-            setting_name = PropertyItem(key)
-            setting_value = PropertyItem(val)
-            parent.appendRow([setting_name, setting_value])
+            settingName = PropertyItem(key)
+            settingValue = PropertyItem(val)
+            parent.appendRow([settingName, settingValue])
 
     def _readSettings(self, moduleName):
         """

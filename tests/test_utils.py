@@ -68,10 +68,14 @@ class ExporterTestCase(unittest.TestCase):
         e = Exporter(dataPoints=self.dataPoints, fileName=self.png_name)
         # this will spawn a new thread
         e.runExport()
-        # do not wait (simulates closing the gui while exporting)
+        # do not keep a reference (simulates closing the plot while exporting)
         del e
-        # file should not be there as thread was killed
-        self.assertFalse(os.path.exists(self.png_name))
+        # the export keeps itself alive and finishes
+        t0 = time.perf_counter()
+        while Exporter._running and time.perf_counter() - t0 < 120:
+            app.processEvents()
+            time.sleep(0.01)
+        self.assertTrue(os.path.exists(self.png_name))
 
     @pytest.mark.slow
     def test_timings(self):

@@ -11,7 +11,7 @@ from .inputs import WIN, rescan_devices
 from .utils import getResource
 
 
-class GamePad(QThread):
+class Gamepad(QThread):
     absHX = pyqtSignal(float)
     absHY = pyqtSignal(float)
     absX = pyqtSignal(float)
@@ -105,8 +105,8 @@ class GamePad(QThread):
         if event.ev_type == 'Absolute':
             self.absState[abbv] = event.state
 
-    def outputBtnEvent(self, ev_type, abbv):
-        if ev_type == 'Key':
+    def outputBtnEvent(self, evType, abbv):
+        if evType == 'Key':
             if self.btnState[abbv]:
                 sig = getattr(self, 'btn' + abbv)
                 sig.emit()
@@ -154,7 +154,7 @@ def getGamepadByIndex(devices, index):
     if devices is None or index >= len(devices.gamepads) or devices.gamepads[index] is None:
         return None
     else:
-        ctrl = GamePad(devices, index)
+        ctrl = Gamepad(devices, index)
         ctrl.setTerminationEnabled(True)
         ctrl.start()
         return ctrl

@@ -105,11 +105,11 @@ class DataTcpIpDialog(QDialog):
         self.portData.setText(str(self.portValue))
         self.portData.setValidator(QIntValidator(0, 65535, self))
 
-        horizonalLayout = QHBoxLayout()
+        horizontalLayout = QHBoxLayout()
 
-        horizonalLayout.addWidget(self.ipData)
-        horizonalLayout.addWidget(self.portData)
-        mainLayout.addLayout(horizonalLayout)
+        horizontalLayout.addWidget(self.ipData)
+        horizontalLayout.addWidget(self.portData)
+        mainLayout.addLayout(horizontalLayout)
 
         # OK and Cancel buttons
         buttons = QDialogButtonBox(
@@ -344,7 +344,7 @@ class RemoteWidgetEdit(QDialog):
 class ShortcutCreator(QLineEdit):
     def __init__(self, parent=None):
         super(ShortcutCreator, self).__init__(parent)
-        self.KeySequence = None
+        self.keySequence = None
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Control or \
@@ -357,12 +357,12 @@ class ShortcutCreator(QLineEdit):
                 event.key() == Qt.Key_Tab:
             self.setText('')
         else:
-            self.KeySequence = QKeySequence(event.key()).toString()
-            self.setText(self.KeySequence)
+            self.keySequence = QKeySequence(event.key()).toString()
+            self.setText(self.keySequence)
 
     def getKeySequence(self):
-        return self.KeySequence
+        return self.keySequence
 
-    def setText(self, p_str):
-        self.KeySequence = p_str
-        super(ShortcutCreator, self).setText(p_str)
+    def setText(self, text):
+        self.keySequence = text
+        super(ShortcutCreator, self).setText(text)

@@ -36,7 +36,7 @@ class DoublePendulum(ExperimentModule):
 
     def handleFrame(self, frame) -> dict:
         dataPoints = {}
-        fid = frame.min_id
+        fid = frame.id
         if fid == 15:
             data = struct.unpack(f'<L{len(DoublePendulum.dataPoints)}d', frame.payload)
             dataPoints['Time'] = data[0]

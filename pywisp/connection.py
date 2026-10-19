@@ -98,7 +98,7 @@ class Connection(QObject, metaclass=ConnectionMeta):
         thread = QThread()
         worker = ConnReader(self, rx)
         worker.moveToThread(thread)
-        worker.err.connect(self.workerror)
+        worker.err.connect(self.workerError)
         worker.frames.connect(self._onFrames)
         thread.started.connect(worker.run)
         thread.finished.connect(thread.deleteLater)
@@ -106,7 +106,7 @@ class Connection(QObject, metaclass=ConnectionMeta):
         self.worker = worker
         self.connected = False
 
-    def workerror(self, err):
+    def workerError(self, err):
         self.worker.deleteLater()
         self._logger.error(err)
         self.close()
@@ -183,18 +183,20 @@ class SerialConnection(Connection):
     Simple Serial Connection
     """
 
-    supported_baudrates = (
+    supportedBaudrates = (
             1200, 1800, 2400, 4800, 9600, 
             19200, 38400, 57600, 
             115200, 230400, 460800, 500000, 576000, 921600,
             1000000, 1152000, 1500000, 2000000, 2500000, 3000000, 3500000,4000000,
             )
+    # former name, kept for compatibility
+    supported_baudrates = supportedBaudrates
 
     def __init__(self, port: str, baud: int):
         self.serial = serial.Serial(timeout=0.01)
-        if baud not in self.supported_baudrates:
+        if baud not in self.supportedBaudrates:
             raise ValueError(f"Baudrate {baud} not supported. " 
-                             f"Choose one of {self.supported_baudrates}")
+                             f"Choose one of {self.supportedBaudrates}")
         self.serial.baudrate = baud
         self.serial.port = port
         super().__init__(tx=Packer, rx=[Bytewise, HDRStuf, Unpacker])
