@@ -6,12 +6,12 @@ import sys
 import time
 import unittest
 
-import numpy as np
+import pytest
 
 from PyQt5.QtWidgets import QApplication
 from pywisp.utils import Exporter, DataPointBuffer
 
-app = QApplication(sys.argv)
+app = QApplication.instance() or QApplication(sys.argv)
 class ExporterTestCase(unittest.TestCase):
     base_path = os.path.dirname(__file__)
     d_name = os.path.join(base_path, "dataPoints.pkl")
@@ -42,7 +42,7 @@ class ExporterTestCase(unittest.TestCase):
 
     def test_init(self):
         # normal init
-        e = Exporter(dataPoints=self.dataPoints, fileName=self.csv_name)
+        Exporter(dataPoints=self.dataPoints, fileName=self.csv_name)
 
     def test_export_csv(self):
         e = Exporter(dataPoints=self.dataPoints, fileName=self.csv_name)
@@ -53,6 +53,7 @@ class ExporterTestCase(unittest.TestCase):
         del e
         self.assertTrue(os.path.exists(self.csv_name))
 
+    @pytest.mark.slow
     def test_export_png(self):
         e = Exporter(dataPoints=self.dataPoints, fileName=self.png_name)
         # this will spawn a new thread
@@ -71,12 +72,13 @@ class ExporterTestCase(unittest.TestCase):
         # file should not be there as thread was killed
         self.assertFalse(os.path.exists(self.png_name))
 
+    @pytest.mark.slow
     def test_timings(self):
         e = Exporter(dataPoints=self.dataPoints, fileName=self.csv_name)
 
         t0 = time.perf_counter()
         N = 10
-        for n in range(N):
+        for _ in range(N):
             e.worker._buildFrame()
         dt = time.perf_counter() - t0
         print(f"Average time needed for init is {dt/N} seconds.")

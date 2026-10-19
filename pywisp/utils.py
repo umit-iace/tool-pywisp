@@ -2,20 +2,15 @@
 import logging
 import os
 import struct
-from bisect import bisect_left
-import subprocess
-from pathlib import Path
-import importlib.util
 
-import matplotlib
-import matplotlib.gridspec as gridspec
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from PyQt5.QtCore import Qt, QObject, QRegExp, QSize, pyqtSignal, pyqtSlot, QRect, QThread
-from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QDoubleValidator, QKeySequence, QFont, QPen, \
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.figure import Figure
+from PyQt5.QtCore import Qt, QObject, QRegExp, QSize, pyqtSignal, QRect, QThread
+from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QIcon, QKeySequence, QFont, QPen, \
     QPainter, QTextCursor
-from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QAction, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
+from PyQt5.QtWidgets import QVBoxLayout, QDialogButtonBox, QDialog, QLineEdit, QLabel, QHBoxLayout, QFormLayout, \
     QLayout, QComboBox, QPushButton, QWidget, QSlider, QMenu, QWidgetAction, QShortcut, QStyledItemDelegate, QStyle
 from pyqtgraph.dockarea import Dock
 
@@ -65,9 +60,8 @@ def createDir(dirName):
     :param dirName: directory name
     :return: path of directory
     """
-    path = os.getcwd() + os.path.sep + dirName
-    if not os.path.exists(path) or not os.path.isdir(path):
-        os.mkdir(path)
+    path = os.path.join(os.getcwd(), dirName)
+    os.makedirs(path, exist_ok=True)
     return path
 
 
@@ -110,6 +104,8 @@ def getFormatedStructString(dataLenFloat: int, dataLenInt: int , lenFloat: int) 
         intStr = 'H'
     elif dataLenInt == 4:
         intStr = 'I'
+    elif dataLenInt == 8:
+        intStr = 'Q'
     else:
         intStr = ''
 
@@ -135,24 +131,22 @@ def packArrayToFrame(id: int, data: list[float], frameLen: int, dataLenFloat: in
 
     :return: List of MIN-Frames, encoded in dictionaries with keys `id` and `msg`.
     """
-    completeData = len(data) * dataLenFloat + 1 * dataLenInt
-    N = np.ceil(completeData / frameLen)
-    frameLenFloat = frameLen // dataLenFloat
-    dataPoints = []
-    for i in range(int(N)):
-        if i > 0:
-            outList = [float(data[i * frameLenFloat + j - 1]) for j in range(frameLenFloat) if
-                       i * frameLenFloat + j - 1 < len(data)]
-            fmtStr = getFormatedStructString(dataLenFloat, 0, len(outList))
-            payload = struct.pack(fmtStr, *outList)
-        else:
-            outList = [len(data)]
-            outList += [float(data[i * frameLenFloat + j]) for j in range(frameLenFloat - 1) if
-                        i * frameLenFloat + j < len(data)]
-            fmtStr = getFormatedStructString(dataLenFloat, dataLenInt, len(outList) - 1)
-            payload = struct.pack(fmtStr, *outList)
-        dataPoints += [{'id': id,
-                        'msg': payload}]
+    # the first frame carries the length of the array (occupying one float slot)
+    # followed by floats, all following frames are filled with floats only
+    restCnt = frameLen // dataLenFloat
+    firstCnt = restCnt - 1
+    if firstCnt < 0 or dataLenInt > dataLenFloat:
+        raise ValueError("frameLen is too small for the given data types")
+
+    values = [float(d) for d in data]
+    first, rest = values[:firstCnt], values[firstCnt:]
+
+    fmtStr = getFormatedStructString(dataLenFloat, dataLenInt, len(first))
+    dataPoints = [{'id': id, 'msg': struct.pack(fmtStr, len(values), *first)}]
+    for i in range(0, len(rest), restCnt):
+        chunk = rest[i:i + restCnt]
+        fmtStr = getFormatedStructString(dataLenFloat, 0, len(chunk))
+        dataPoints.append({'id': id, 'msg': struct.pack(fmtStr, *chunk)})
     return dataPoints
 
 
@@ -180,32 +174,85 @@ class PlainTextLogger(logging.Handler):
         msg = self.format(record)
         if self.cb:
             clr = self.settings.color(record.levelname, 'log')
-            self.cb.setTextColor(clr)
-
-            self.cb.append(msg)
-            self.cb.moveCursor(QTextCursor.End)
+            try:
+                self.cb.setTextColor(clr)
+                self.cb.append(msg)
+                self.cb.moveCursor(QTextCursor.End)
+            except RuntimeError:
+                # the target widget has already been deleted on the C++ side
+                self.cb = None
+                logging.getLogger().removeHandler(self)
         else:
             logging.getLogger().error("No callback configured!")
 
 
-class DataPointBuffer(object):
+class BufferView(np.ndarray):
     """
-    Buffer object to store the values of the data points
+    Read only numpy view on the data of a :class:`DataPointBuffer`.
+
+    In contrast to a plain array its truth value behaves like the one of a list,
+    so ``if buffer.values:`` keeps working.
     """
 
+    def __bool__(self):
+        if self.ndim == 0:
+            return bool(self.item())
+        return self.size > 0
+
+
+class DataPointBuffer(object):
+    """
+    Buffer object to store the values of the data points.
+
+    The data is kept in numpy arrays that grow in chunks, :attr:`time` and :attr:`values`
+    return views on the filled part.
+    """
+    _initialCapacity = 1024
+
     def __init__(self, time=None, values=None):
-        if time is None:
-            self.time = []
-        elif isinstance(time, list):
-            self.time = time
-        elif isinstance(time, np.ndarray):
-            self.time = time.tolist()
-        if values is None:
-            self.values = []
-        elif isinstance(values, list):
-            self.values = values
-        elif isinstance(values, np.ndarray):
-            self.values = values.tolist()
+        time = np.asarray([] if time is None else time, dtype=float)
+        values = np.asarray([] if values is None else values, dtype=float)
+        if time.shape != values.shape:
+            raise ValueError("time and values must have the same length")
+        self._setData(time, values)
+
+    def _setData(self, time, values):
+        self._size = len(time)
+        capacity = max(self._initialCapacity, self._size)
+        self._time = np.empty(capacity)
+        self._values = np.empty(capacity)
+        self._time[:self._size] = time
+        self._values[:self._size] = values
+
+    def _view(self, arr):
+        view = arr[:self._size].view(BufferView)
+        view.flags.writeable = False
+        return view
+
+    @property
+    def time(self):
+        """ time stamps of the values (x axis) """
+        return self._view(self._time)
+
+    @property
+    def values(self):
+        """ values of the data point (y axis) """
+        return self._view(self._values)
+
+    def __len__(self):
+        return self._size
+
+    def _reserve(self, size):
+        capacity = len(self._time)
+        if size <= capacity:
+            return
+        # grow geometrically to keep appending amortized O(1)
+        capacity = max(size, 2 * capacity)
+        for name in ('_time', '_values'):
+            old = getattr(self, name)
+            new = np.empty(capacity)
+            new[:self._size] = old[:self._size]
+            setattr(self, name, new)
 
     def addValue(self, time, value):
         """
@@ -214,15 +261,52 @@ class DataPointBuffer(object):
         :param value: the new value for the data point (y axis)
         :return:
         """
-        self.time.append(time)
-        self.values.append(value)
+        self._reserve(self._size + 1)
+        # write the value first, so a failing conversion leaves the buffer untouched
+        self._values[self._size] = value
+        self._time[self._size] = time
+        self._size += 1
+
+    def extend(self, time, values):
+        """
+        Adds several values to the data point buffer
+        :param time: time stamps of the values
+        :param values: the new values
+        """
+        time = np.asarray(time, dtype=float)
+        values = np.asarray(values, dtype=float)
+        if time.shape != values.shape:
+            raise ValueError("time and values must have the same length")
+        n = len(time)
+        self._reserve(self._size + n)
+        self._time[self._size:self._size + n] = time
+        self._values[self._size:self._size + n] = values
+        self._size += n
+
+    def snapshot(self):
+        """
+        Returns a buffer containing the current data without copying it.
+        Data added later on to this buffer does not show up in the snapshot.
+        """
+        snap = DataPointBuffer.__new__(DataPointBuffer)
+        snap._size = self._size
+        snap._time = self._time[:self._size]
+        snap._values = self._values[:self._size]
+        return snap
 
     def clearBuffer(self):
         """
         Clears all the buffers of the data point
         """
-        del self.values[:]
-        del self.time[:]
+        # allocate new memory, views handed out before must not see new data
+        self._setData(np.empty(0), np.empty(0))
+
+    def __getstate__(self):
+        return {'time': self.time.view(np.ndarray).copy(), 'values': self.values.view(np.ndarray).copy()}
+
+    def __setstate__(self, state):
+        # also handles pickles of the former list based implementation
+        self._setData(np.asarray(state['time'], dtype=float), np.asarray(state['values'], dtype=float))
 
 
 class Exporter(QObject):
@@ -238,7 +322,7 @@ class Exporter(QObject):
             ["CSV Data (*.csv)", "PNG Image (*.png)"]
         ).getSaveFileName()
 
-        self.worker = self.ExportThread(self, dataPoints, fileName)
+        self.worker = self.ExportThread(dataPoints, fileName)
         self.logger = logging.getLogger("Exporter")
         def handleLog(done, lvl, msg):
             self.logger.log(lvl, msg)
@@ -257,22 +341,23 @@ class Exporter(QObject):
 
     class ExportThread(QThread):
         info = pyqtSignal(bool,int,str)
-        def __init__(self, parent, data, file):
+        def __init__(self, data, file):
             super().__init__()
             self.dataPoints = data
             self.fileName = file
-            self.parent = parent
+            self.df = None
 
         def run(self):
             if self.dataPoints is None:
-                self.info.emit(True, logging.ERROR, f"Export failed: No data given")
+                self.info.emit(True, logging.ERROR, "Export failed: No data given")
                 return
             if self.fileName is None:
-                self.info.emit(True, logging.ERROR, f"Export failed: No file name given")
+                self.info.emit(True, logging.ERROR, "Export failed: No file name given")
                 return
             self.info.emit(False, logging.INFO, f"Export to {self.fileName} started.")
             self._buildFrame()
             if self.df is None:
+                self.info.emit(True, logging.ERROR, "Export failed: Cannot build data frame")
                 return
             file, ext = os.path.splitext(self.fileName)
             if ext == '.csv':
@@ -282,7 +367,7 @@ class Exporter(QObject):
             else:
                 self.info.emit(True, logging.ERROR, f"Export failed: Unsupported file extension '{ext}'.")
                 return
-            self.info.emit(True, logging.INFO, f"Export successful.")
+            self.info.emit(True, logging.INFO, "Export successful.")
 
         def _buildFrame(self):
             # build pandas data frame
@@ -292,8 +377,7 @@ class Exporter(QObject):
                 self.df = pd.DataFrame.from_dict(d, orient='index').transpose()
                 self.df.index.name = 'time'
                 self.df.sort_index(inplace=True)
-            except BaseException:
-                self.parent.failed.emit()
+            except Exception:
                 self.df = None
 
         def exportPng(self):
@@ -302,13 +386,15 @@ class Exporter(QObject):
             :param fileName: name of file with extension
             """
 
-            matplotlib.use('agg')
-            fig = plt.figure(figsize=(10, 6))
-            gs = gridspec.GridSpec(1, 1, hspace=0.1)
-            axes = plt.Subplot(fig, gs[0])
+            # use the object oriented api, pyplot is not thread safe and
+            # switching the global backend would break the gui
+            fig = Figure(figsize=(10, 6))
+            FigureCanvasAgg(fig)
+            axes = fig.add_subplot(1, 1, 1)
 
             for col in self.df.columns:
-                self.df[col].plot(ax=axes, label=col)
+                series = self.df[col].dropna()
+                axes.plot(series.index, series.values, label=col)
 
             axes.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=4,
                         ncol=4, mode="expand", borderaxespad=0., framealpha=0.5)
@@ -317,7 +403,6 @@ class Exporter(QObject):
             if self.df.index.name == 'time':
                 axes.set_xlabel(r"Time (s)")
 
-            fig.add_subplot(axes)
             fig.savefig(self.fileName, dpi=300)
 
         def exportCsv(self, sep=','):
@@ -470,6 +555,8 @@ class RemoteWidgetEdit(QDialog):
         self.shortcut = str(kwargs.get('shortcut', ""))
         self.shortcutPlus = str(kwargs.get('shortcutPlus', ""))
         self.shortcutMinus = str(kwargs.get('shortcutMinus', ""))
+        self.shortcutGp = kwargs.get('shortcut-Gp', None)
+        self.invertSlider = kwargs.get('invertSlider', False)
 
         self.curModule = kwargs.get('Module', None)
         self.curParameter = kwargs.get('Parameter', None)
@@ -503,7 +590,7 @@ class RemoteWidgetEdit(QDialog):
         self.moduleList = QComboBox()
         self.paramList = QComboBox()
         self.modules = dict()
-        exp = kwargs.get('exp', None)
+        exp = kwargs.get('exp', None) or {}
         for key, value in exp.items():
             self.modules[key] = [k for k, v in value.items()]
 
@@ -611,7 +698,7 @@ class RemoteWidgetEdit(QDialog):
         self.paramList.clear()
         module = self.moduleList.currentText()
 
-        for p in self.modules[module]:
+        for p in self.modules.get(module, []):
             self.paramList.addItem(p)
 
     def _getData(self):
@@ -620,6 +707,7 @@ class RemoteWidgetEdit(QDialog):
         msg['widgetType'] = self.typeList.currentText()
         msg['Module'] = self.moduleList.currentText()
         msg['Parameter'] = self.paramList.currentText()
+        msg['shortcut-Gp'] = self.shortcutGp
 
         if self.typeList.currentText() == "PushButton":
             msg['valueOn'] = self.valueText.text()
@@ -635,7 +723,7 @@ class RemoteWidgetEdit(QDialog):
             msg['stepSlider'] = self.stepSliderText.text()
             msg['shortcutPlus'] = self.shortcutFieldPlus.getKeySequence()
             msg['shortcutMinus'] = self.shortcutFieldMinus.getKeySequence()
-            msg['shortcut-Gp'] = None
+            msg['invertSlider'] = self.invertSlider
 
         return msg
 
@@ -646,7 +734,7 @@ class RemoteWidgetEdit(QDialog):
         msg = dialog._getData()
 
         if msg['widgetType'] == "Slider":
-            if msg['Parameter'] in exp[msg['Module']]:
+            if exp and msg['Parameter'] in exp.get(msg['Module'], {}):
                 msg['startValue'] = exp[msg['Module']][msg['Parameter']]
             else:
                 msg['startValue'] = 0
@@ -695,10 +783,21 @@ class FreeLayout(QLayout):
         self.list = []
 
 
-class MovableWidget(object):
-    def __init__(self, name, label=None):
+class MovableWidget:
+    """
+    Mixin that makes a widget movable via right click & drag and adds a context menu.
+
+    Must be listed before the Qt base class, so that its event handlers take precedence.
+    """
+    # True if the widget is driven by an absolute (analog) gamepad axis
+    gamepadAbsolute = False
+
+    def __init__(self, name, label=None, shortcutKeyGp=None):
         self.widgetName = name
         self.label = label
+        self.shortcutKeyGp = shortcutKeyGp
+        self.gamepad = None
+        self._gamepadConnection = None
         self._mousePressPos = None
         self._mouseMovePos = None
 
@@ -711,39 +810,37 @@ class MovableWidget(object):
             self._mousePressPos = event.globalPos()
             self._mouseMovePos = event.globalPos()
 
-        self.mousePressEvent(event)
+        super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if event.buttons() == Qt.RightButton:
-            # adjust offset from clicked point to origin of widget
-            currPos = self.mapToGlobal(self.pos())
+        if event.buttons() == Qt.RightButton and self._mouseMovePos is not None:
             globalPos = event.globalPos()
-            diff = globalPos - self._mouseMovePos
-            newPos = self.mapFromGlobal(currPos + diff)
+            newPos = self.pos() + (globalPos - self._mouseMovePos)
             if self.parent().rect().contains(newPos):
                 self.move(newPos)
                 if self.label:
-                    newPos.setY(newPos.y() + 30)
-                    newPos.setX(newPos.x() + 80)
-                    self.label.move(newPos)
+                    self.label.move(newPos.x() + 80, newPos.y() + 30)
                 self._mouseMovePos = globalPos
 
-        self.mouseMoveEvent(event)
+        super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.RightButton:
             if self._mousePressPos is not None:
                 moved = event.globalPos() - self._mousePressPos
+                self._mousePressPos = None
+                self._mouseMovePos = None
                 if moved.manhattanLength() > 0:
                     event.ignore()
                     return
-                self.mouseReleaseEvent(event)
+                super().mouseReleaseEvent(event)
                 self.contextMenu.exec_(self.mapToGlobal(event.pos()))
         else:
-            self.mouseReleaseEvent(event)
+            super().mouseReleaseEvent(event)
 
     def contextMenuEvent(self, event):
-        pass
+        # the context menu is handled in mouseReleaseEvent
+        event.accept()
 
     def getData(self):
         pass
@@ -752,13 +849,47 @@ class MovableWidget(object):
         pass
 
     def updateGamePad(self, gamepad):
+        """
+        (Re-)connect the widget to the given gamepad, `None` disconnects it.
+        """
+        if self._gamepadConnection is not None:
+            signal, slot = self._gamepadConnection
+            try:
+                signal.disconnect(slot)
+            except TypeError:
+                pass
+            self._gamepadConnection = None
+
+        self.gamepad = gamepad
+        if gamepad is None or not self.shortcutKeyGp:
+            return
+
+        names = [name for name, abbrev in gamepad.getAbbrevs().items() if abbrev == self.shortcutKeyGp]
+        if not names:
+            self._logger.error("{} is not a valid gamepad button!".format(self.shortcutKeyGp))
+            return
+
+        isAbsolute = names[0].startswith('Absolute')
+        if isAbsolute != self.gamepadAbsolute:
+            self._logger.error("{} is {} absolute button!".format(
+                self.shortcutKeyGp, "an" if isAbsolute else "not an"))
+            return
+
+        prefix = 'abs' if isAbsolute else 'btn'
+        signal = getattr(gamepad, prefix + self.shortcutKeyGp)
+        slot = self._onGamePad
+        signal.connect(slot)
+        self._gamepadConnection = (signal, slot)
+
+    def _onGamePad(self, *args):
         pass
 
 
-class MovablePushButton(QPushButton, MovableWidget):
+class MovablePushButton(MovableWidget, QPushButton):
     def __init__(self, name, valueOn, valueReset, shortcutKey, shortcutKeyGp, **kwargs):
-        MovableWidget.__init__(self, name)
-        QPushButton.__init__(self, name=name)
+        QPushButton.__init__(self)
+        MovableWidget.__init__(self, name, shortcutKeyGp=shortcutKeyGp)
+        self.setObjectName(name)
 
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -768,7 +899,6 @@ class MovablePushButton(QPushButton, MovableWidget):
         self.parameter = kwargs.get('parameter', None)
         self.module = kwargs.get('module', None)
 
-        self.shortcutKeyGp = shortcutKeyGp
         self.shortcut = QShortcut(self)
         self.shortcut.setKey(shortcutKey)
         self.shortcut.setAutoRepeat(False)
@@ -776,20 +906,8 @@ class MovablePushButton(QPushButton, MovableWidget):
 
         self.updateData()
 
-    def updateGamePad(self, gamepad):
-        self.gamepad = gamepad
-        if gamepad is not None:
-            ctrlDict = self.gamepad.getAbbrevs()
-            if self.shortcutKeyGp:
-                try:
-                    name = list(ctrlDict.keys())[list(ctrlDict.values()).index(self.shortcutKeyGp)]
-                    if 'Absolute' in name:
-                        self._logger.error("{} is an absolute button!".format(self.shortcutKeyGp))
-                    else:
-                        name = 'btn' + self.shortcutKeyGp
-                        getattr(self.gamepad, name).connect(lambda: self.click())
-                except ValueError:
-                    self._logger.error("{} is not a valid gamepad button!".format(self.shortcutPlusKeyGp))
+    def _onGamePad(self):
+        self.click()
 
     def getData(self):
         data = dict()
@@ -801,6 +919,7 @@ class MovablePushButton(QPushButton, MovableWidget):
         data['Module'] = self.module
         data['Parameter'] = self.parameter
         data['shortcut'] = self.shortcut.key().toString()
+        data['shortcut-Gp'] = self.shortcutKeyGp
 
         return data
 
@@ -846,12 +965,15 @@ class DoubleSlider(QSlider):
         return self._maxValue
 
 
-class MovableSlider(DoubleSlider, MovableWidget):
+class MovableSlider(MovableWidget, DoubleSlider):
+    gamepadAbsolute = True
+
     def __init__(self, name, minSlider, maxSlider, invertSlider, stepSlider, label,
                  shortcutPlusKey, shortcutMinusKey, shortcutKeyGp,
                  startValue, **kwargs):
-        MovableWidget.__init__(self, name, label)
-        DoubleSlider.__init__(self, Qt.Horizontal, name=name)
+        DoubleSlider.__init__(self, Qt.Horizontal)
+        MovableWidget.__init__(self, name, label, shortcutKeyGp=shortcutKeyGp)
+        self.setObjectName(name)
 
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -861,9 +983,7 @@ class MovableSlider(DoubleSlider, MovableWidget):
         self.minSlider = minSlider
         self.maxSlider = maxSlider
         self.stepSlider = stepSlider
-        self.label = label
-        self.invertSlider = invertSlider
-        self.shortcutKeyGp = shortcutKeyGp
+        self.invertSlider = bool(invertSlider)
 
         self.shortcutPlus = QShortcut(self)
         self.shortcutPlus.setKey(shortcutPlusKey)
@@ -877,26 +997,12 @@ class MovableSlider(DoubleSlider, MovableWidget):
 
         self.updateData()
 
-    def updateGamePad(self, gamepad):
-        self.gamepad = gamepad
-        if gamepad is not None:
-            ctrlDict = self.gamepad.getAbbrevs()
-            if self.shortcutKeyGp:
-                try:
-                    name = list(ctrlDict.keys())[list(ctrlDict.values()).index(self.shortcutKeyGp)]
-                    if 'Absolute' in name:
-                        name = 'abs' + self.shortcutKeyGp
-                        sliderDim = float(self.maxSlider) - float(self.minSlider)
-                        if self.invertSlider is None or self.invertSlider == False:
-                            getattr(self.gamepad, name).connect(lambda absVal:
-                                                                self.setValue(absVal * sliderDim))
-                        else:
-                            getattr(self.gamepad, name).connect(lambda absVal:
-                                                                self.setValue(-absVal * sliderDim))
-                    else:
-                        self._logger.error("{} is not an absolute button!".format(self.shortcutKeyGp))
-                except ValueError:
-                    self._logger.error("{} is not a valid gamepad button!".format(self.shortcutPlusKeyGp))
+    def _onGamePad(self, absVal):
+        """ map the axis value in [-0.5, 0.5] onto the slider range """
+        lower, upper = float(self.minSlider), float(self.maxSlider)
+        if self.invertSlider:
+            absVal = -absVal
+        self.setValue((lower + upper) / 2 + absVal * (upper - lower))
 
     def getData(self):
         data = dict()
@@ -906,10 +1012,12 @@ class MovableSlider(DoubleSlider, MovableWidget):
         data['minSlider'] = self.minSlider
         data['maxSlider'] = self.maxSlider
         data['stepSlider'] = self.stepSlider
+        data['invertSlider'] = self.invertSlider
         data['Module'] = self.module
         data['Parameter'] = self.parameter
         data['shortcutPlus'] = self.shortcutPlus.key().toString()
         data['shortcutMinus'] = self.shortcutMinus.key().toString()
+        data['shortcut-Gp'] = self.shortcutKeyGp
 
         return data
 
@@ -921,10 +1029,11 @@ class MovableSlider(DoubleSlider, MovableWidget):
         self.label.setText(self.widgetName + ': ' + str(self.startValue))
 
 
-class MovableSwitch(QPushButton, MovableWidget):
+class MovableSwitch(MovableWidget, QPushButton):
     def __init__(self, name, valueOn, valueOff, shortcutKey, shortcutKeyGp, **kwargs):
-        MovableWidget.__init__(self, name)
-        QPushButton.__init__(self, name=name)
+        QPushButton.__init__(self)
+        MovableWidget.__init__(self, name, shortcutKeyGp=shortcutKeyGp)
+        self.setObjectName(name)
 
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -934,7 +1043,6 @@ class MovableSwitch(QPushButton, MovableWidget):
         self.valueOn = valueOn
         self.valueOff = valueOff
 
-        self.shortcutKeyGp = shortcutKeyGp
         self.shortcut = QShortcut(self)
         self.shortcut.setKey(shortcutKey)
         self.shortcut.setAutoRepeat(False)
@@ -943,6 +1051,9 @@ class MovableSwitch(QPushButton, MovableWidget):
         self.setCheckable(True)
 
         self.updateData()
+
+    def _onGamePad(self):
+        self.click()
 
     def getData(self):
         data = dict()
@@ -954,27 +1065,13 @@ class MovableSwitch(QPushButton, MovableWidget):
         data['Module'] = self.module
         data['Parameter'] = self.parameter
         data['shortcut'] = self.shortcut.key().toString()
+        data['shortcut-Gp'] = self.shortcutKeyGp
 
         return data
 
     def updateData(self):
         self.setChecked(False)
         self.setText(self.widgetName + '\n' + self.valueOn)
-
-    def updateGamePad(self, gamepad):
-        self.gamepad = gamepad
-        if gamepad is not None:
-            ctrlDict = self.gamepad.getAbbrevs()
-            if self.shortcutKeyGp:
-                try:
-                    name = list(ctrlDict.keys())[list(ctrlDict.values()).index(self.shortcutKeyGp)]
-                    if 'Absolute' in name:
-                        self._logger.error("{} is an absolute button!".format(self.shortcutKeyGp))
-                    else:
-                        name = 'btn' + self.shortcutKeyGp
-                        getattr(self.gamepad, name).connect(lambda: self.click())
-                except ValueError:
-                    self._logger.error("{} is not a valid gamepad button!".format(self.shortcutPlusKeyGp))
 
 
 class ShortcutCreator(QLineEdit):
@@ -1015,7 +1112,7 @@ class ContextLineEditAction(QWidgetAction):
 
     def __init__(self, **kwargs):
         parent = kwargs.get("parent", None)
-        super(QWidgetAction, self).__init__(parent)
+        super().__init__(parent)
 
         self.minValue = kwargs.get("min", 1)
         self.maxValue = kwargs.get("max", 1000)
@@ -1047,20 +1144,6 @@ class ContextLineEditAction(QWidgetAction):
 
     def onChange(self):
         self.dataEmit.emit(self.data.text())
-
-
-def isNan(value):
-    if value == 6.95165821120223e-310:
-        return True
-    else:
-        return False
-
-
-def isInf(value):
-    if value == 6.94996061456946e-310:
-        return True
-    else:
-        return False
 
 
 class TreeWidgetStyledItemDelegate(QStyledItemDelegate):

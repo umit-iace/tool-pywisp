@@ -14,6 +14,8 @@ class Registry(dict):
             raise TypeError(f"Cannot register {mod} as {type}!")
         if mod in self[type].values():
             raise ValueError(f'class {mod} already registered as {type}')
+        if mod.__name__ in self[type]:
+            raise ValueError(f'another class named {mod.__name__} is already registered as {type}')
         self[type][mod.__name__] = mod
 
 _registry = Registry()

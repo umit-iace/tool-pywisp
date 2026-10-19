@@ -73,7 +73,7 @@ class GamePad(QThread):
                 configFileName = getResource('gpPS4-LinuxDefault.yaml', '')
 
         with open(configFileName, 'r') as f:
-            configData = yaml.load(f, Loader=yaml.FullLoader)
+            configData = yaml.safe_load(f)
 
         abbrevs = {}
         for item in configData.items():
@@ -96,7 +96,6 @@ class GamePad(QThread):
             abbv = self.abbrevs[key]
         except KeyError:
             self._logger.error("The event {} of type {} is not supported!".format(event.code, event.ev_type))
-            print(event.ev_type + '-' + event.code)
             return
 
         if event.ev_type == 'Key':
@@ -118,15 +117,16 @@ class GamePad(QThread):
         for key, value in self.absState.items():
             sig = getattr(self, 'abs' + key)
             if WIN:
-                keyValue = round(self.absState[key] / self.stickResolution, 3)
+                keyValue = round(value / self.stickResolution, 3)
             else:
-                keyValue = round(self.absState[key] / self.stickResolution, 3) - 0.5
+                keyValue = round(value / self.stickResolution, 3) - 0.5
             sig.emit(keyValue)
 
     def run(self):
         while self.runFlag:
             if WIN:
-                self.devices.gamepads[self.indexOfController].__check_state()
+                # name mangled private method of inputs.GamePad, cannot be called as __check_state() here
+                self.devices.gamepads[self.indexOfController]._GamePad__check_state()
             try:
                 events = self.devices.gamepads[self.indexOfController]._do_iter()
             except OSError:
@@ -151,7 +151,7 @@ def getGamepadByIndex(devices, index):
 
     :return: gamepad or keyboard thread
     """
-    if devices.gamepads[index] is None:
+    if devices is None or index >= len(devices.gamepads) or devices.gamepads[index] is None:
         return None
     else:
         ctrl = GamePad(devices, index)
@@ -167,7 +167,7 @@ def getAllGamepads():
     :return: list of detected Gamepads or "None" if empy
     """
     devices = rescan_devices()
-    if any(["GamePad" in des for des in [it[0] for it in [dir(dev) for dev in devices]]]):
+    if devices.gamepads:
         return devices
     else:
         return None

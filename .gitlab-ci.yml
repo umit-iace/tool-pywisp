@@ -1,6 +1,21 @@
 stages:
+  - test
   - docu
   - deploy
+
+test:
+  stage: test
+  tags:
+    - shell
+  variables:
+    QT_QPA_PLATFORM: offscreen
+  script:
+    - uv sync --group dev
+    - uv run ruff check pywisp tests examples
+    - uv run pytest -m "not slow"
+  after_script:
+    - uv clean
+    - rm -rf .venv/
 
 docu:
   stage: docu

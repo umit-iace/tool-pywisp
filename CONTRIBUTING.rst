@@ -75,13 +75,19 @@ Ready to contribute? Here's how to set up pywisp_ for local development.
 
    Now you can make your changes locally.
 
-5. Commit your changes and push your branch to GitHub::
+5. When you're done making changes, check that your changes pass the linter
+   and the tests (``-m "not slow"`` skips the long running benchmarks)::
+
+    $ uv run ruff check pywisp tests examples
+    $ uv run pytest -m "not slow"
+
+6. Commit your changes and push your branch to GitHub::
 
     $ git add .
     $ git commit -m "Your detailed description of your changes."
     $ git push origin name-of-your-bugfix-or-feature
 
-6. Submit a pull request through the GitHub website.
+7. Submit a pull request through the GitHub website.
 
 Pull Request Guidelines
 -----------------------

@@ -1,10 +1,10 @@
 # logging config for pywisp package
 version: 1
-disable_existing_loggers: true
+disable_existing_loggers: false
 
 # default logger
 root:
-  level: !!python/name:logging.NOTSET
+  level: INFO
   handlers: [console]
 
 handlers:
@@ -13,7 +13,7 @@ handlers:
     class: logging.StreamHandler
     stream: ext://sys.stdout
     formatter: simpleFormatter
-    level: !!python/name:logging.NOTSET
+    level: NOTSET
 
 formatters:
 

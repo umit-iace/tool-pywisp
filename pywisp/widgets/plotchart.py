@@ -1,11 +1,10 @@
+import logging
 import math
 import numpy as np
-from bisect import bisect_left
 from PyQt5.QtCore import QTimer, pyqtSignal
-from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QAction, QMenu, QWidget
+from PyQt5.QtWidgets import QAction, QMenu
 from pyqtgraph import PlotWidget, TextItem, mkPen
-from pywisp.utils import ContextLineEditAction, DataPointBuffer, Exporter
+from ..utils import ContextLineEditAction, DataPointBuffer, Exporter
 from ..settings import Settings
 
 class PlotChart(PlotWidget):
@@ -16,13 +15,15 @@ class PlotChart(PlotWidget):
 
     def __init__(self, title, config):
         super().__init__()
+        self._logger = logging.getLogger(self.__class__.__name__)
         self.title = title
         self.plotCurves = {}
 
         # plot settings
         self.settings = Settings()
         self.movingWindowEnable = config.get("MovingWindowEnable", True)
-        self.movingWindowWidth = config.get("MovingWindowWidth", 30)
+        # MovingWindowSize is the documented key, MovingWindowWidth is kept for compatibility
+        self.movingWindowWidth = config.get("MovingWindowSize", config.get("MovingWindowWidth", 30))
 
         # plot widget settings
         self.showGrid(True, True)
@@ -48,7 +49,7 @@ class PlotChart(PlotWidget):
         def coordWrapper(pos):
             coords = self.getPlotItem().vb.mapSceneToView(pos)
             coord_text = "x={:.3e} y={:.3e}".format(coords.x(), coords.y())
-            if self.settings.value("view/show_coordinates"):
+            if self.settings.value("view/show_coordinates", type=bool):
                 coordItem.setText(coord_text.replace(" ", "\n"))
                 coordItem.setPos(coords.x(), coords.y())
                 coordItem.show()
@@ -102,10 +103,10 @@ class PlotChart(PlotWidget):
         self.updateCurves({name:data})
 
     def removeCurve(self, name):
-        if name in self.plotCurves:
-            curve = self.plotCurves.pop(name)
-        if name in self.cache:
-            del self.cache[name]
+        self.cache.pop(name, None)
+        curve = self.plotCurves.pop(name, None)
+        if curve is None:
+            return
         self.getPlotItem().removeItem(curve)
         # update colors of remaining curves
         for ix, curve in enumerate(self.plotCurves.values()):
@@ -121,7 +122,10 @@ class PlotChart(PlotWidget):
         self.setAutoRange()
 
     def setMovingWindowWidth(self, movingWindowWidth):
-        self.movingWindowWidth = int(movingWindowWidth)
+        try:
+            self.movingWindowWidth = int(movingWindowWidth)
+        except ValueError:
+            self._logger.error(f"Invalid moving window width '{movingWindowWidth}'")
 
     def getMovingWindowWidth(self):
         return self.movingWindowWidth
@@ -134,13 +138,13 @@ class PlotChart(PlotWidget):
                     if name in dataPoints ]
         lastX = [ dataPoints[name].time[-1]
                      for name in keys
-                     if dataPoints[name].time ]
+                     if len(dataPoints[name].time) ]
         if not lastX:
             return
         firstX = max(lastX) - self.movingWindowWidth
 
         def xRange(time, values):
-            start = bisect_left(time, firstX)
+            start = np.searchsorted(time, firstX)
             return time[start:], values[start:]
 
         for name in keys:
@@ -158,20 +162,18 @@ class PlotChart(PlotWidget):
     def export(self, filename=None):
         dataPoints = dict()
         for c in self.getPlotItem().curves:
-            data, name = c.getData(), c.name()
-            if data is None:
+            (x, y), name = c.getData(), c.name()
+            if x is None or y is None:
+                self._logger.warning(f"Curve '{name}' contains no data, skipping it.")
                 continue
-            if len(data) > 2:
-                self._logger.warning('Can not handle the amount of data!')
-                continue
-            dataPoints[name] = DataPointBuffer(time=data[0], values=data[1])
+            dataPoints[name] = DataPointBuffer(time=x, values=y)
 
         self.exporter = Exporter(dataPoints=dataPoints, fileName=filename)
         self.exporter.runExport()
 
     def _samplestep(self, X):
         ds = 1
-        if not X:
+        if len(X) == 0:
             return ds
         view = self.getViewBox()
         if view is None:
@@ -198,48 +200,54 @@ class PlotChart(PlotWidget):
         return ds
 
     def _downsample(self, ds, x, y):
+        """
+        Reduces the given data by the factor `ds` according to the configured method.
+        Only complete blocks of `ds` samples are used.
+        :return: numpy arrays with the downsampled data
+        """
+        x = np.asarray(x)
+        y = np.asarray(y)
         if ds <= 1:
             return x, y
-        if self.config['downsamplingMethod'] == 'subsample':
-            x = x[::ds]
-            y = y[::ds]
-        elif self.config['downsamplingMethod'] == 'mean':
-            n = len(x) // ds
-            # start of x-values try to select a somewhat centered point
-            stx = ds // 2
+        method = self.config['downsamplingMethod']
+        n = len(x) // ds
+        # start of x-values; try to select a somewhat centered point
+        stx = ds // 2
+        if method == 'subsample':
+            x = x[:n * ds:ds]
+            y = y[:n * ds:ds]
+        elif method == 'mean':
             x = x[stx:stx + n * ds:ds]
-            y = np.array(y[:n * ds]).reshape(n, ds).mean(axis=1).tolist()
-        elif self.config['downsamplingMethod'] == 'peak':
-            n = len(x) // ds
-            x1 = np.empty((n, 2))
-            # start of x-values; try to select a somewhat centered point
-            stx = ds // 2
-            x1[:] = np.array(x)[stx:stx + n * ds:ds, np.newaxis]
-            x = x1.reshape(n * 2).tolist()
-            y1 = np.empty((n, 2))
-            y2 = np.array(y[:n * ds]).reshape((n, ds))
-            y1[:, 0] = y2.max(axis=1)
-            y1[:, 1] = y2.min(axis=1)
-            y = y1.reshape(n * 2).tolist()
-        else:
-            ...
+            y = y[:n * ds].reshape(n, ds).mean(axis=1)
+        elif method == 'peak':
+            x = np.repeat(x[stx:stx + n * ds:ds], 2)
+            blocks = y[:n * ds].reshape(n, ds)
+            y = np.empty(2 * n)
+            y[0::2] = blocks.max(axis=1)
+            y[1::2] = blocks.min(axis=1)
         return x, y
 
     def _cachedsample(self, name, x, y):
+        """
+        Downsamples the complete data set, reusing the result of the last call.
+        Only the samples added since then are processed.
+        """
+        x = np.asarray(x)
+        y = np.asarray(y)
         ds = self._samplestep(x)
-        if name in self.cache:
-            cds, cx, cy = self.cache[name]
-            if ds == cds:
-                ## reuse cached data, append new
-                ix = bisect_left(x, cx[-1])
-                ex, ey = x[ix+1:], y[ix+1:]
-                assert( len(x) > ix )
-                if ex:
-                    ex, ey = self._downsample(ds, ex, ey)
-                cx.extend(ex)
-                cy.extend(ey)
-                return cx, cy
-        ## recalculate whole downsampling
-        x, y = self._downsample(ds, x, y)
-        self.cache[name] = (ds, x, y)
-        return x, y
+        cached = self.cache.get(name)
+        if cached is not None and cached[0] == ds and cached[1] <= len(x):
+            _, used, cx, cy = cached
+        else:
+            used, cx, cy = 0, np.empty(0), np.empty(0)
+
+        # only process complete blocks, the remainder is handled with the next call
+        n = (len(x) - used) // ds * ds
+        if n:
+            nx, ny = self._downsample(ds, x[used:used + n], y[used:used + n])
+            cx, cy = np.concatenate((cx, nx)), np.concatenate((cy, ny))
+            used += n
+        self.cache[name] = (ds, used, cx, cy)
+
+        # show the not yet downsampled tail as it is
+        return np.concatenate((cx, x[used:])), np.concatenate((cy, y[used:]))

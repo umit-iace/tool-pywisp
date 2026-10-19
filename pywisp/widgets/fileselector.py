@@ -21,12 +21,15 @@ class FileSelector(QFileDialog):
         ext = self.st.value("export_ext")
         file = os.path.join(path, "export" + ext)
         filterStr = ";;".join(self.formats)
-        ix = [ ext in fmt for fmt in self.formats ].index(True)
+        matches = [ix for ix, fmt in enumerate(self.formats) if ext in fmt]
+        ix = matches[0] if matches else 0
+        if not matches:
+            file = os.path.join(path, "export" + self.exts[0])
 
         selpath, selfilt = super().getSaveFileName(self, text, file,
                                                    filterStr, self.formats[ix])
         if not selpath:
-            self.logger.warn("File selection aborted!")
+            self.logger.warning("File selection aborted!")
             return
         name, selext = os.path.splitext(selpath)
         if not selext:
@@ -37,7 +40,7 @@ class FileSelector(QFileDialog):
             return
 
         seldir = os.path.dirname(selpath)
-        if path != selpath:
+        if path != seldir:
             self.st.setValue("export_dir", seldir)
 
         if ext != selext:

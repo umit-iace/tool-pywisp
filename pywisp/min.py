@@ -95,10 +95,10 @@ def Unpacker(sink):
         if id >= 64: # not handling transport frames
             # print(f"dropping transport frame: {id=}")
             continue
-        len, ok = (yield)
+        length, ok = (yield)
         if not ok: continue
         pld = bytearray([])
-        for _ in range(len):
+        for _ in range(length):
             n, ok = (yield)
             if not ok: break
             pld.append(n)
@@ -112,7 +112,7 @@ def Unpacker(sink):
         c4, ok = (yield)
         if not ok: continue
         crc = bytes([c1,c2,c3,c4])
-        want = crc32(bytes([id, len])+pld)
+        want = crc32(bytes([id, length])+pld)
         if spack('>I',want) != crc: # dropping frame
             # print(f"dropping frame mismatched CRC {id=}")
             continue

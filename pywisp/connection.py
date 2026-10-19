@@ -5,7 +5,8 @@ This module contains all classes and functions related to establishing a connect
 
 import logging
 import socket
-from abc import abstractmethod
+import time
+from abc import ABCMeta, abstractmethod
 
 import serial
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
@@ -17,24 +18,45 @@ __all__ = ["Connection", "UdpConnection", "TcpConnection", "SerialConnection"]
 
 
 class ConnReader(QObject):
-    """ Thread worker receiving connection data """
+    """
+    Thread worker receiving connection data.
+
+    Received frames are collected and handed to the gui thread in batches, since
+    emitting a queued signal for every single frame does not scale to high frame rates.
+    """
     err = pyqtSignal(str)
+    frames = pyqtSignal(object)
+    # [s] maximum time frames are held back before they are passed on
+    flushInterval = 0.01
 
     def __init__(self, conn, rx):
         super().__init__()
         self.conn = conn
         self.stop = False
-        self.rx = pipe(rx)
+        self.pending = []
+        self.rx = pipe([rx, self.collector])
+
+    @coroutine
+    def collector(self):
+        """ collect unpacked frames until the next flush """
+        while True:
+            id, payload = yield
+            self.pending.append(Frame(id, payload))
+
+    def flush(self):
+        """ pass all collected frames on """
+        if self.pending:
+            frames, self.pending = self.pending, []
+            self.frames.emit(frames)
 
     def run(self):
+        lastFlush = time.monotonic()
         while not self.stop:
             try:
                 data = self.conn._recv()
-                self.rx.send(data)
-            except TimeoutError:
-                # intentionally empty
-                pass
-            except socket.timeout:
+                if data:
+                    self.rx.send(data)
+            except (TimeoutError, socket.timeout):
                 # intentionally empty
                 pass
             except Exception as e:
@@ -42,15 +64,31 @@ class ConnReader(QObject):
                     self.err.emit(f"connection dropped: {repr(e)} / {e}")
                 break
 
+            now = time.monotonic()
+            if now - lastFlush >= self.flushInterval:
+                self.flush()
+                lastFlush = now
+        self.flush()
+
     def quit(self):
         self.stop = True
 
 
-class Connection(QObject):
+class ConnectionMeta(ABCMeta, type(QObject)):
+    pass
+
+
+class Connection(QObject, metaclass=ConnectionMeta):
     """
     Base class for a connection, i.e. tcp or serial
+
+    A connection instance can only be opened once. After :meth:`close` a new
+    instance has to be created.
     """
+    #: emitted for every received frame, prefer :attr:`receivedFrames` for high frame rates
     received = pyqtSignal(Frame)
+    #: emitted with a list of all frames received since the last emission
+    receivedFrames = pyqtSignal(object)
     finished = pyqtSignal()
 
     def __init__(self, rx, tx, *args, **kwargs):
@@ -58,29 +96,29 @@ class Connection(QObject):
         self._logger = logging.getLogger(self.__class__.__name__)
         self.tx = pipe([tx, self._send])
         thread = QThread()
-        worker = ConnReader(self, [rx, self.emitter])
+        worker = ConnReader(self, rx)
         worker.moveToThread(thread)
         worker.err.connect(self.workerror)
+        worker.frames.connect(self._onFrames)
         thread.started.connect(worker.run)
         thread.finished.connect(thread.deleteLater)
-        self.thread = thread
+        self.readerThread = thread
         self.worker = worker
         self.connected = False
 
     def workerror(self, err):
         self.worker.deleteLater()
-        self.disconnect()
         self._logger.error(err)
-        self.finished.emit()
+        self.close()
 
-    @coroutine
-    def emitter(self):
+    def _onFrames(self, frames):
         """
-        send received frame to application
+        pass received frames to the application, runs in the thread of the connection object
         """
-        while True:
-            id, payload = yield
-            self.received.emit(Frame(id, payload))
+        self.receivedFrames.emit(frames)
+        if self.receivers(self.received):
+            for frame in frames:
+                self.received.emit(frame)
 
     def writeData(self, data):
         """
@@ -94,21 +132,24 @@ class Connection(QObject):
             pass
         except Exception as e:
             self._logger.error(f"cannot send data: {e}")
-            self.disconnect()
+            self.close()
 
-    def connect(self):
+    def open(self):
         """ establish the connection """
         if self._connect():
-            self.thread.start()
+            self.readerThread.start()
             self.connected = True
             return True
+        return False
 
-    def disconnect(self):
+    def close(self):
         """ close the connection, stop worker and thread """
+        if not self.connected:
+            return
         self.connected = False
         self.worker.quit()
         self._disconnect()
-        self.thread.quit()
+        self.readerThread.quit()
         self.finished.emit()
 
     @abstractmethod
@@ -125,7 +166,8 @@ class Connection(QObject):
         return data from connection.
         this runs in a threaded loop.
         make sure this actually takes some time (e.q. w/ socket timeouts)
-        otherwise this will eat your cpu
+        otherwise this will eat your cpu.
+        raise an exception if the connection has been closed by the other side.
         """
         pass
 
@@ -184,19 +226,23 @@ class SocketConnection(Connection):
     Simple Socket based Connection
     """
 
-    def __init__(self, socket, ip, port, timeout=0.01, **kwargs):
+    def __init__(self, socket, ip, port, timeout=0.01, connectTimeout=3.0, **kwargs):
         self.ip = ip
         self.port = port
         self.sock = socket
         self.timeout = timeout
+        self.connectTimeout = connectTimeout
         super().__init__(**kwargs)
 
     def _connect(self):
         try:
-            self.sock.settimeout(self.timeout)
+            # use a generous timeout while connecting, the short one is only
+            # meant for the polling receive loop
+            self.sock.settimeout(self.connectTimeout)
             self.sock.connect((self.ip, int(self.port)))
-        except socket.error:
-            self._logger.error("Connection to the server is not possible!")
+            self.sock.settimeout(self.timeout)
+        except OSError as e:
+            self._logger.error(f"Connection to the server is not possible: {e}")
             self.sock.close()
             return False
         return True
@@ -205,7 +251,11 @@ class SocketConnection(Connection):
         self.sock.close()
 
     def _recv(self):
-        return self.sock.recv(512*4)
+        data = self.sock.recv(512*4)
+        if not data and self.sock.type == socket.SOCK_STREAM:
+            # an empty read on a stream socket means the peer closed the connection
+            raise ConnectionResetError("connection closed by peer")
+        return data
 
     @coroutine
     def _send(self):
@@ -227,16 +277,23 @@ class TcpConnection(SocketConnection):
             """ send 1 byte id + 80 byte payload """
             while True:
                 id, data = (yield)
+                if len(data) > maxPayload:
+                    # do not raise here, an exception would terminate the coroutine
+                    logging.getLogger("TcpConnection").error(
+                        f"dropping frame {id}: payload of {len(data)} bytes "
+                        f"exceeds maxPayload={maxPayload}")
+                    continue
                 sink.send(bytes([id]) + data + bytes(maxPayload - len(data)))
 
         @coroutine
         def Receiver(sink):
             """ receive 81 byte chunks -> (1 id + 80 payload) """
-            data = []
+            data = bytearray()
             while True:
                 data.extend((yield))
                 while len(data) >= maxPayload + 1:
-                    f, data = data[:maxPayload + 1], data[maxPayload + 1:]
+                    f = data[:maxPayload + 1]
+                    del data[:maxPayload + 1]
                     sink.send((f[0], bytes(f[1:])))
 
         super().__init__(sock, ip, port, tx=Sender, rx=Receiver, **kwargs)

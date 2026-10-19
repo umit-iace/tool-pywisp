@@ -9,19 +9,20 @@ import unittest
 from itertools import product
 
 import numpy as np
-import pyqtgraph as pg
+import pytest
 
 from PyQt5.QtWidgets import QApplication
 from pywisp.widgets.plotchart import PlotChart
 from pywisp.utils import DataPointBuffer
 
 
+@pytest.mark.slow
 class PlotTestCase(unittest.TestCase):
     base_path = os.path.dirname(__file__)
     d_name = os.path.join(base_path, "plotPoints.pkl")
 
     def setUp(self):
-        self.app = QApplication(sys.argv)
+        self.app = QApplication.instance() or QApplication(sys.argv)
         if os.path.exists(self.d_name):
             # load test data
             with open(self.d_name, "rb") as f:
@@ -90,8 +91,7 @@ class PlotTestCase(unittest.TestCase):
         times = []
         for i in range(20, npoints, 20):
             for key, buf in dps.items():
-                buf.time.extend(self.dataPoints[key].time[i-20: i])
-                buf.values.extend(self.dataPoints[key].values[i-20: i])
+                buf.extend(self.dataPoints[key].time[i-20: i], self.dataPoints[key].values[i-20: i])
             t0 = time.perf_counter()
             chart.updateCurves(dps)
             t1 = time.perf_counter()
@@ -124,7 +124,7 @@ class PlotTestCase(unittest.TestCase):
             if ws:
                 print(f"windowing with {ws=}")
             else:
-                print(f"No windowing")
+                print("No windowing")
             if ds == 'off':
                 print("no downsampling")
             else:
@@ -145,15 +145,13 @@ class PlotTestCase(unittest.TestCase):
 
         N = 10
         t0 = time.perf_counter()
-        for i in range(N):
+        for _ in range(N):
             chart.updateCurves(self.dataPoints)
             self.app.processEvents()
         dt = time.perf_counter() - t0
         chart.close()
         print(f"Average update time is {dt/N * 1e3} ms")
 
-    def tearDown(self):
-        self.app.exit()
 
 
 if __name__ == '__main__':

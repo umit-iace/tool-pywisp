@@ -122,7 +122,7 @@ the setting
 
 .. code-block:: yaml
 
-    Heartbeat: 100  # send a heartbeat every 100ms
+    HeartbeatTime: 100  # send a heartbeat every 100ms
 
 It can be disabled by setting the parameter to zero or omitting the entry.
 Note that the embedded code on the rig itself also has to be configured to expect such a packet.
@@ -144,6 +144,11 @@ To save the configuration the ``defaults.sreg`` ``Config`` section can be extend
     TimerTime:           <time in ms>
     MovingWindowSize:    <time in s>
     MovingWindowEnable:  <True..enable moving window, False..disable moving window>
+    downsamplingMethod:  <peak, mean, subsample or off>
+
+The configuration file is checked when it is loaded. Unknown keys, settings that do not
+exist in a module and malformed remote widgets are reported in the log. Experiments that
+reference experiment modules which are not registered are skipped.
 
 For detailed information see the :ref:`chapter_examples` section.
 

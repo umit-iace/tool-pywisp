@@ -3,17 +3,15 @@ import os
 import time
 from abc import ABCMeta, abstractmethod
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import *
-from pywisp.utils import createDir
+from .utils import createDir
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-__all__ = ["MplVisualizer", "VtkVisualizer"]
+__all__ = ["Visualizer", "MplVisualizer", "VtkVisualizer"]
 
 try:
     import vtk
-    from vtk.qt.QVTKRenderWindowInteractor import *
+    from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 
     class QVTKRenderWindowInteractor(QVTKRenderWindowInteractor):
@@ -31,7 +29,7 @@ try:
             else:
                 self._Iren.MouseWheelBackwardEvent()
 
-except ImportError as e:
+except ImportError:
     QVTKRenderWindowInteractor = None
 
 
@@ -42,23 +40,32 @@ class Visualizer(metaclass=ABCMeta):
     def __init__(self):
         self.frameCounter = 0
         self.fileNameCounter = 0
-        self.timeStamp = 0
+        self.timeStamp = ''
         self.picturePath = None
         self.expName = None
         self.saveAnimation = False
 
     def checkSaveAnimation(self, state):
         self.saveAnimation = state
+        if state:
+            self._preparePicturePath()
 
     def startAnimation(self):
+        self.frameCounter = 0
+        self.fileNameCounter = 0
+        self.timeStamp = time.strftime("%d_%m_%Y_%H_%M_%S") + '_'
         if self.saveAnimation:
-            self.frameCounter = 0
-            self.fileNameCounter = 0
-            self.timeStamp = time.strftime("%d_%m_%Y_%H_%M_%S") + '_'
+            self._preparePicturePath()
 
     def setExpName(self, name):
         self.expName = name
-        self.picturePath = createDir('ani_' + self.expName)
+        self.picturePath = None
+
+    def _preparePicturePath(self):
+        # only create the directory if pictures are actually saved
+        if self.picturePath is None and self.expName is not None:
+            safeName = "".join(c if c.isalnum() or c in "-_." else "_" for c in self.expName)
+            self.picturePath = createDir('ani_' + safeName)
 
     @abstractmethod
     def saveIfChecked(self) -> bool:
@@ -156,7 +163,7 @@ class MplVisualizer(Visualizer):
         """
         Must be called after self.draw_idle() in implementation.
         """
-        if self.saveAnimation:
+        if self.saveAnimation and self.picturePath is not None:
             fileName = self.picturePath + os.path.sep + self.timeStamp + "%04d" % self.fileNameCounter + '.png'
             self.fig.savefig(fileName, format='png', dpi=self.dpi)
             self.fileNameCounter += 1

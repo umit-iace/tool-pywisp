@@ -7,6 +7,7 @@ from PyQt5.QtCore import Qt, QSize, pyqtSignal, QObject
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QItemDelegate, QTreeView
 
+from .config import RESERVED_KEYS as NON_MODULE_KEYS
 from .experimentModules import ExperimentModuleException
 from .registry import *
 import copy as cp
@@ -141,6 +142,10 @@ class ExperimentInteractor(QObject):
         self.targetModel.itemChanged.connect(self.itemChanged)
         # parameter change settings
         self.modSets = {}
+        # modules per connection that handle incoming frames
+        self._frameHandlerCache = {}
+        # number of failed handleFrame calls per module
+        self._frameErrors = {}
 
     def _addSettings(self, moduleName, parent):
         """
@@ -161,8 +166,7 @@ class ExperimentInteractor(QObject):
         :param moduleName: the given experiment module name
         :return: settings of module or raise an exception if module is unknown
         """
-        modules = getRegisteredExperimentModules()
-        return modules[moduleName].publicSettings
+        return self._getModule(moduleName).publicSettings
 
     def _readDataPoints(self, moduleName):
         """
@@ -170,8 +174,18 @@ class ExperimentInteractor(QObject):
         :param moduleName: the given experiment module name
         :return: data points of module or raise an exception if module is unknown
         """
-        modules = getRegisteredExperimentModules()
-        return modules[moduleName].dataPoints
+        return self._getModule(moduleName).dataPoints
+
+    @staticmethod
+    def _getModule(moduleName):
+        """
+        Looks up a registered experiment module by name.
+        :raises ExperimentException: if the module is unknown
+        """
+        try:
+            return getRegisteredExperimentModules()[moduleName]
+        except KeyError:
+            raise ExperimentException(f"Experiment module '{moduleName}' is not registered!") from None
 
     def itemChanged(self, item):
         """
@@ -243,6 +257,7 @@ class ExperimentInteractor(QObject):
         :return: `True` if successful, `False` if errors occurred.
         """
         self.dataPoints = []
+        self._frameHandlerCache = {}
         self.targetModel.clear()
         # insert header
         self.targetModel.setHorizontalHeaderLabels(['Property', 'Value'])
@@ -250,13 +265,7 @@ class ExperimentInteractor(QObject):
         for key, value in exp.items():
             if key == 'Name':
                 self.targetModel.setName(value)
-                continue
-
-            if key == 'Config':
-                continue
-            if key == 'Remote':
-                continue
-            if key == 'Visu':
+            if key in NON_MODULE_KEYS:
                 continue
 
             name = PropertyItem(key)
@@ -277,17 +286,7 @@ class ExperimentInteractor(QObject):
                 return False
 
         for moduleName, moduleValue in exp.items():
-            if moduleName == 'Name':
-                continue
-
-            if moduleName == 'Config':
-                continue
-            if moduleName == 'Remote':
-                continue
-            if moduleName == 'Visu':
-                continue
-
-            if not moduleValue:
+            if moduleName in NON_MODULE_KEYS or not moduleValue:
                 continue
 
             for valKey, valVal in moduleValue.items():
@@ -314,17 +313,7 @@ class ExperimentInteractor(QObject):
         :return: `True` if successful, `False` if errors occurred.
         """
         for moduleName, moduleValue in exp.items():
-            if moduleName == 'Name':
-                continue
-
-            if moduleName == 'Config':
-                continue
-            if moduleName == 'Remote':
-                continue
-            if moduleName == 'Visu':
-                continue
-
-            if not moduleValue:
+            if moduleName in NON_MODULE_KEYS or not moduleValue:
                 continue
 
             for valKey, valVal in moduleValue.items():
@@ -337,7 +326,7 @@ class ExperimentInteractor(QObject):
                         self.targetModel.dataChanged.emit(valueIdx, valueIdx)
                         break
                 else:
-                    self._logger.warning("_applyExperiment(): Setting: '{0}' not "
+                    self._logger.warning("_editExperiment(): Setting: '{0}' not "
                                          "available for Module: '{1}'".format(valKey, moduleName))
 
         return True
@@ -358,17 +347,62 @@ class ExperimentInteractor(QObject):
         """
         if frame.id == 1:
             self.stopExperiment(broadcast=False)
-            self._logger.warn("rig missed heartbeat! disconnecting...")
+            self._logger.warning("rig missed heartbeat! disconnecting...")
             self.missedbeat.emit()
             return None
-        for mod, _, _ in self.activeModules():
-            if mod.connection != connection:
+        for mod, name in self._frameHandlers(connection):
+            try:
+                dataPoints = mod.handleFrame(mod, frame)
+            except Exception:
+                self._reportFrameError(name, frame)
                 continue
-            dataPoints = mod.handleFrame(mod,frame)
             if dataPoints:
                 return dataPoints
 
         return None
+
+    def _frameHandlers(self, connection):
+        """
+        Returns the modules handling frames of the given connection.
+        The result is cached, since this is called for every received frame.
+        """
+        handlers = self._frameHandlerCache.get(connection)
+        if handlers is None:
+            handlers = [(mod, name) for mod, name in self._activeModuleClasses()
+                        if mod.connection == connection]
+            self._frameHandlerCache[connection] = handlers
+        return handlers
+
+    def _reportFrameError(self, name, frame):
+        """
+        Logs a failing `handleFrame` call. Only the first error of a module is logged with
+        its traceback, otherwise a broken module would flood the log at the frame rate.
+        """
+        cnt = self._frameErrors.get(name, 0) + 1
+        self._frameErrors[name] = cnt
+        if cnt == 1:
+            self._logger.exception(f"Module '{name}' failed to handle frame {frame.id}, "
+                                   f"further errors of this module are suppressed")
+
+    def _logFrameErrorSummary(self):
+        for name, cnt in self._frameErrors.items():
+            self._logger.error(f"Module '{name}' failed to handle {cnt} frame(s)")
+        self._frameErrors = {}
+
+    def _collectParams(self, mod, name, funcName, vals, abort=False):
+        """
+        Calls a parameter function of a module and converts the result to connection data.
+        Errors in user code are logged instead of crashing the gui.
+        :param abort: re-raise the error as `ExperimentModuleException`
+        """
+        try:
+            params = getattr(mod, funcName)(mod, vals)
+        except Exception as e:
+            if abort:
+                raise ExperimentModuleException(f"{name}.{funcName}() failed: {e!r}") from e
+            self._logger.exception(f"{name}.{funcName}() failed")
+            return []
+        return self.paramsToConnData(params, mod.connection)
 
     def updateSendParameter(self, module, parameter, value):
         if module in self.modSets:
@@ -381,17 +415,15 @@ class ExperimentInteractor(QObject):
         """
         data = []
         self.runningExperiment = True
+        self._frameErrors = {}
         try:
             for mod, name, settings in self.activeModules():
 
                 self.modSets[name] = cp.copy(settings)
                 vals = list(settings.values())
 
-                startParams = mod.getStartParams(mod,vals)
-                data.extend(self.paramsToConnData(startParams, mod.connection))
-
-                params = mod.getParams(mod,vals)
-                data.extend(self.paramsToConnData(params, mod.connection))
+                data.extend(self._collectParams(mod, name, 'getStartParams', vals, abort=True))
+                data.extend(self._collectParams(mod, name, 'getParams', vals, abort=True))
 
         except ExperimentModuleException as eme:
             self._logger.error(eme)
@@ -415,12 +447,11 @@ class ExperimentInteractor(QObject):
         data = []
         for mod, name, settings in self.activeModules():
 
-            if self.modSets[name] == settings:
+            if self.modSets.get(name) == settings:
                 continue
             self.modSets[name] = cp.copy(settings)
             vals = list(settings.values())
-            params = mod.getParams(mod,vals)
-            data.extend(self.paramsToConnData(params, mod.connection))
+            data.extend(self._collectParams(mod, name, 'getParams', vals))
 
         for _data in data:
             self.sendData.emit(_data)
@@ -433,8 +464,7 @@ class ExperimentInteractor(QObject):
         for mod, name, settings in self.activeModules():
 
             vals = list(settings.values())
-            params = mod.getParams(mod,vals)
-            data.extend(self.paramsToConnData(params, mod.connection))
+            data.extend(self._collectParams(mod, name, 'getParams', vals))
 
         for _data in data:
             self.sendData.emit(_data)
@@ -453,9 +483,7 @@ class ExperimentInteractor(QObject):
         for mod, name, settings in self.activeModules():
 
             vals = list(settings.values())
-
-            stopParams = mod.getStopParams(mod,vals)
-            data.extend(self.paramsToConnData(stopParams, mod.connection))
+            data.extend(self._collectParams(mod, name, 'getStopParams', vals))
 
         # stop experiment
         if broadcast:
@@ -466,6 +494,7 @@ class ExperimentInteractor(QObject):
             for _data in data:
                 self.sendData.emit(_data)
 
+        self._logFrameErrorSummary()
         self.expFinished.emit()
 
     def getExperiment(self):
@@ -480,22 +509,24 @@ class ExperimentInteractor(QObject):
 
         return exp
 
+    def _activeModuleClasses(self):
+        """ like :meth:`activeModules`, but without reading the settings from the model """
+        for row in range(self.targetModel.rowCount()):
+            name = self.targetModel.item(row, 0).data(role=PropertyItem.RawDataRole)
+            yield self._getModule(name), name
+
     def activeModules(self):
         for row in range(self.targetModel.rowCount()):
             index = self.targetModel.index(row, 0)
             parent = index.model().itemFromIndex(index)
             settings = self.getSettings(parent)
             name = parent.data(role=PropertyItem.RawDataRole)
-            mod = getRegisteredExperimentModules()[name]
+            mod = self._getModule(name)
             yield mod, name, settings
 
     def paramsToConnData(self, params, conn):
-            if not params:
-                return []
-            data = []
-            if not isinstance(params, list):
-                params = [params]
-            for p in params:
-                p['connection'] = conn
-                data.append(p)
-            return data
+        if not params:
+            return []
+        if not isinstance(params, list):
+            params = [params]
+        return [dict(p, connection=conn) for p in params]

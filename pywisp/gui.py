@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
+import sys
 import time
-import importlib.metadata
 from copy import deepcopy
 
 import serial.tools.list_ports
@@ -11,10 +11,7 @@ import yaml
 # vtk
 vtk_error_msg = ""
 try:
-    import vtk
-
     from vtk import vtkRenderer
-    from vtk import qt
     # import patched class that fixes scroll problem
     from .visualization import QVTKRenderWindowInteractor
 
@@ -26,26 +23,29 @@ except ImportError as e:
     QVTKRenderWindowInteractor = None
 
 try:
-    from yaml import CLoader as Loader, CDumper as Dumper
+    from yaml import CSafeLoader as SafeLoader
 except ImportError:
-    from yaml import Loader, Dumper
-from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QCoreApplication, QMutex
+    from yaml import SafeLoader
+from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QCoreApplication
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from pyqtgraph.dockarea import *
 
+from .config import validateExperiments
 from .connection import SerialConnection, SocketConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .utils import getResource, PlainTextLogger, DataPointBuffer, Exporter, DataIntDialog, \
     DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, PinnedDock, \
-    ContextLineEditAction, TreeWidgetStyledItemDelegate
+    TreeWidgetStyledItemDelegate
 
 from .visualization import MplVisualizer, VtkVisualizer
 from .gamepad import getGamepadByIndex
 from .gamepad import getAllGamepads
 from .settings import Settings
 from .widgets.plotchart import PlotChart
+
+__all__ = ["MainGui"]
 
 
 class MainGui(QMainWindow):
@@ -58,11 +58,16 @@ class MainGui(QMainWindow):
     def __init__(self, fileName=None, parent=None):
         super(MainGui, self).__init__(parent)
 
+        # log errors in slots instead of letting PyQt abort the application,
+        # but do not replace a hook somebody else installed
+        if sys.excepthook is sys.__excepthook__:
+            sys.excepthook = logUncaughtException
+
+        from . import __version__
         QCoreApplication.setOrganizationName("IACE")
         QCoreApplication.setOrganizationDomain("https://umit-tirol.at/iace")
-        QCoreApplication.setApplicationVersion(
-            importlib.metadata.version("PyWisp"))
-        QCoreApplication.setApplicationName(globals()["__package__"])
+        QCoreApplication.setApplicationVersion(__version__)
+        QCoreApplication.setApplicationName(__package__)
 
         # general config parameters
         self.config = {'TimerTime': 40, # [] = ms
@@ -96,6 +101,7 @@ class MainGui(QMainWindow):
 
         self.connections = {}
         self.isConnected = False
+        self.selectedExp = False
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.updateDataPlots)
@@ -326,13 +332,14 @@ class MainGui(QMainWindow):
         self.actShowCoords = QAction("&Show coordinates", self)
         self.actShowCoords.setCheckable(True)
         self.actShowCoords.setChecked(
-            self._settings.value("view/show_coordinates") == "True"
+            self._settings.value("view/show_coordinates", type=bool)
         )
         self.viewMenu.addAction(self.actShowCoords)
         self.actShowCoords.changed.connect(self.updateShowCoordsSetting)
 
         self.gamepad = None
         self.selectedGamepadIndex = None
+        self.gamepadDevices = None
 
         ### options
         self.optMenu = self.menuBar().addMenu('&Options')
@@ -426,6 +433,7 @@ class MainGui(QMainWindow):
         self._currentExpListItem = None
         self._currentLastMeasItem = None
         self._currentDataPointBuffers = None
+        self._dataWarnings = set()
         self.plotCharts = {}
 
         loadExpFromFileSuccess = self.loadExpFromFile(fileName)
@@ -449,7 +457,6 @@ class MainGui(QMainWindow):
             self._applyFirstExperiment()
             self.selectedExp = True
 
-        self.data_mutex = QMutex()
         self.exporter = None
 
         # close splash screen
@@ -464,7 +471,11 @@ class MainGui(QMainWindow):
         visName = self.visComboBox.itemText(idx)
         available = getRegisteredVisualizers()
 
-        self.setVisualizer(available[visName])
+        try:
+            self.setVisualizer(available[visName])
+        except Exception:
+            self._logger.exception(f"Cannot load visualizer '{visName}'")
+            self.visualizer = None
 
     def _getTcpMenu(self, settings):
         # ip and port
@@ -498,12 +509,12 @@ class MainGui(QMainWindow):
 
             return fn
 
-        baud = settings['baud']
+        baud = int(settings['baud'])
         connMenu.clear()
         for _baud in SerialConnection.supported_baudrates:
-            baudAction = QAction(_baud, self)
+            baudAction = QAction(str(_baud), self)
             baudAction.setCheckable(True)
-            baudAction.setChecked(True if _baud in str(baud) else False)
+            baudAction.setChecked(_baud == baud)
             baudAction.triggered.connect(setBaud(_baud))
             connMenu.addAction(baudAction)
 
@@ -518,7 +529,7 @@ class MainGui(QMainWindow):
         if comPorts:
             arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
 
-            if len(arduinoPorts) != 0 and len(arduinoPorts) >= cnt:
+            if len(arduinoPorts) > cnt:
                 settings['port'] = arduinoPorts[cnt]
             else:
                 self._logger.warning("Can't set comport for Arduino automatically! Set the port manually!")
@@ -550,7 +561,7 @@ class MainGui(QMainWindow):
             for p in comPorts:
                 portAction = QAction(p.device, self)
                 portAction.setCheckable(True)
-                portAction.setChecked(True if p.device in port else False)
+                portAction.setChecked(p.device == port)
                 portAction.triggered.connect(setPort(p.device))
                 connMenu.addAction(portAction)
         else:
@@ -589,32 +600,40 @@ class MainGui(QMainWindow):
             selectGamepadAction.setChecked(self.selectedGamepadIndex == index)
 
     def selectGamepad(self, detectedDevices, index):
-        # stop existing gamepad
-        if self.gamepad is not None:
-            self.gamepad.stop()
-            self.gamepad = None
-            self.selectedGamepadIndex = None
-            for wid in self.remoteWidgetLayout.list:
-                if isinstance(wid, MovableSlider):
-                    wid.updateGamePad(self.gamepad)
+        self.stopGamepad()
         # construct new gamepad
         self.gamepad = getGamepadByIndex(detectedDevices, index)
         # check if construction succeeded
         if self.gamepad is not None:
             self._logger.info('Gamepad connected')
             self.selectedGamepadIndex = index
-            for wid in self.remoteWidgetLayout.list:
-                wid.updateGamePad(self.gamepad)
+            self.gamepadDevices = detectedDevices
         else:
             self._logger.info('Gamepad not connected')
+        self.updateRemoteGamepad()
+
+    def stopGamepad(self):
+        if self.gamepad is not None:
+            self.gamepad.stop()
+            self.gamepad = None
+            self.selectedGamepadIndex = None
+            self.gamepadDevices = None
+            self.updateRemoteGamepad()
+
+    def updateRemoteGamepad(self):
+        """ (re-)connect all remote widgets to the current gamepad """
+        for wid in self.remoteWidgetLayout.list:
+            wid.updateGamePad(self.gamepad)
 
     def setTimerTime(self):
         """
         Sets the timer time in settings with a dialog.
         """
-        timerTime, ok = DataIntDialog.getData(parent=self,title="Timer Time", min=2, max=10000, unit='ms',
+        # plot updates are capped at 25 fps, see startExperiment
+        timerTime, ok = DataIntDialog.getData(parent=self, title="Timer Time", min=40, max=10000, unit='ms',
                                               current=self.config['TimerTime'])
-        if ok:
+        if ok and timerTime:
+            timerTime = int(timerTime)
             self.config['TimerTime'] = timerTime
             self._logger.info("Set timer time to {}".format(timerTime))
 
@@ -703,7 +722,7 @@ class MainGui(QMainWindow):
         for i in range(toplevelItem.childCount()):
             topLevelItemList.append(toplevelItem.child(i).text(1))
 
-        for idx, dataPoint in enumerate(self.dataPointListWidget.selectedItems()):
+        for dataPoint in self.dataPointListWidget.selectedItems():
             if dataPoint.text() not in topLevelItemList:
                 child = QTreeWidgetItem()
                 child.setText(1, dataPoint.text())
@@ -735,9 +754,8 @@ class MainGui(QMainWindow):
         self._logger.info(f"Measurements selected for export are: {exp_lbls}")
         dataPoints = {lbl: dataPointBuffers[lbl] for lbl in exp_lbls}
 
-        self.data_mutex.lock()
-        expData = deepcopy(dataPoints)
-        self.data_mutex.unlock()
+        # snapshots share the memory, but are not affected by data that is still being added
+        expData = {lbl: buf.snapshot() for lbl, buf in dataPoints.items()}
         self.exporter = Exporter(dataPoints=expData)
         self.exporter.done.connect(self.exportDone)
         self.exporter.runExport()
@@ -812,10 +830,9 @@ class MainGui(QMainWindow):
         if title in openDocks:
             # dataPointBuffers = self.getCurrentDataPoints()
             # self.updatePlot(item, dataPointBuffers)
-            try:
-                self.area.docks[title].raiseDock()
-            except:
-                pass
+            dock = self.area.docks.get(title)
+            if dock is not None:
+                dock.raiseDock()
         else:
             self.plotDataVector(item)
 
@@ -888,21 +905,25 @@ class MainGui(QMainWindow):
 
     @pyqtSlot()
     def updateShowCoordsSetting(self):
-        self._settings.setValue("view/show_coordinates", str(self.actShowCoords.isChecked()))
+        self._settings.setValue("view/show_coordinates", self.actShowCoords.isChecked())
 
     @pyqtSlot()
     def startExperiment(self):
         """
         Starts the experiment, the timer, and the connections. Disables the start button.
         """
+        if self._currentExpListItem is None:
+            self._logger.error("No experiment selected!")
+            return
+
+        dataPointNames = self.exp.getDataPoints()
+        if not dataPointNames:
+            self._logger.error("The selected experiment does not provide any data points!")
+            return
+
         self._currentExperimentIndex = self.experimentList.row(self._currentExpListItem)
         self._currentExperimentName = self._experiments[self._currentExperimentIndex]["Name"]
-
-        if self._currentExperimentIndex is None:
-            expName = ""
-        else:
-            expName = str(self.experimentList.item(self._currentExperimentIndex).text())
-
+        expName = self._currentExperimentName
         self._logger.info("Experiment: {}".format(expName))
 
         if self.visualizer is not None:
@@ -913,18 +934,11 @@ class MainGui(QMainWindow):
         self.actStopExperiment.setDisabled(False)
         self.actSendParameter.setDisabled(False)
         self.actSendChangedParameter.setDisabled(False)
-        if self._currentExperimentIndex is not None:
-            self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.darkGreen))
-            self.experimentList.repaint()
+        self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.darkGreen))
+        self.experimentList.repaint()
 
-        dataPointNames = self.exp.getDataPoints()
-
-        if dataPointNames:
-            self._currentDataPointBuffers = dict()
-            for data in dataPointNames:
-                self._currentDataPointBuffers[data] = DataPointBuffer()
-        else:
-            return
+        self._currentDataPointBuffers = {data: DataPointBuffer() for data in dataPointNames}
+        self._dataWarnings = set()
 
         data = {}
         data.update({'dataPointBuffers': self._currentDataPointBuffers})
@@ -959,14 +973,19 @@ class MainGui(QMainWindow):
         self.actSendParameter.setDisabled(True)
         self.actSendChangedParameter.setDisabled(True)
         for i in range(self.experimentList.count()):
-            self.experimentList.item(i).setBackground(QBrush(Qt.white))
+            # reset to the default background of the current style
+            self.experimentList.item(i).setData(Qt.BackgroundRole, None)
         self.experimentList.repaint()
 
         self.timer.stop()
         self.heartbeatTimer.stop()
         self.exp.stopExperiment()
 
-        # time.sleep(1)
+        # show the complete data, then detach the buffers of the finished run, so
+        # frames arriving late do not modify the stored measurement
+        if self._currentDataPointBuffers is not None:
+            self.updateDataPlots()
+            self._currentDataPointBuffers = None
 
         self.guiTimer.stop()
 
@@ -1002,9 +1021,8 @@ class MainGui(QMainWindow):
         """
         success = True
         if fileName is None:
-            if os.path.isfile('default.sreg'):
-                fileName = 'default.sreg'
-            else:
+            fileName = findDefaultConfig()
+            if fileName is None:
                 self._logger.error('No default.sreg found!')
                 success = False
         else:
@@ -1015,9 +1033,26 @@ class MainGui(QMainWindow):
         if success:
             self._logger.info("Load config file: {0}".format(fileName))
 
-            with open(fileName.encode(), "r") as f:
-                self._experiments = yaml.load(f, Loader=Loader)
+            try:
+                with open(fileName, "r") as f:
+                    experiments = yaml.load(f, Loader=SafeLoader)
+            except yaml.YAMLError as e:
+                self._logger.error("Cannot parse config file {}: {}".format(fileName, e))
+                return False
 
+            if not isinstance(experiments, list) or not experiments:
+                self._logger.error("Config file {} contains no experiments!".format(fileName))
+                return False
+
+            experiments = validateExperiments(experiments,
+                                              getRegisteredExperimentModules(),
+                                              getRegisteredVisualizers(),
+                                              logger=self._logger)
+            if not experiments:
+                self._logger.error("Config file {} contains no usable experiments!".format(fileName))
+                return False
+
+            self._experiments = experiments
             self._logger.info("Loading {} experiments".format(len(self._experiments)))
 
         return success
@@ -1056,15 +1091,16 @@ class MainGui(QMainWindow):
     def configureRemote(self, idx):
         self.remoteWidgetLayout.clearAll()
 
-        if 'Remote' not in self._experiments[idx]:
+        remote = self._experiments[idx].get('Remote')
+        if remote is None:
             return
-        if self._experiments[idx] is None:
+        if not isinstance(remote, dict):
             self._logger.warning("Remote not correct configured in file!")
             return
-        for name in self._experiments[idx]['Remote']:
-            config = self._experiments[idx]['Remote'][name]
+        for name, config in remote.items():
             config['name'] = name
             self.remoteAddWidget(config)
+        self.updateRemoteGamepad()
 
     def configureVisualizer(self, idx):
         availableVis = getRegisteredVisualizers()
@@ -1144,27 +1180,6 @@ class MainGui(QMainWindow):
                     self.actStartExperiment.setDisabled(False)
             self.selectedExp = True
 
-        # use gamepad
-        # stop existing gamepad
-        if self.gamepad is not None:
-            self.gamepad.stop()
-            self.gamepad = None
-            for wid in self.remoteWidgetLayout.list:
-                if isinstance(wid, MovableSlider):
-                    wid.updateGamePad(self.gamepad)
-        # construct new gamepad
-        if self.selectedGamepadIndex is not None:
-            self.gamepad = getGamepadByIndex(self.selectedGamepadIndex)
-            # check if construction succeeded
-            if self.gamepad is not None:
-                self._logger.info('Gamepad connected')
-                for wid in self.remoteWidgetLayout.list:
-                    wid.updateGamePad(self.gamepad)
-            else:
-                self._logger.info('Gamepad not connected')
-
-
-
     def _applyExperimentByIdx(self, index=0):
         """
         Applies the given experiment.
@@ -1197,8 +1212,9 @@ class MainGui(QMainWindow):
         self._logger.info("Close Event received, shutting down.")
         if self.isConnected:
             self.disconnect()
-        if self.exporter != None:
-            self._logger.warn("Export in progress, waiting!")
+        self.stopGamepad()
+        if self.exporter is not None:
+            self._logger.warning("Export in progress, waiting!")
             self.exporter.wait()
         logging.getLogger().removeHandler(self.textLogger)
         super().closeEvent(QCloseEvent)
@@ -1208,24 +1224,30 @@ class MainGui(QMainWindow):
         """
         Connects all connections and sets the button states.
         """
+        if not self.connections:
+            self._logger.error("No connections registered!")
+            return
+
         for name, conn in self.connections.items():
             connInstance = conn['cls']()
-            if connInstance.connect():
-                self._logger.info(f"Connection for {name} established!")
-                self.actConnect.setEnabled(False)
-                self.actDisconnect.setEnabled(True)
-                if self._currentExpListItem is not None and self.selectedExp:
-                    self.actStartExperiment.setEnabled(True)
-                self.actStopExperiment.setEnabled(False)
-                self.statusbarLabel.setText("Connected!")
-                connInstance.received.connect(lambda frame: self.updateData(frame, name))
-                connInstance.finished.connect(self.disconnect)
-                self.connections[name]['inst'] = connInstance
-                self.isConnected = True
-            else:
+            if not connInstance.open():
                 self._logger.warning(f"No connection for {name} established! Check your settings!")
-                self.isConnected = False
+                # do not leave the other connections half open
+                self.disconnect()
                 return
+            self._logger.info(f"Connection for {name} established!")
+            # bind name as default argument, otherwise all lambdas would see the last name
+            connInstance.receivedFrames.connect(lambda frames, name=name: self.updateData(frames, name))
+            connInstance.finished.connect(self.disconnect)
+            conn['inst'] = connInstance
+
+        self.actConnect.setEnabled(False)
+        self.actDisconnect.setEnabled(True)
+        if self._currentExpListItem is not None and self.selectedExp:
+            self.actStartExperiment.setEnabled(True)
+        self.actStopExperiment.setEnabled(False)
+        self.statusbarLabel.setText("Connected!")
+        self.isConnected = True
 
     def writeToConnection(self, data):
         """
@@ -1233,10 +1255,17 @@ class MainGui(QMainWindow):
         :param data: to send data
         """
         if data['id'] == 1:
-            for conn in self.connections.values():
-                conn['inst'].writeData(data)
+            targets = list(self.connections.values())
         else:
-            self.connections[data['connection']]['inst'].writeData(data)
+            conn = self.connections.get(data['connection'])
+            if conn is None:
+                self._logger.error(f"Unknown connection '{data['connection']}'!")
+                return
+            targets = [conn]
+
+        for conn in targets:
+            if 'inst' in conn:
+                conn['inst'].writeData(data)
 
     @pyqtSlot()
     def disconnect(self):
@@ -1247,9 +1276,9 @@ class MainGui(QMainWindow):
             self.stopExperiment()
 
         for conn in self.connections.values():
-            if conn.get('inst', None) and conn['inst'].connected:
-                conn['inst'].disconnect()
-                del conn['inst']
+            inst = conn.pop('inst', None)
+            if inst is not None:
+                inst.close()
         self.actConnect.setEnabled(True)
         self.actDisconnect.setEnabled(False)
         self.actStartExperiment.setEnabled(False)
@@ -1271,29 +1300,57 @@ class MainGui(QMainWindow):
 
         return list
 
-    def updateData(self, frame, connection):
-        data = self.exp.handleFrame(frame, connection)
-        if data is None:
-            return
-        time = data['Time'] / 1000.0
-        dataPoints = data['DataPoints']
-        names = data['DataPoints'].keys()
+    def updateData(self, frames, connection):
+        """
+        Stores the data points of the received frames in the buffers of the current measurement.
+        :param frames: list of frames received by the connection
+        :param connection: name of the connection
+        """
+        lastTime = None
+        for frame in frames:
+            data = self.exp.handleFrame(frame, connection)
+            if data is None or self._currentDataPointBuffers is None:
+                continue
+            try:
+                time = data['Time'] / 1000.0
+                dataPoints = data['DataPoints']
+            except (KeyError, TypeError):
+                self._warnOnce(('format', connection),
+                               "handleFrame() must return a dict with the keys 'Time' and 'DataPoints'")
+                continue
 
-        self.data_mutex.lock()
-        for key in names:
-            self._currentDataPointBuffers[key].addValue(time, dataPoints[key])
-        self.data_mutex.unlock()
+            for key, value in dataPoints.items():
+                buf = self._currentDataPointBuffers.get(key)
+                if buf is None:
+                    self._warnOnce(('key', key), f"Received unknown data point '{key}'")
+                    continue
+                try:
+                    buf.addValue(time, value)
+                except (TypeError, ValueError):
+                    self._warnOnce(('value', key), f"Data point '{key}' must be a number, got {value!r}")
+            lastTime = time
 
-        time_text = "Exp time={}".format(timeString(time))
-        self.expTimeLabel.setText(time_text)
+        if lastTime is not None:
+            self.expTimeLabel.setText("Exp time={}".format(timeString(lastTime)))
+
+    def _warnOnce(self, key, msg):
+        """ log a warning only once per experiment run, the data path is called at the frame rate """
+        if key not in self._dataWarnings:
+            self._dataWarnings.add(key)
+            self._logger.warning(msg)
 
     def updateDataPlots(self):
         if self.visualizer:
-            self.visualizer.update(self._currentDataPointBuffers)
-            if self.vtkWidget is not None:
-                self.vtkWidget.GetRenderWindow().GetInteractor().Render()
+            try:
+                self.visualizer.update(self._currentDataPointBuffers)
+                if self.vtkWidget is not None:
+                    self.vtkWidget.GetRenderWindow().GetInteractor().Render()
+            except Exception:
+                # disable the visualizer, otherwise the error would repeat with every timer tick
+                self._logger.exception(f"Visualizer '{type(self.visualizer).__name__}' failed and has been disabled")
+                self.visualizer = None
 
-        for lbl, chart in self.plotCharts.items():
+        for chart in self.plotCharts.values():
             chart.updateCurves(self._currentDataPointBuffers)
 
     def heartbeat(self):
@@ -1318,14 +1375,14 @@ class MainGui(QMainWindow):
             return
 
         items = self.lastMeasList.findItems('~current~', Qt.MatchContains)
+        if not items:
+            return
         if len(items) != 1:
             self._logger.warning('Error, more than one ~current~ measurement available. Using first one!')
 
+        # the measurement already references the buffers of the run, no need to copy them
         item = items[0]
         item.setText(item.text().replace(' ~current~', ''))
-
-        idx = self.lastMeasList.row(item)
-        self.measurements[idx].update({'dataPointBuffers': deepcopy(self._currentDataPointBuffers)})
 
     def copyLastMeas(self, item):
         self._currentLastMeasItem = item
@@ -1411,7 +1468,8 @@ class MainGui(QMainWindow):
 
     def remoteRemoveWidget(self, widget):
         idx = self.experimentList.row(self._currentExpListItem)
-        del self._experiments[idx]['Remote'][widget.widgetName]
+        self._experiments[idx].get('Remote', {}).pop(widget.widgetName, None)
+        widget.updateGamePad(None)
         self.remoteWidgetLayout.removeWidget(widget)
 
     def remoteConfigWidget(self, widget, editWidget=True):
@@ -1421,9 +1479,9 @@ class MainGui(QMainWindow):
         config, ok = RemoteWidgetEdit.getData(exp, editWidget, **(widget.getData()))
         if not ok:
             return
-        if not 'Remote' in self._experiments[idx]:
+        if not self._experiments[idx].get('Remote'):
             self._experiments[idx]['Remote'] = {}
-        del self._experiments[idx]['Remote'][widget.widgetName]
+        self._experiments[idx]['Remote'].pop(widget.widgetName, None)
 
         widget.widgetName = config['name']
         widget.widgetType = config['widgetType']
@@ -1451,7 +1509,6 @@ class MainGui(QMainWindow):
         Adds a new widget to the remoteDock
         :param config: RemoteWidgetEdit object containing widget parameters and information
         """
-        changed = False
         idx = self.experimentList.row(self._currentExpListItem)
         exp = self.exp.getExperiment()
         del exp['Name']
@@ -1459,12 +1516,8 @@ class MainGui(QMainWindow):
             config, ok = RemoteWidgetEdit.getData(exp=exp, **kwargs)
             if not ok:
                 return
-            changed = True
-            if not 'Remote' in self._experiments[idx]:
+            if not self._experiments[idx].get('Remote'):
                 self._experiments[idx]['Remote'] = {}
-            self._experiments[idx]['Remote'][config['name']] = {}
-
-        if changed:
             self._experiments[idx]['Remote'][config['name']] = config
         sliderLabel = None
         if config['widgetType'] == "PushButton":
@@ -1498,6 +1551,11 @@ class MainGui(QMainWindow):
                 config['shortcut-Gp'] = None
             if 'invertSlider' not in config:
                 config['invertSlider'] = False
+            startValue = exp.get(config['Module'], {}).get(config['Parameter'])
+            if startValue is None:
+                self._logger.error("Cannot create slider '{}': parameter '{}' of module '{}' not found!".format(
+                    config['name'], config['Parameter'], config['Module']))
+                return
             sliderLabel = QLabel()
             sliderLabel.setFixedHeight(15)
             labelFont = sliderLabel.font()
@@ -1507,7 +1565,7 @@ class MainGui(QMainWindow):
             widget = MovableSlider(config['name'], config['minSlider'], config['maxSlider'], config['invertSlider'], config['stepSlider'],
                                    sliderLabel,
                                    config['shortcutPlus'], config['shortcutMinus'], config['shortcut-Gp'],
-                                   exp[config['Module']][config['Parameter']], module=config['Module'],
+                                   startValue, module=config['Module'],
                                    parameter=config['Parameter'])
             widget.setFixedHeight(30)
             widget.setFixedWidth(200)
@@ -1530,7 +1588,7 @@ class MainGui(QMainWindow):
         :param widget: the widget the user interacted with
         """
         value = widget.valueOn
-        self.remoteSendParamter(widget.module, widget.parameter, value)
+        self.remoteSendParameter(widget.module, widget.parameter, value)
         self.remoteSliderUpdate(widget, value, sliderMoved=False)
 
         if widget.valueReset != '':
@@ -1549,7 +1607,7 @@ class MainGui(QMainWindow):
             value = widget.valueOff
             widget.setText(widget.widgetName + '\n' + widget.valueOn)
 
-        self.remoteSendParamter(widget.module, widget.parameter, value)
+        self.remoteSendParameter(widget.module, widget.parameter, value)
         self.remoteSliderUpdate(widget, value, sliderMoved=False)
 
     def remoteSliderSendParameter(self, widget, value):
@@ -1559,7 +1617,7 @@ class MainGui(QMainWindow):
         :param value: the actual value of the widget
         """
         self.remoteSliderUpdate(widget, value)
-        self.remoteSendParamter(widget.module, widget.parameter, widget.value)
+        self.remoteSendParameter(widget.module, widget.parameter, widget.value)
 
     def remoteSliderUpdate(self, widget, value, sliderMoved=True):
         """
@@ -1572,11 +1630,11 @@ class MainGui(QMainWindow):
             for wid in self.remoteWidgetLayout.list:
                 if isinstance(wid, MovableSlider):
                     if wid.module == widget.module and wid.parameter == widget.parameter:
-                        wid.valueChanged.disconnect()
+                        wid.blockSignals(True)
                         wid.setValue(float(value))
+                        wid.blockSignals(False)
                         wid.valueOn = value
                         wid.label.setText(wid.widgetName + ": {:.3f}".format(wid.value))
-                        wid.valueChanged.connect(lambda value, _wid=wid: self.remoteSliderSendParameter(_wid, value))
         else:
             widget.valueOn = value
 
@@ -1585,7 +1643,7 @@ class MainGui(QMainWindow):
 
             widget.label.setText(widget.widgetName + ": {:.3f}".format(value))
 
-    def remoteSendParamter(self, module, parameter, value):
+    def remoteSendParameter(self, module, parameter, value):
         self.remoteSetParameter(module, parameter, value)
         if self.actSendParameter.isEnabled():
             self.sendChangedParameter()
@@ -1597,7 +1655,7 @@ class MainGui(QMainWindow):
         for key, val in exp.items():
             if key != module:
                 continue
-            for k, v in val.items():
+            for k in val:
                 if k != parameter:
                     continue
                 exp[key][k] = value
@@ -1606,6 +1664,9 @@ class MainGui(QMainWindow):
                 return
 
     def copyRemoteSource(self):
+        if self._currentExperimentIndex is None:
+            self._logger.error("No experiment selected!")
+            return
         text = "  Remote:\n"
         if 'Remote' in self._experiments[self._currentExperimentIndex]:
             text += yaml.dump(self._experiments[self._currentExperimentIndex]['Remote'], default_flow_style=False)
@@ -1626,6 +1687,35 @@ class MainGui(QMainWindow):
             self.remoteAddWidget()
         elif action == saveAction:
             self.copyRemoteSource()
+
+def logUncaughtException(excType, excValue, excTraceback):
+    """
+    Exception hook that logs uncaught exceptions. Since PyQt 5.5 an unhandled exception
+    in a slot aborts the application if the default hook is installed.
+    """
+    if issubclass(excType, KeyboardInterrupt):
+        sys.__excepthook__(excType, excValue, excTraceback)
+        return
+    logging.getLogger("pywisp").critical("Unhandled exception",
+                                         exc_info=(excType, excValue, excTraceback))
+
+
+def findDefaultConfig(name='default.sreg'):
+    """
+    Looks for the default config file in the current working directory and
+    in the directory of the main script.
+    :return: path of the config file or `None`
+    """
+    dirs = [os.getcwd()]
+    mainFile = getattr(sys.modules.get('__main__'), '__file__', None)
+    if mainFile:
+        dirs.append(os.path.dirname(os.path.abspath(mainFile)))
+    for d in dirs:
+        path = os.path.join(d, name)
+        if os.path.isfile(path):
+            return path
+    return None
+
 
 def timeString(seconds):
     return "{:02d}:{:02d}:{:02d}".format(
