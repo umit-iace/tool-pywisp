@@ -2,9 +2,9 @@
 """
 Dialogs for settings and the configuration of remote widgets.
 """
-from PyQt5.QtCore import Qt, QRegExp
-from PyQt5.QtGui import QIcon, QIntValidator, QKeySequence, QRegExpValidator
-from PyQt5.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, \
+from PyQt6.QtCore import Qt, QRegularExpression
+from PyQt6.QtGui import QIcon, QIntValidator, QKeySequence, QRegularExpressionValidator
+from PyQt6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, \
     QVBoxLayout, QWidget
 
 from ..utils import getResource
@@ -57,8 +57,8 @@ class DataIntDialog(QDialog):
 
         # OK and Cancel buttons
         buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
-            Qt.Horizontal, self)
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            Qt.Orientation.Horizontal, self)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         mainLayout.addWidget(buttons)
@@ -73,10 +73,10 @@ class DataIntDialog(QDialog):
     @staticmethod
     def getData(**kwargs):
         dialog = DataIntDialog(**kwargs)
-        result = dialog.exec_()
+        result = dialog.exec()
         data = dialog._getData()
 
-        return data, result == QDialog.Accepted
+        return data, result == QDialog.DialogCode.Accepted
 
 class DataTcpIpDialog(QDialog):
     """
@@ -92,8 +92,8 @@ class DataTcpIpDialog(QDialog):
 
         ipRange = "(?:[0-1]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])"  # Part of the regular expression
         # regular expression
-        ipRegex = QRegExp("^" + ipRange + "\\." + ipRange + "\\." + ipRange + "\\." + ipRange + "$")
-        ipValidator = QRegExpValidator(ipRegex, self)
+        ipRegex = QRegularExpression("^" + ipRange + "\\." + ipRange + "\\." + ipRange + "\\." + ipRange + "$")
+        ipValidator = QRegularExpressionValidator(ipRegex, self)
 
         mainLayout = QVBoxLayout(self)
 
@@ -113,8 +113,8 @@ class DataTcpIpDialog(QDialog):
 
         # OK and Cancel buttons
         buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
-            Qt.Horizontal, self)
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            Qt.Orientation.Horizontal, self)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         mainLayout.addWidget(buttons)
@@ -129,10 +129,10 @@ class DataTcpIpDialog(QDialog):
     @staticmethod
     def getData(**kwargs):
         dialog = DataTcpIpDialog(**kwargs)
-        result = dialog.exec_()
+        result = dialog.exec()
         ipData, portData = dialog._getData()
 
-        return ipData, portData, result == QDialog.Accepted
+        return ipData, portData, result == QDialog.DialogCode.Accepted
 
 
 class RemoteWidgetEdit(QDialog):
@@ -220,8 +220,8 @@ class RemoteWidgetEdit(QDialog):
 
         # OK and Cancel buttons
         buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
-            Qt.Horizontal, self)
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            Qt.Orientation.Horizontal, self)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         mainLayout.addWidget(buttons)
@@ -237,7 +237,7 @@ class RemoteWidgetEdit(QDialog):
             self.settingsWidgetLayout.itemAt(i).widget().deleteLater()
 
         height = QLineEdit().sizeHint().height()
-        doubleValidator = QRegExpValidator(QRegExp("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?"), self)
+        doubleValidator = QRegularExpressionValidator(QRegularExpression("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?"), self)
 
         if self.typeList.currentText() == "PushButton":
             self.valueText = QLineEdit(self.valueOn)
@@ -329,7 +329,7 @@ class RemoteWidgetEdit(QDialog):
     @staticmethod
     def getData(exp=None, editWidget=False, **kwargs):
         dialog = RemoteWidgetEdit(exp=exp, editWidget=editWidget, **kwargs)
-        result = dialog.exec_()
+        result = dialog.exec()
         msg = dialog._getData()
 
         if msg['widgetType'] == "Slider":
@@ -338,7 +338,7 @@ class RemoteWidgetEdit(QDialog):
             else:
                 msg['startValue'] = 0
 
-        return msg, result == QDialog.Accepted
+        return msg, result == QDialog.DialogCode.Accepted
 
 
 class ShortcutCreator(QLineEdit):
@@ -347,14 +347,14 @@ class ShortcutCreator(QLineEdit):
         self.keySequence = None
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Control or \
-                event.key() == Qt.Key_Alt or \
-                event.key() == Qt.Key_AltGr or \
-                event.key() == Qt.Key_Escape or \
-                event.key() == Qt.Key_Shift or \
-                event.key() == Qt.Key_CapsLock or \
-                event.key() == Qt.Key_Space or \
-                event.key() == Qt.Key_Tab:
+        if event.key() == Qt.Key.Key_Control or \
+                event.key() == Qt.Key.Key_Alt or \
+                event.key() == Qt.Key.Key_AltGr or \
+                event.key() == Qt.Key.Key_Escape or \
+                event.key() == Qt.Key.Key_Shift or \
+                event.key() == Qt.Key.Key_CapsLock or \
+                event.key() == Qt.Key.Key_Space or \
+                event.key() == Qt.Key.Key_Tab:
             self.setText('')
         else:
             self.keySequence = QKeySequence(event.key()).toString()

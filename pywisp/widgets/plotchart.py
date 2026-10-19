@@ -1,8 +1,9 @@
 import logging
 import math
 import numpy as np
-from PyQt5.QtCore import QTimer, pyqtSignal
-from PyQt5.QtWidgets import QAction, QMenu
+from PyQt6.QtCore import QTimer, pyqtSignal
+from PyQt6.QtGui import QAction
+from PyQt6.QtWidgets import QMenu
 from pyqtgraph import PlotWidget, TextItem, mkPen
 from ..buffer import DataPointBuffer
 from ..export import Exporter

@@ -97,7 +97,7 @@ After installation is done, you can switch in the `WSL` enviroment with::
 and install the following packages::
 
     $ pacman -Syu
-    $ pacman -S python3 uv eigen cmake arm-none-eabi-gcc git make gcc libgl qt5-base
+    $ pacman -S python3 uv eigen cmake arm-none-eabi-gcc git make gcc libgl qt6-base
 
 Switch to correct folder and install enviroment::
 

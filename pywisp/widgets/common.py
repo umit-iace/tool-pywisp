@@ -4,9 +4,9 @@ Small widgets and helpers used by the main window.
 """
 import logging
 
-from PyQt5.QtCore import Qt, QRect, pyqtSignal
-from PyQt5.QtGui import QColor, QFont, QIntValidator, QPainter, QPen, QTextCursor
-from PyQt5.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QStyle, QStyledItemDelegate, QWidget, QWidgetAction
+from PyQt6.QtCore import Qt, QRect, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QIntValidator, QPainter, QPen, QTextCursor
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QStyle, QStyledItemDelegate, QWidget, QWidgetAction
 from pyqtgraph.dockarea import Dock
 
 __all__ = ["PlainTextLogger", "PinnedDock", "ContextLineEditAction", "TreeWidgetStyledItemDelegate"]
@@ -39,7 +39,7 @@ class PlainTextLogger(logging.Handler):
             try:
                 self.cb.setTextColor(clr)
                 self.cb.append(msg)
-                self.cb.moveCursor(QTextCursor.End)
+                self.cb.moveCursor(QTextCursor.MoveOperation.End)
             except RuntimeError:
                 # the target widget has already been deleted on the C++ side
                 self.cb = None
@@ -98,7 +98,7 @@ class TreeWidgetStyledItemDelegate(QStyledItemDelegate):
         For overriding behavior of selection and hovering in QTreeView and QTreeWidget
 
         When you set background color (QtGui.QColor()) to QTreeWidgetItem you also must set this color like:
-            item.setData(0, QtCore.Qt.BackgroundRole, QtGui.QColor())
+            item.setData(0, QtCore.Qt.ItemDataRole.BackgroundRole, QtGui.QColor())
     """
 
     def paint(self, painter, option, index):
@@ -115,26 +115,26 @@ class TreeWidgetStyledItemDelegate(QStyledItemDelegate):
             if icon:
                 icon = icon.pixmap(h, h)
                 painter.drawPixmap(QRect(x, y, h, h), icon)
-                painter.drawText(option.rect.adjusted(h, 0, 0, 0), Qt.AlignLeft, text)
+                painter.drawText(option.rect.adjusted(h, 0, 0, 0), Qt.AlignmentFlag.AlignLeft, text)
             else:
-                painter.drawText(option.rect, Qt.AlignLeft, text)
+                painter.drawText(option.rect, Qt.AlignmentFlag.AlignLeft, text)
 
-            painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
-            painter.setPen(QPen(Qt.NoPen))
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceAtop)
+            painter.setPen(QPen(Qt.PenStyle.NoPen))
             painter.fillRect(option.rect, brush)
-            painter.setBackgroundMode(Qt.OpaqueMode)
+            painter.setBackgroundMode(Qt.BGMode.OpaqueMode)
             painter.setBackground(brush)
             painter.drawRect(option.rect)
             painter.restore()
 
         # Also should be activated in StyleSheet
         #                             Selected
-        if (option.state & QStyle.State_Selected):
-            option.font.setWeight(QFont.Bold)
+        if (option.state & QStyle.StateFlag.State_Selected):
+            option.font.setWeight(QFont.Weight.Bold)
 
-            brush = index.data(Qt.BackgroundRole)
-            text = index.data(Qt.DisplayRole)
-            icon = index.data(Qt.DecorationRole)
+            brush = index.data(Qt.ItemDataRole.BackgroundRole)
+            text = index.data(Qt.ItemDataRole.DisplayRole)
+            icon = index.data(Qt.ItemDataRole.DecorationRole)
 
             drawSelected(option=option, painter=painter, brush=brush, text=text, icon=icon)
         else:

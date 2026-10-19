@@ -9,9 +9,9 @@ import textwrap
 
 import pytest
 import yaml
-from PyQt5.QtCore import QEvent, QPoint, Qt
-from PyQt5.QtGui import QMouseEvent
-from PyQt5.QtWidgets import QApplication, QFileDialog, QMenu
+from PyQt6.QtCore import QEvent, QPoint, QPointF, Qt
+from PyQt6.QtGui import QMouseEvent
+from PyQt6.QtWidgets import QApplication, QFileDialog, QMenu
 
 import pywisp as pw
 from pywisp.widgets.remote import MovablePushButton, MovableSlider, MovableSwitch, MovableWidget
@@ -254,12 +254,13 @@ def rightDrag(widget, delta):
     start = QPoint(5, 5)
 
     def send(kind, pos, buttons):
-        event = QMouseEvent(kind, pos, widget.mapToGlobal(pos), Qt.RightButton, buttons, Qt.NoModifier)
+        event = QMouseEvent(kind, QPointF(pos), QPointF(widget.mapToGlobal(pos)), Qt.MouseButton.RightButton,
+                            buttons, Qt.KeyboardModifier.NoModifier)
         QApplication.sendEvent(widget, event)
 
-    send(QEvent.MouseButtonPress, start, Qt.RightButton)
-    send(QEvent.MouseMove, start + delta, Qt.RightButton)
-    send(QEvent.MouseButtonRelease, start + delta, Qt.NoButton)
+    send(QEvent.Type.MouseButtonPress, start, Qt.MouseButton.RightButton)
+    send(QEvent.Type.MouseMove, start + delta, Qt.MouseButton.RightButton)
+    send(QEvent.Type.MouseButtonRelease, start + delta, Qt.MouseButton.NoButton)
 
 
 def savedExperiments(path):
@@ -391,7 +392,7 @@ def test_heartbeat_goes_to_all_connections(gui):
 def test_measurement_list(gui):
     startExperiment(gui)
     item = gui.lastMeasList.item(0)
-    measurement = item.data(Qt.UserRole)
+    measurement = item.data(Qt.ItemDataRole.UserRole)
     assert measurement is gui.measurements[0] and measurement.running
     assert item.text() == "1: First ~current~"
     assert gui._currentDataPointBuffers is measurement.dataPointBuffers

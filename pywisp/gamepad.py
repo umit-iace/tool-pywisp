@@ -14,7 +14,7 @@ import warnings
 from collections import namedtuple
 
 import yaml
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal
 
 __all__ = ["Gamepad", "GamepadInfo", "getAllGamepads", "openGamepad", "DEFAULT_MAPPING"]
 

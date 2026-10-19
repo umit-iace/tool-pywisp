@@ -11,7 +11,6 @@ def runClean(code):
     """ run code in a fresh interpreter, pytest itself configures logging """
     env = dict(os.environ)
     env.pop('PYQTGRAPH_QT_LIB', None)
-    env.pop('QT_AUTO_SCREEN_SCALE_FACTOR', None)
     env['QT_QPA_PLATFORM'] = 'offscreen'
     with tempfile.TemporaryDirectory() as tmp:
         # keep the settings of the gui away from the user's config
@@ -29,13 +28,13 @@ def test_import_has_no_side_effects():
         "import pyqtgraph.Qt\n"
         "print(len(logging.getLogger().handlers), 'matplotlib.pyplot' in sys.modules,\n"
         "      os.environ.get('PYQTGRAPH_QT_LIB'), pyqtgraph.Qt.QT_LIB)\n")
-    assert out == "0 False None PyQt5"
+    assert out == "0 False None PyQt6"
 
 
 def test_gui_configures_logging():
     out = runClean(
         "import logging\n"
-        "from PyQt5.QtWidgets import QApplication\n"
+        "from PyQt6.QtWidgets import QApplication\n"
         "import pywisp\n"
         "app = QApplication([])\n"
         "gui = pywisp.MainGui()\n"
@@ -48,7 +47,7 @@ def test_gui_keeps_application_logging():
     out = runClean(
         "import logging\n"
         "logging.basicConfig(level=logging.DEBUG, filename='/dev/null')\n"
-        "from PyQt5.QtWidgets import QApplication\n"
+        "from PyQt6.QtWidgets import QApplication\n"
         "import pywisp\n"
         "app = QApplication([])\n"
         "gui = pywisp.MainGui()\n"

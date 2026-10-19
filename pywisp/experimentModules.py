@@ -3,7 +3,7 @@ import logging
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict
 
-from PyQt5.QtCore import QObject
+from PyQt6.QtCore import QObject
 
 from .min import Frame
 

@@ -19,6 +19,14 @@ must include the following files:
 - ``main.py``: Main file to register all needed :mod:`pywisp.experimentModules`, :mod:`pywisp.connection`,
   :mod:`pywisp.visualization` and starts the GUI.
 
+PyWisp is based on PyQt6. Projects written for former versions using PyQt5 have to be adapted, since both cannot be
+used in the same program:
+
+- Import Qt classes from ``PyQt6`` instead of ``PyQt5``, e.g. ``from PyQt6.QtWidgets import QApplication``.
+- Call ``app.exec()`` instead of ``app.exec_()``.
+- Enums have to be fully qualified, e.g. ``Qt.AlignmentFlag.AlignLeft`` instead of ``Qt.AlignLeft``.
+- Visualizers using matplotlib directly import the canvas from ``matplotlib.backends.backend_qtagg``.
+
 Connection
 ----------
 

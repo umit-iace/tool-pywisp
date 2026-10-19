@@ -3,7 +3,7 @@ import struct
 from collections import OrderedDict
 
 import pytest
-from PyQt5.QtWidgets import QTreeView
+from PyQt6.QtWidgets import QTreeView
 
 import pywisp as pw
 from pywisp.experiments import ExperimentInteractor, checkFrame

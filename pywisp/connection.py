@@ -9,7 +9,7 @@ import time
 from abc import ABCMeta, abstractmethod
 
 import serial
-from PyQt5.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from .min import Packer, Unpacker, Frame, Bytewise, HDRStuf
 from .utils import coroutine, pipe

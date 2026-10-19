@@ -169,7 +169,7 @@ class TestRemoteWidgets:
         assert len(clicks) == 1
 
     def test_slider(self, pad, ctrl, qtbot):
-        from PyQt5.QtWidgets import QLabel
+        from PyQt6.QtWidgets import QLabel
         label = QLabel()
         slider = MovableSlider('s', minSlider='0', maxSlider='10', invertSlider=False, stepSlider='1',
                                label=label, shortcutPlusKey='', shortcutMinusKey='', shortcutKeyGp='X',

@@ -4,7 +4,7 @@ import pywisp as pw
 import testbench
 import trajectory
 import visualization
-from PyQt5.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication
 from connection import Connection
 
 if __name__ == '__main__':
@@ -21,4 +21,4 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     form = pw.MainGui()
     form.show()
-    app.exec_()
+    app.exec()

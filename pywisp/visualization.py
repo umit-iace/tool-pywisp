@@ -4,7 +4,7 @@ import time
 from abc import ABCMeta, abstractmethod
 
 from .utils import createDir
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 __all__ = ["Visualizer", "MplVisualizer", "VtkVisualizer"]
@@ -17,7 +17,7 @@ try:
     class QVTKRenderWindowInteractor(QVTKRenderWindowInteractor):
         """
         overload class to patch problem with zooming in vtk window
-        the reason is that the QWheelEvent in PyQt5 hasn't the function delta()
+        the reason is that the QWheelEvent in PyQt6 hasn't the function delta()
         so we have to replace that with angleDelta()
         the error is caused by vtk 7.0.0
         """

@@ -28,9 +28,9 @@ try:
     from yaml import CSafeLoader as SafeLoader
 except ImportError:
     from yaml import SafeLoader
-from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QCoreApplication
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
+from PyQt6.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QCoreApplication
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
 from pyqtgraph.dockarea import *
 
 from .config import dumpExperiments, validateExperiments
@@ -103,10 +103,13 @@ class MainGui(QMainWindow):
         """
 
         # Create and display the splash screen
-        self.splashScreenIcon = QPixmap(getResource("icon.svg"))
-        self.splashScreen = QSplashScreen(self, self.splashScreenIcon, Qt.WindowStaysOnTopHint)
-        self.splashScreen.setEnabled(False)
-        self.splashScreen.show()
+        # without a display Qt waits in vain for the splash screen to become visible
+        self.splashScreen = None
+        if QGuiApplication.platformName() != "offscreen":
+            self.splashScreenIcon = QPixmap(getResource("icon.svg"))
+            self.splashScreen = QSplashScreen(self.splashScreenIcon, Qt.WindowType.WindowStaysOnTopHint)
+            self.splashScreen.setEnabled(False)
+            self.splashScreen.show()
 
         self.connections = {}
         self.isConnected = False
@@ -141,7 +144,7 @@ class MainGui(QMainWindow):
         self.statusBar.addPermanentWidget(self.statusbarLabel, 1)
         self.guiStartTime = 0.0
         self.guiTimer = QTimer()
-        self.guiTimer.setTimerType(Qt.PreciseTimer)
+        self.guiTimer.setTimerType(Qt.TimerType.PreciseTimer)
         self.guiTimer.timeout.connect(
             lambda: self.guiTimeLabel.setText(
                 f"GUI time={timeString(time.time()-self.guiStartTime)}"
@@ -197,9 +200,9 @@ class MainGui(QMainWindow):
 
         # experiment dock
         self.experimentList = QListWidget(self)
-        self.experimentList.setFocusPolicy(Qt.NoFocus)
+        self.experimentList.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.experimentList.setStyleSheet(QStyleSheet)
-        self.experimentList.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.experimentList.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.experimentDock.addWidget(self.experimentList)
         self.experimentList.itemDoubleClicked.connect(self.experimentDoubleClicked)
         self._currentExperimentIndex = None
@@ -225,7 +228,7 @@ class MainGui(QMainWindow):
 
         # lastmeas dock
         self.lastMeasList = QListWidget(self)
-        self.lastMeasList.setFocusPolicy(Qt.NoFocus)
+        self.lastMeasList.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.lastMeasList.setStyleSheet(QStyleSheet)
         self.lastMeasDock.addWidget(self.lastMeasList)
         self.lastMeasList.itemDoubleClicked.connect(self.loadLastMeas)
@@ -236,7 +239,7 @@ class MainGui(QMainWindow):
         # log dock
         self.logBox = QTextEdit(self)
         self.logBox.setReadOnly(True)
-        self.logBox.setLineWrapMode(QTextEdit.NoWrap)
+        self.logBox.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         self.logBox.ensureCursorVisible()
         self.logDock.addWidget(self.logBox)
 
@@ -247,7 +250,7 @@ class MainGui(QMainWindow):
         self.dataPointListWidget = QListWidget()
         self.dataPointListLayout = QVBoxLayout()
         self.dataPointListWidget.setLayout(self.dataPointListLayout)
-        self.dataPointListWidget.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.dataPointListWidget.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.dataLayout.addWidget(self.dataPointListWidget)
 
         self.dataPointManipulationWidget = QWidget()
@@ -262,7 +265,7 @@ class MainGui(QMainWindow):
             "on the right.")
         self.dataPointRightButton.clicked.connect(self.addDataPointToTree)
         self.dataPointLabel = QLabel('DataPoint', self)
-        self.dataPointLabel.setAlignment(Qt.AlignCenter)
+        self.dataPointLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.dataPointManipulationLayout.addWidget(self.dataPointLabel)
         self.dataPointManipulationLayout.addWidget(self.dataPointRightButton)
         self.dataPointLeftButtonWidget = QWidget()
@@ -287,7 +290,7 @@ class MainGui(QMainWindow):
         )
         self.dataPointPlotAddButton.clicked.connect(self.addPlotTreeItem)
         self.plotLabel = QLabel('Plots', self)
-        self.plotLabel.setAlignment(Qt.AlignCenter)
+        self.plotLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.dataPointManipulationLayout.addWidget(self.plotLabel)
         self.dataPointManipulationLayout.addWidget(self.dataPointPlotAddButton)
         self.dataPointPlotRemoveButtonWidget = QWidget()
@@ -325,7 +328,7 @@ class MainGui(QMainWindow):
 
         # remote dock
         self.remoteWidget = QWidget()
-        self.remoteWidget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.remoteWidget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.remoteWidget.customContextMenuRequested.connect(self.remoteWidgetMenu)
         self.remoteWidgetLayout = FreeLayout()
         self.remoteWidget.setLayout(self.remoteWidgetLayout)
@@ -333,12 +336,12 @@ class MainGui(QMainWindow):
 
         # menu bar
         fileMenu = self.menuBar().addMenu("&File")
-        self.actSaveExperiments = fileMenu.addAction("&Save experiments", self.saveExperiments,
-                                                     QKeySequence(QKeySequence.Save))
-        self.actSaveExperimentsAs = fileMenu.addAction("Save experiments &as ...", self.saveExperimentsAs,
-                                                       QKeySequence(QKeySequence.SaveAs))
+        self.actSaveExperiments = fileMenu.addAction("&Save experiments", QKeySequence.StandardKey.Save,
+                                                     lambda: self.saveExperiments())
+        self.actSaveExperimentsAs = fileMenu.addAction("Save experiments &as ...", QKeySequence.StandardKey.SaveAs,
+                                                       self.saveExperimentsAs)
         fileMenu.addSeparator()
-        fileMenu.addAction("&Quit", self.close, QKeySequence(Qt.CTRL + Qt.Key_W))
+        fileMenu.addAction("&Quit", QKeySequence("Ctrl+W"), self.close)
 
         # view
         self.viewMenu = self.menuBar().addMenu('&View')
@@ -429,7 +432,7 @@ class MainGui(QMainWindow):
 
         # toolbar
         self.toolbarExp = QToolBar("Experiment")
-        self.toolbarExp.setContextMenuPolicy(Qt.PreventContextMenu)
+        self.toolbarExp.setContextMenuPolicy(Qt.ContextMenuPolicy.PreventContextMenu)
         self.toolbarExp.setMovable(False)
         self.toolbarExp.setIconSize(iconSize)
         self.addToolBar(self.toolbarExp)
@@ -440,7 +443,7 @@ class MainGui(QMainWindow):
         self.toolbarExp.addAction(self.actStopExperiment)
         self.toolbarExp.addSeparator()
         vSpacer = QWidget()
-        vSpacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        vSpacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.toolbarExp.addWidget(vSpacer)
         self.toolbarExp.addSeparator()
         self.toolbarExp.addWidget(self.visComboBox)
@@ -479,7 +482,8 @@ class MainGui(QMainWindow):
         self.exporter = None
 
         # close splash screen
-        self.splashScreen.finish(self)
+        if self.splashScreen is not None:
+            self.splashScreen.finish(self)
 
     def visualizerChanged(self, idx):
         for i in reversed(range(self.animationLayout.count())):
@@ -672,7 +676,7 @@ class MainGui(QMainWindow):
         else:
             name = text
 
-        similarItems = self.dataPointTreeWidget.findItems(name, Qt.MatchExactly)
+        similarItems = self.dataPointTreeWidget.findItems(name, Qt.MatchFlag.MatchExactly)
         if similarItems:
             self._logger.error(f"Name '{name}' exists.")
             return
@@ -703,8 +707,8 @@ class MainGui(QMainWindow):
             item = item.parent()
 
         text = "The labeled plot '" + item.text(0) + "' will be deleted!"
-        buttonReply = QMessageBox.warning(self, "Plot delete", text, QMessageBox.Ok | QMessageBox.Cancel)
-        if buttonReply == QMessageBox.Ok:
+        buttonReply = QMessageBox.warning(self, "Plot delete", text, QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+        if buttonReply == QMessageBox.StandardButton.Ok:
             openDocks = [dock.title() for dock in self.findAllPlotDocks()]
             if item.text(0) in openDocks:
                 self.area.docks[item.text(0)].close()
@@ -857,13 +861,13 @@ class MainGui(QMainWindow):
         """ the measurement shown in the gui or `None` """
         if self._currentLastMeasItem is None:
             return None
-        return self._currentLastMeasItem.data(Qt.UserRole)
+        return self._currentLastMeasItem.data(Qt.ItemDataRole.UserRole)
 
     def _measurementItem(self, measurement):
         """ the item of the given measurement in the list of measurements """
         for row in range(self.lastMeasList.count()):
             item = self.lastMeasList.item(row)
-            if item.data(Qt.UserRole) is measurement:
+            if item.data(Qt.ItemDataRole.UserRole) is measurement:
                 return item
         return None
 
@@ -954,7 +958,7 @@ class MainGui(QMainWindow):
         self.actStopExperiment.setDisabled(False)
         self.actSendParameter.setDisabled(False)
         self.actSendChangedParameter.setDisabled(False)
-        self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.darkGreen))
+        self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.GlobalColor.darkGreen))
         self.experimentList.repaint()
 
         measurement = Measurement(len(self.measurements) + 1, self.exp.getExperiment(), dataPointNames)
@@ -964,7 +968,7 @@ class MainGui(QMainWindow):
         self._dataWarnings = set()
 
         item = QListWidgetItem(measurement.label())
-        item.setData(Qt.UserRole, measurement)
+        item.setData(Qt.ItemDataRole.UserRole, measurement)
         self.lastMeasList.addItem(item)
         self.lastMeasList.scrollToItem(item)
         self.copyLastMeas(item)
@@ -992,7 +996,7 @@ class MainGui(QMainWindow):
         self.actSendChangedParameter.setDisabled(True)
         for i in range(self.experimentList.count()):
             # reset to the default background of the current style
-            self.experimentList.item(i).setData(Qt.BackgroundRole, None)
+            self.experimentList.item(i).setData(Qt.ItemDataRole.BackgroundRole, None)
         self.experimentList.repaint()
 
         self.timer.stop()
@@ -1414,7 +1418,7 @@ class MainGui(QMainWindow):
 
     def copyLastMeas(self, item):
         self._currentLastMeasItem = item
-        measurement = item.data(Qt.UserRole)
+        measurement = item.data(Qt.ItemDataRole.UserRole)
 
         dataPointNames = self.exp.getDataPoints()
         dataPointBuffers = measurement.dataPointBuffers
@@ -1436,7 +1440,7 @@ class MainGui(QMainWindow):
         self.selectedExp = False
         self.remoteWidgetLayout.clearAll()
 
-        measurement = item.data(Qt.UserRole)
+        measurement = item.data(Qt.ItemDataRole.UserRole)
         if measurement is None:
             self._logger.error(f"loadLastMeas(): No measurement stored for '{item.text()}'")
             return False
@@ -1779,7 +1783,7 @@ class MainGui(QMainWindow):
         menu.addSeparator()
         saveAction = menu.addAction("Save experiments")
         copyAction = menu.addAction("Copy remote source")
-        action = menu.exec_(self.remoteWidget.mapToGlobal(position))
+        action = menu.exec(self.remoteWidget.mapToGlobal(position))
         if action == addAction:
             self.remoteAddWidget()
         elif action == saveAction:

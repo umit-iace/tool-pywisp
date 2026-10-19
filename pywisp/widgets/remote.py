@@ -4,8 +4,9 @@ Movable widgets of the remote dock, that send parameters to the experiment.
 """
 import logging
 
-from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtWidgets import QLabel, QLayout, QMenu, QPushButton, QShortcut, QSlider
+from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtGui import QShortcut
+from PyQt6.QtWidgets import QLabel, QLayout, QMenu, QPushButton, QSlider
 
 __all__ = ["FreeLayout", "MovableWidget", "MovablePushButton", "DoubleSlider", "MovableSlider", "MovableSwitch"]
 
@@ -76,15 +77,15 @@ class MovableWidget:
         self.editAction = self.contextMenu.addAction("Edit")
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.RightButton:
-            self._mousePressPos = event.globalPos()
-            self._mouseMovePos = event.globalPos()
+        if event.button() == Qt.MouseButton.RightButton:
+            self._mousePressPos = event.globalPosition().toPoint()
+            self._mouseMovePos = event.globalPosition().toPoint()
 
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if event.buttons() == Qt.RightButton and self._mouseMovePos is not None:
-            globalPos = event.globalPos()
+        if event.buttons() == Qt.MouseButton.RightButton and self._mouseMovePos is not None:
+            globalPos = event.globalPosition().toPoint()
             newPos = self.pos() + (globalPos - self._mouseMovePos)
             if self.parent().rect().contains(newPos):
                 self.placeAt(newPos.x(), newPos.y())
@@ -93,9 +94,9 @@ class MovableWidget:
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.RightButton:
+        if event.button() == Qt.MouseButton.RightButton:
             if self._mousePressPos is not None:
-                moved = event.globalPos() - self._mousePressPos
+                moved = event.globalPosition().toPoint() - self._mousePressPos
                 self._mousePressPos = None
                 self._mouseMovePos = None
                 if moved.manhattanLength() > 0:
@@ -104,7 +105,7 @@ class MovableWidget:
                         self.onMoved(self)
                     return
                 super().mouseReleaseEvent(event)
-                self.contextMenu.exec_(self.mapToGlobal(event.pos()))
+                self.contextMenu.exec(self.mapToGlobal(event.position().toPoint()))
         else:
             super().mouseReleaseEvent(event)
 
@@ -249,7 +250,7 @@ class MovableSlider(MovableWidget, DoubleSlider):
     def __init__(self, name, minSlider, maxSlider, invertSlider, stepSlider, label,
                  shortcutPlusKey, shortcutMinusKey, shortcutKeyGp,
                  startValue, **kwargs):
-        DoubleSlider.__init__(self, Qt.Horizontal)
+        DoubleSlider.__init__(self, Qt.Orientation.Horizontal)
         MovableWidget.__init__(self, name, label, shortcutKeyGp=shortcutKeyGp)
         self.setObjectName(name)
 

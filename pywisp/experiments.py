@@ -3,9 +3,9 @@ import ast
 import logging
 from collections import OrderedDict
 
-from PyQt5.QtCore import Qt, QSize, pyqtSignal, QObject
-from PyQt5.QtGui import QStandardItemModel, QStandardItem
-from PyQt5.QtWidgets import QItemDelegate, QTreeView
+from PyQt6.QtCore import Qt, QSize, pyqtSignal, QObject
+from PyQt6.QtGui import QStandardItemModel, QStandardItem
+from PyQt6.QtWidgets import QItemDelegate, QTreeView
 
 from .config import RESERVED_KEYS as NON_MODULE_KEYS
 from .experimentModules import ExperimentModuleException
@@ -35,13 +35,13 @@ class ExperimentModel(QStandardItemModel):
 
     def flags(self, index):
         if index.column() == 1:
-            return Qt.ItemIsEditable | Qt.ItemIsEnabled
+            return Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsEnabled
         else:
-            return Qt.ItemIsEnabled
+            return Qt.ItemFlag.ItemIsEnabled
 
 
 class PropertyItem(QStandardItem):
-    RawDataRole = Qt.UserRole + 1
+    RawDataRole = Qt.ItemDataRole.UserRole + 1
 
     def __init__(self, data):
         QStandardItem.__init__(self)
@@ -50,13 +50,13 @@ class PropertyItem(QStandardItem):
         self._text = self._getText(data)
 
     def type(self):
-        return QStandardItem.UserType
+        return QStandardItem.ItemType.UserType
 
     def _getText(self, data):
         return str(data)
 
     def setData(self, Any, role=None, *args, **kwargs):
-        if role == Qt.EditRole:
+        if role == Qt.ItemDataRole.EditRole:
             try:
                 self._data = ast.literal_eval(Any)
             except (SyntaxError, ValueError) as e:
@@ -72,9 +72,9 @@ class PropertyItem(QStandardItem):
             raise NotImplementedError
 
     def data(self, role=None, *args, **kwargs):
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
             return self._text
-        elif role == Qt.EditRole:
+        elif role == Qt.ItemDataRole.EditRole:
             if isinstance(self._data, str):
                 return "'" + self._text + "'"
             else:

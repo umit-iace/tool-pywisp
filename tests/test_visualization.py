@@ -1,7 +1,7 @@
 import re
 
 import pytest
-from PyQt5.QtWidgets import QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
 from pywisp.visualization import MplVisualizer, Visualizer
 

@@ -1,8 +1,8 @@
 import pytest
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QValidator
-from PyQt5.QtTest import QTest
-from PyQt5.QtWidgets import QDialog, QFileDialog
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QValidator
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QDialog, QFileDialog
 
 from pywisp.config import REMOTE_KEYS, validateExperiments
 from pywisp.experimentModules import ExperimentModule
@@ -26,13 +26,13 @@ class Trajectory(ExperimentModule):
     dataPoints = []
 
 
-def acceptDialogs(monkeypatch, result=QDialog.Accepted):
+def acceptDialogs(monkeypatch, result=QDialog.DialogCode.Accepted):
     """ replace the modal event loop of the dialogs """
-    monkeypatch.setattr(QDialog, 'exec_', lambda self: result)
+    monkeypatch.setattr(QDialog, 'exec', lambda self: result)
 
 
 def isValid(lineEdit, text):
-    return lineEdit.validator().validate(text, 0)[0] == QValidator.Acceptable
+    return lineEdit.validator().validate(text, 0)[0] == QValidator.State.Acceptable
 
 
 def test_int_dialog(qtbot):
@@ -45,7 +45,7 @@ def test_int_dialog(qtbot):
     assert not isValid(dialog.data, 'abc')
 
 
-@pytest.mark.parametrize("result, ok", [(QDialog.Accepted, True), (QDialog.Rejected, False)])
+@pytest.mark.parametrize("result, ok", [(QDialog.DialogCode.Accepted, True), (QDialog.DialogCode.Rejected, False)])
 def test_int_dialog_get_data(monkeypatch, result, ok):
     acceptDialogs(monkeypatch, result)
     assert DataIntDialog.getData(current=42) == ('42', ok)
@@ -141,13 +141,13 @@ def test_remote_edit_change_type(qtbot):
 def test_shortcut_creator(qtbot):
     field = ShortcutCreator()
     qtbot.addWidget(field)
-    QTest.keyClick(field, Qt.Key_A)
+    QTest.keyClick(field, Qt.Key.Key_A)
     assert field.getKeySequence() == 'A'
     assert field.text() == 'A'
-    QTest.keyClick(field, Qt.Key_F5)
+    QTest.keyClick(field, Qt.Key.Key_F5)
     assert field.getKeySequence() == 'F5'
     # modifiers alone are no shortcut
-    QTest.keyClick(field, Qt.Key_Shift)
+    QTest.keyClick(field, Qt.Key.Key_Shift)
     assert field.text() == ''
 
 
