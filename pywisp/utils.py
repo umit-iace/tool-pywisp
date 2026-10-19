@@ -3,11 +3,15 @@
 General helpers: coroutine pipes, resources and packing of data arrays.
 """
 import importlib
+import logging
+import logging.config
 import os
 import struct
 import warnings
 
-__all__ = ["createDir", "getResource", "packArrayToFrame", "coroutine", "pipe"]
+import yaml
+
+__all__ = ["createDir", "getResource", "setupLogging", "packArrayToFrame", "coroutine", "pipe"]
 
 
 def flatten(lst):
@@ -66,6 +70,21 @@ def getResource(resName, resType="icons"):
     ownPath = os.path.dirname(__file__)
     resourcePath = os.path.abspath(os.path.join(ownPath, "resources", resType))
     return os.path.join(resourcePath, resName)
+
+
+def setupLogging(force=False):
+    """
+    Configure the logging with the defaults of pywisp (console output, level INFO).
+
+    This is done by :class:`pywisp.MainGui`, if the application has not configured
+    logging itself.
+
+    :param force: apply the configuration even if the root logger already has handlers
+    """
+    if logging.getLogger().handlers and not force:
+        return
+    with open(getResource("logging.yaml", ""), "r") as f:
+        logging.config.dictConfig(yaml.safe_load(f))
 
 
 def getFormattedStructString(dataLenFloat: int, dataLenInt: int , lenFloat: int) -> str:

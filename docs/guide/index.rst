@@ -128,6 +128,14 @@ It can be disabled by setting the parameter to zero or omitting the entry.
 Note that the embedded code on the rig itself also has to be configured to expect such a packet.
 Refer to the `tool-libs <https://github.com/umit-iace/tool-libs>`_ documentation for details.
 
+Logging
+~~~~~~~
+
+Importing pywisp does not touch the logging configuration. When the :class:`pywisp.MainGui` is created, it sets up
+console output with level ``INFO``, unless the application has configured logging before, e.g. with
+``logging.basicConfig()``. Scripts that do not create the GUI can call :func:`pywisp.setupLogging` to get the same
+output.
+
 Plot Configuration
 ~~~~~~~~~~~~~~~~~~
 

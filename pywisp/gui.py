@@ -37,7 +37,7 @@ from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .buffer import DataPointBuffer
 from .export import Exporter
-from .utils import getResource
+from .utils import getResource, setupLogging
 from .widgets.common import PlainTextLogger, PinnedDock, TreeWidgetStyledItemDelegate
 from .widgets.dialogs import DataIntDialog, DataTcpIpDialog, RemoteWidgetEdit
 from .widgets.remote import FreeLayout, MovablePushButton, MovableSwitch, MovableSlider
@@ -60,6 +60,9 @@ class MainGui(QMainWindow):
 
     def __init__(self, fileName=None, parent=None):
         super(MainGui, self).__init__(parent)
+
+        # keeps a logging config of the application
+        setupLogging()
 
         # log errors in slots instead of letting PyQt abort the application,
         # but do not replace a hook somebody else installed
