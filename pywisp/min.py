@@ -1,11 +1,36 @@
 
+import logging
 from binascii import crc32
+from enum import IntEnum
 from struct import pack as spack
 
 from .utils import coroutine
 
 HDR = 0xaa
 STF = 0x55
+
+#: largest frame id the MIN protocol can transmit
+MAX_MIN_ID = 63
+#: largest payload of a MIN frame in bytes
+MAX_MIN_PAYLOAD = 255
+
+#: frame id reserved for the control of the experiment, modules must not use it
+CONTROL_FRAME_ID = 1
+
+
+class Control(IntEnum):
+    """
+    Payload of the control frames (id :data:`CONTROL_FRAME_ID`) sent to the rig.
+    A control frame received from the rig signals a missed heartbeat.
+    """
+    STOP = 0
+    START = 1
+    HEARTBEAT = 2
+
+
+def controlFrame(command):
+    """ returns the frame for the given :class:`Control` command """
+    return {'id': CONTROL_FRAME_ID, 'msg': bytes([Control(command)])}
 
 class Frame:
     def __init__(self, id, data):
@@ -43,8 +68,12 @@ def Packer(sink):
     """ pack received (id, data) for transmission on wire. coroutine """
     while True:
         id, data = (yield)
-        assert(id < 64)
-        assert(len(data) < 256)
+        if not 0 <= id <= MAX_MIN_ID or len(data) > MAX_MIN_PAYLOAD:
+            # do not raise here, an exception would terminate the coroutine
+            logging.getLogger("MIN").error(
+                f"dropping frame {id}: ids must be in [0, {MAX_MIN_ID}] and payloads "
+                f"must not exceed {MAX_MIN_PAYLOAD} bytes, got {len(data)} bytes")
+            continue
         pld = bytes([id, len(data)]) + data
         crc = crc32(pld)
         ret = bytearray([HDR,HDR,HDR])

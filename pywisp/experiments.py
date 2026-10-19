@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import QItemDelegate, QTreeView
 
 from .config import RESERVED_KEYS as NON_MODULE_KEYS
 from .experimentModules import ExperimentModuleException
+from .min import CONTROL_FRAME_ID, Control, controlFrame
 from .registry import *
 import copy as cp
 
@@ -366,7 +367,7 @@ class ExperimentInteractor(QObject):
         :param connection: connection of the frame
         :return: data points or None if nothing found
         """
-        if frame.id == 1:
+        if frame.id == CONTROL_FRAME_ID:
             self.stopExperiment(broadcast=False)
             self._logger.warning("rig missed heartbeat! disconnecting...")
             self.missedbeat.emit()
@@ -425,7 +426,18 @@ class ExperimentInteractor(QObject):
                 raise ExperimentModuleException(f"{name}.{funcName}() failed: {e!r}") from e
             self._logger.exception(f"{name}.{funcName}() failed")
             return []
-        return self.paramsToConnData(params, mod.connection)
+
+        frames = []
+        for frame in self.paramsToConnData(params, mod.connection):
+            problem = checkFrame(frame)
+            if problem is None:
+                frames.append(frame)
+                continue
+            msg = f"{name}.{funcName}() returned an invalid frame {frame!r}: {problem}"
+            if abort:
+                raise ExperimentModuleException(msg)
+            self._logger.error(msg + ", dropping it")
+        return frames
 
     def updateSendParameter(self, module, parameter, value):
         if module in self.modSets:
@@ -454,11 +466,7 @@ class ExperimentInteractor(QObject):
             self.expStop.emit()
             return
 
-        # start experiment
-        payload = bytes([1])
-
-        data.append({'id': 1,
-                     'msg': payload})
+        data.append(controlFrame(Control.START))
         for _data in data:
             self.sendData.emit(_data)
 
@@ -506,10 +514,7 @@ class ExperimentInteractor(QObject):
 
         # stop experiment
         if broadcast:
-            payload = bytes([0])
-
-            data.append({'id': 1,
-                         'msg': payload})
+            data.append(controlFrame(Control.STOP))
             for _data in data:
                 self.sendData.emit(_data)
 
@@ -548,4 +553,22 @@ class ExperimentInteractor(QObject):
             return []
         if not isinstance(params, list):
             params = [params]
-        return [dict(p, connection=conn) for p in params]
+        return [dict(p, connection=conn) if isinstance(p, dict) else p for p in params]
+
+
+def checkFrame(frame):
+    """
+    Checks a frame returned by an experiment module.
+
+    :return: description of the problem or `None` if the frame is valid
+    """
+    if not isinstance(frame, dict):
+        return "frames must be dicts with the keys 'id' and 'msg'"
+    fid = frame.get('id')
+    if not isinstance(fid, int) or isinstance(fid, bool) or not 0 <= fid <= 255:
+        return "the id must be an integer in [0, 255]"
+    if fid == CONTROL_FRAME_ID:
+        return f"the id {CONTROL_FRAME_ID} is reserved for the experiment control"
+    if not isinstance(frame.get('msg'), (bytes, bytearray)):
+        return "the payload 'msg' must be bytes"
+    return None

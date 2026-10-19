@@ -376,3 +376,13 @@ def test_copy_remote_source(gui):
     assert set(remote) == {'Gain', 'Go'}
     assert 'name' not in remote['Go']
     assert remote['Go']['position'] == [150, 60]
+
+
+def test_heartbeat_goes_to_all_connections(gui):
+    sent = {}
+    for name in gui.connections:
+        inst = mock.Mock()
+        inst.writeData.side_effect = lambda data, name=name: sent.setdefault(name, []).append(data)
+        gui.connections[name]['inst'] = inst
+    gui.heartbeat()
+    assert sent == {name: [{'id': 1, 'msg': b'\x02'}] for name in gui.connections}

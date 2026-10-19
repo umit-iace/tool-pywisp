@@ -38,20 +38,28 @@ Frame IDs
     * - ID
       - Meaning
     * - 1
-      - Experiment Control:
+      - Experiment Control (:data:`pywisp.min.CONTROL_FRAME_ID`):
 
-        Payload (1 byte) is interpreted as
+        Payload (1 byte) sent to the rig is interpreted as (:class:`pywisp.min.Control`)
 
         - ``0`` -- STOP experiment
         - ``1`` -- START experiment
         - ``2`` -- HEARTBEAT
 
-    * - 0, 2 - 127
-      - User defined
+        A frame with this ID received from the rig signals a missed heartbeat and stops the experiment.
+
+    * - 0, 2 - 63
+      - User defined for connections using MIN (serial, UDP)
+    * - 0, 2 - 255
+      - User defined for the TCP connection
+
+Frames returned by the experiment modules are checked before they are sent. Frames using the reserved ID 1, IDs
+outside of 0 - 255 or a payload ``msg`` that is not ``bytes`` are rejected: when starting an experiment, the start is
+aborted, later on the frame is dropped. In both cases the problem is logged. Frames exceeding the limits of MIN are
+dropped by the connection.
 
 It is up to the user to guarantee that:
 
-    * No system reserved IDs are used
     * IDs are uniquely assigned
     * Every ID used to send data has a corresponding handler
 

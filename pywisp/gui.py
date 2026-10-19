@@ -39,6 +39,7 @@ from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
 from .buffer import DataPointBuffer
 from .export import Exporter
+from .min import CONTROL_FRAME_ID, Control, controlFrame
 from .utils import getResource, setupLogging
 from .widgets.common import PlainTextLogger, PinnedDock, TreeWidgetStyledItemDelegate
 from .widgets.dialogs import DataIntDialog, DataTcpIpDialog, RemoteWidgetEdit
@@ -1268,7 +1269,8 @@ class MainGui(QMainWindow):
         PySignal function, that sends the given data to the connections
         :param data: to send data
         """
-        if data['id'] == 1:
+        if data['id'] == CONTROL_FRAME_ID:
+            # control frames go to all rigs
             targets = list(self.connections.values())
         else:
             conn = self.connections.get(data['connection'])
@@ -1368,8 +1370,7 @@ class MainGui(QMainWindow):
             chart.updateCurves(self._currentDataPointBuffers)
 
     def heartbeat(self):
-        self.writeToConnection({'id': 1,
-                                'msg': bytes([1 << 1])})
+        self.writeToConnection(controlFrame(Control.HEARTBEAT))
 
     def loadStandardDockState(self):
         """

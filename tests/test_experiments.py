@@ -6,7 +6,7 @@ import pytest
 from PyQt5.QtWidgets import QTreeView
 
 import pywisp as pw
-from pywisp.experiments import ExperimentInteractor
+from pywisp.experiments import ExperimentInteractor, checkFrame
 from pywisp.min import Frame
 
 
@@ -75,6 +75,21 @@ class Echo(pw.ExperimentModule):
         return {'Time': 0, 'DataPoints': dict(self.settings)}
 
 
+class Rogue(pw.ExperimentModule):
+    """ sends frames given by the test """
+    dataPoints = []
+    publicSettings = OrderedDict([('x', 0)])
+    connection = 'Conn'
+    startFrames = []
+    frames = []
+
+    def getStartParams(self, data):
+        return self.startFrames
+
+    def getParams(self, data):
+        return self.frames
+
+
 class Broken(pw.ExperimentModule):
     dataPoints = []
     publicSettings = OrderedDict()
@@ -92,7 +107,7 @@ class Incomplete(pw.ExperimentModule):
 
 @pytest.fixture
 def interactor(qtbot, cleanRegistry):
-    for mod in (Counter, Legacy, Echo, Broken, Incomplete):
+    for mod in (Counter, Legacy, Echo, Rogue, Broken, Incomplete):
         pw.registerExperimentModule(mod)
     view = QTreeView()
     qtbot.addWidget(view)
@@ -208,3 +223,52 @@ def test_settings_are_updated_when_sent(interactor):
     # the module gets its own copy
     mod.settings['gain'] = 99
     assert interactor.getExperiment()['Echo']['gain'] == 2.0
+
+
+@pytest.mark.parametrize("frame, problem", [
+    ({'id': 5, 'msg': b'x'}, None),
+    ({'id': 0, 'msg': bytearray(b'x')}, None),
+    ({'id': 1, 'msg': b'x'}, "reserved"),
+    ({'id': 256, 'msg': b'x'}, "[0, 255]"),
+    ({'id': '5', 'msg': b'x'}, "integer"),
+    ({'id': True, 'msg': b'x'}, "integer"),
+    ({'id': 5, 'msg': 'x'}, "bytes"),
+    ({'id': 5}, "bytes"),
+    ([5, b'x'], "dicts"),
+])
+def test_check_frame(frame, problem):
+    result = checkFrame(frame)
+    if problem is None:
+        assert result is None
+    else:
+        assert problem in result
+
+
+def test_control_frames_of_the_experiment(interactor):
+    interactor.setExperiment({'Name': 'a', 'Counter': {}})
+    interactor.runExperiment()
+    assert frames(interactor)[-1] == (1, bytes([pw.Control.START]))
+    interactor.stopExperiment()
+    assert frames(interactor)[-1] == (1, bytes([pw.Control.STOP]))
+
+
+def test_reserved_id_aborts_start(interactor, monkeypatch, caplog):
+    monkeypatch.setattr(Rogue, 'startFrames', [{'id': 1, 'msg': bytes([0])}])
+    interactor.setExperiment({'Name': 'a', 'Rogue': {}})
+    interactor.runExperiment()
+    # nothing reaches the rig, especially no start command
+    assert interactor.sent == []
+    assert not interactor.runningExperiment
+    assert "reserved for the experiment control" in caplog.text
+
+
+def test_invalid_frames_are_dropped_while_running(interactor, monkeypatch, caplog):
+    interactor.setExperiment({'Name': 'a', 'Rogue': {}})
+    interactor.runExperiment()
+    interactor.sent.clear()
+
+    monkeypatch.setattr(Rogue, 'frames', [{'id': 1, 'msg': b'\x00'}, {'id': 7, 'msg': b'ok'}, {'id': 300, 'msg': b''}])
+    interactor.sendParameterExperiment()
+    assert frames(interactor) == [(7, b'ok')]
+    assert caplog.text.count("dropping it") == 2
+    assert interactor.runningExperiment

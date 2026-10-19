@@ -3,7 +3,7 @@ import random
 
 import pytest
 
-from pywisp.min import HDR, STF, Bytewise, HDRStuf, Packer, Unpacker
+from pywisp.min import CONTROL_FRAME_ID, HDR, STF, Bytewise, Control, HDRStuf, Packer, Unpacker, controlFrame
 from pywisp.utils import coroutine, pipe
 
 
@@ -55,7 +55,19 @@ def test_corrupted_frame_is_dropped():
     assert out == [(8, b"world")]
 
 
-def test_invalid_id_is_rejected():
-    tx = pipe([Packer, lambda: collector([])])
-    with pytest.raises(AssertionError):
-        tx.send((64, b""))
+def test_packer_drops_invalid_frames(caplog):
+    """ invalid frames are dropped without terminating the coroutine """
+    out = roundtrip([(64, b"x"), (2, bytes(256)), (63, b"ok")])
+    assert out == [(63, b"ok")]
+    assert caplog.text.count("dropping frame") == 2
+
+
+@pytest.mark.parametrize("command, payload", [(Control.STOP, 0), (Control.START, 1), (Control.HEARTBEAT, 2)])
+def test_control_frames(command, payload):
+    assert controlFrame(command) == {'id': CONTROL_FRAME_ID, 'msg': bytes([payload])}
+    assert CONTROL_FRAME_ID == 1
+
+
+def test_control_frame_rejects_unknown_command():
+    with pytest.raises(ValueError):
+        controlFrame(7)
