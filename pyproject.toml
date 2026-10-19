@@ -32,6 +32,8 @@ dependencies = [
     'PyYAML',
     'python-dateutil',
     'pandas',
+    'pysdl2',
+    'pysdl2-dll',
 ]
 
 [project.optional-dependencies]
@@ -65,12 +67,10 @@ markers = [
 
 [tool.coverage.run]
 source = ["pywisp"]
-omit = ["pywisp/inputs.py"]  # vendored third party code
 
 [tool.ruff]
 line-length = 120
 extend-exclude = [
-    "pywisp/inputs.py",  # vendored third party code
     "examples/tcp/bur",
 ]
 

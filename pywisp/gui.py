@@ -43,8 +43,7 @@ from .widgets.dialogs import DataIntDialog, DataTcpIpDialog, RemoteWidgetEdit
 from .widgets.remote import FreeLayout, MovablePushButton, MovableSwitch, MovableSlider
 
 from .visualization import MplVisualizer, VtkVisualizer
-from .gamepad import getGamepadByIndex
-from .gamepad import getAllGamepads
+from .gamepad import getAllGamepads, openGamepad
 from .settings import Settings
 from .widgets.plotchart import PlotChart
 
@@ -344,8 +343,7 @@ class MainGui(QMainWindow):
         self.actShowCoords.changed.connect(self.updateShowCoordsSetting)
 
         self.gamepad = None
-        self.selectedGamepadIndex = None
-        self.gamepadDevices = None
+        self.selectedGamepadId = None
 
         ### options
         self.optMenu = self.menuBar().addMenu('&Options')
@@ -582,48 +580,42 @@ class MainGui(QMainWindow):
             self.experimentList.addItem(exp["Name"])
 
     def detectGamepads(self):
-        # anonymous functoin to
-        def setGamepad(detectedDevices, index):
-            def fn():
-                self.selectGamepad(detectedDevices, index)
-            return fn
-
-        # clear menu bar
+        """ fill the gamepad menu with the connected gamepads """
         self.gamepadMenu.clear()
 
-        # detect all available Gamepads
-        detectedDevices = getAllGamepads()
-
-        if detectedDevices is None:
+        gamepads = getAllGamepads()
+        if not gamepads:
+            noneAction = self.gamepadMenu.addAction("No gamepad found")
+            noneAction.setEnabled(False)
             return
 
-        # build gamepadMenu items
-        for index, gamepad in enumerate(detectedDevices.gamepads):
-            selectGamepadAction = QAction(gamepad.name, self)
-            selectGamepadAction.setCheckable(True)
-            self.gamepadMenu.addAction(selectGamepadAction)
-            selectGamepadAction.triggered.connect(setGamepad(detectedDevices, index))
-            selectGamepadAction.setChecked(self.selectedGamepadIndex == index)
+        for info in gamepads:
+            action = QAction(info.name, self)
+            action.setCheckable(True)
+            action.setChecked(self.selectedGamepadId == info.id)
+            action.triggered.connect(lambda checked, info=info: self.selectGamepad(info))
+            self.gamepadMenu.addAction(action)
 
-    def selectGamepad(self, detectedDevices, index):
+    def selectGamepad(self, info):
         self.stopGamepad()
-        # construct new gamepad
-        self.gamepad = getGamepadByIndex(detectedDevices, index)
-        # check if construction succeeded
+        self.gamepad = openGamepad(info.id)
         if self.gamepad is not None:
-            self._logger.info('Gamepad connected')
-            self.selectedGamepadIndex = index
-            self.gamepadDevices = detectedDevices
-        else:
-            self._logger.info('Gamepad not connected')
+            self._logger.info(f"Gamepad '{info.name}' connected")
+            self.selectedGamepadId = info.id
+            # the gamepad stops by itself when it is unplugged
+            pad = self.gamepad
+            pad.finished.connect(lambda: self._onGamepadFinished(pad))
         self.updateRemoteGamepad()
+
+    def _onGamepadFinished(self, pad):
+        if pad is self.gamepad:
+            self.stopGamepad()
 
     def stopGamepad(self):
         if self.gamepad is not None:
             self.gamepad.stop()
             self.gamepad = None
-            self.selectedGamepadIndex = None
-            self.gamepadDevices = None
+            self.selectedGamepadId = None
             self.updateRemoteGamepad()
 
     def updateRemoteGamepad(self):

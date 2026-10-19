@@ -29,6 +29,7 @@ SREG = """
       Parameter: gain
       valueOn: '1'
       shortcut: ''
+      shortcut-Gp: S
 - Name: Second
   Dummy:
   Remote:
@@ -143,6 +144,32 @@ def test_gamepad_slider_mapping(gui):
     assert slider.value == 5
     slider._onGamepad(0.5)
     assert slider.value == 10
+
+
+def test_gamepad_menu_without_gamepads(gui, monkeypatch):
+    monkeypatch.setattr(pw.gui, 'getAllGamepads', lambda: [])
+    gui.detectGamepads()
+    actions = gui.gamepadMenu.actions()
+    assert [a.text() for a in actions] == ["No gamepad found"]
+    assert not actions[0].isEnabled()
+
+
+def test_gamepad_drives_remote_widgets(gui, qtbot, sdl, virtualPad):
+    gui.detectGamepads()
+    action = next(a for a in gui.gamepadMenu.actions() if a.text() == 'Virtual Controller')
+    action.trigger()
+    assert gui.gamepad is not None
+    gui.detectGamepads()
+    assert next(a for a in gui.gamepadMenu.actions() if a.text() == 'Virtual Controller').isChecked()
+
+    button = next(w for w in gui.remoteWidgetLayout.list if isinstance(w, MovablePushButton))
+    with qtbot.waitSignal(button.clicked, timeout=2000):
+        virtualPad.press(sdl.SDL_CONTROLLER_BUTTON_A)
+
+    # unplugging releases the gamepad
+    virtualPad.unplug()
+    qtbot.waitUntil(lambda: gui.gamepad is None, timeout=2000)
+    assert button._gamepadConnection is None
 
 
 def frame(t, x):
