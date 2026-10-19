@@ -4,7 +4,9 @@ import numpy as np
 from PyQt5.QtCore import QTimer, pyqtSignal
 from PyQt5.QtWidgets import QAction, QMenu
 from pyqtgraph import PlotWidget, TextItem, mkPen
-from ..utils import ContextLineEditAction, DataPointBuffer, Exporter
+from ..buffer import DataPointBuffer
+from ..export import Exporter
+from .common import ContextLineEditAction
 from ..settings import Settings
 
 class PlotChart(PlotWidget):

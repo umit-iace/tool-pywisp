@@ -7,7 +7,7 @@ import pytest
 from PyQt5.QtWidgets import QMenu
 
 import pywisp as pw
-from pywisp.utils import MovablePushButton, MovableSlider, MovableSwitch, MovableWidget
+from pywisp.widgets.remote import MovablePushButton, MovableSlider, MovableSwitch, MovableWidget
 
 SREG = """
 - Name: First

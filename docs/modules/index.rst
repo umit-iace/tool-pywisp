@@ -12,11 +12,14 @@ access any PyWisp module, or use this contents:
 .. toctree::
     :maxdepth: 2
 
+    buffer
     connection
     experimentModules
     experiments
+    export
     gui
     min
     registry
     utils
     visualization
+    widgets

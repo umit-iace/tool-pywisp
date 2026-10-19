@@ -35,9 +35,12 @@ from .config import validateExperiments
 from .connection import SerialConnection, SocketConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import *
-from .utils import getResource, PlainTextLogger, DataPointBuffer, Exporter, DataIntDialog, \
-    DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, PinnedDock, \
-    TreeWidgetStyledItemDelegate
+from .buffer import DataPointBuffer
+from .export import Exporter
+from .utils import getResource
+from .widgets.common import PlainTextLogger, PinnedDock, TreeWidgetStyledItemDelegate
+from .widgets.dialogs import DataIntDialog, DataTcpIpDialog, RemoteWidgetEdit
+from .widgets.remote import FreeLayout, MovablePushButton, MovableSwitch, MovableSlider
 
 from .visualization import MplVisualizer, VtkVisualizer
 from .gamepad import getGamepadByIndex

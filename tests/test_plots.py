@@ -13,7 +13,7 @@ import pytest
 
 from PyQt5.QtWidgets import QApplication
 from pywisp.widgets.plotchart import PlotChart
-from pywisp.utils import DataPointBuffer
+from pywisp.buffer import DataPointBuffer
 
 
 @pytest.mark.slow

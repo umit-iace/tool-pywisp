@@ -5,7 +5,7 @@ import pickle
 import numpy as np
 import pytest
 
-from pywisp.utils import DataPointBuffer
+from pywisp.buffer import DataPointBuffer
 
 
 def test_grows_beyond_initial_capacity():

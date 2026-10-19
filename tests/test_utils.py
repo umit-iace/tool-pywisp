@@ -9,7 +9,8 @@ import unittest
 import pytest
 
 from PyQt5.QtWidgets import QApplication
-from pywisp.utils import Exporter, DataPointBuffer
+from pywisp.buffer import DataPointBuffer
+from pywisp.export import Exporter
 
 app = QApplication.instance() or QApplication(sys.argv)
 class ExporterTestCase(unittest.TestCase):
@@ -87,6 +88,21 @@ class ExporterTestCase(unittest.TestCase):
         for f_name in [self.csv_name, self.png_name]:
             if os.path.exists(f_name):
                 os.remove(f_name)
+
+
+def test_export_survives_owner_deletion(qtbot, tmp_path):
+    """ dropping the last reference to a running export must not destroy its thread """
+    import gc
+    import numpy as np
+    t = np.arange(200000) * 1e-3
+    dataPoints = {f"dp{i}": DataPointBuffer(t, np.sin(t * i)) for i in range(20)}
+    fileName = str(tmp_path / "export.csv")
+    e = Exporter(dataPoints=dataPoints, fileName=fileName)
+    e.runExport()
+    del e
+    gc.collect()
+    qtbot.waitUntil(lambda: not Exporter._running, timeout=60000)
+    assert os.path.exists(fileName)
 
 
 if __name__ == '__main__':
