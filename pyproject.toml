@@ -52,6 +52,7 @@ dev = [
     "sphinxcontrib-plantuml>=0.31",
     "pytest",
     "pytest-qt",
+    "pytest-cov",
     "ruff",
 ]
 
@@ -61,6 +62,10 @@ qt_api = "pyqt5"
 markers = [
     "slow: long running benchmarks, deselect with '-m \"not slow\"'",
 ]
+
+[tool.coverage.run]
+source = ["pywisp"]
+omit = ["pywisp/inputs.py"]  # vendored third party code
 
 [tool.ruff]
 line-length = 120
