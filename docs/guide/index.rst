@@ -66,7 +66,18 @@ could look like
    :lines: 24-35
 
 Finally, the measurement data from the rig must be processed, to do so implement :meth:`handleFrame`
-to handle frames from test rig such that it can be shown in the GUI.
+to handle frames from test rig such that it can be shown in the GUI. It returns ``None`` for frames that are not
+meant for the module.
+
+All four methods are optional, the default implementations send nothing and ignore all frames.
+
+PyWisp creates an instance of the module when an experiment using it is applied and keeps it until another
+experiment is applied. Hence, state like a cached trajectory can be stored in attributes, initialize them in
+``__init__`` after calling ``super().__init__()``. The member variables listed above have to remain class attributes.
+
+The current values of the settings are available by name in :attr:`settings`, e.g. ``self.settings['gain']``. They hold
+the values of the applied experiment and are updated right before one of the three parameter methods is called, so
+:meth:`handleFrame` always sees the values that have been sent to the rig last.
 
 For actual implementations please refer to the :ref:`chapter_examples` section.
 

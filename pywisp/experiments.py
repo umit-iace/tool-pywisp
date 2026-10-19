@@ -142,6 +142,8 @@ class ExperimentInteractor(QObject):
         self.targetModel.itemChanged.connect(self.itemChanged)
         # parameter change settings
         self.modSets = {}
+        # instances of the modules of the applied experiment
+        self._instances = {}
         # modules per connection that handle incoming frames
         self._frameHandlerCache = {}
         # number of failed handleFrame calls per module
@@ -186,6 +188,21 @@ class ExperimentInteractor(QObject):
             return getRegisteredExperimentModules()[moduleName]
         except KeyError:
             raise ExperimentException(f"Experiment module '{moduleName}' is not registered!") from None
+
+    def _getInstance(self, moduleName):
+        """
+        Returns the instance of a module of the applied experiment, it is created on first use.
+        :raises ExperimentModuleException: if the module cannot be instantiated
+        """
+        instance = self._instances.get(moduleName)
+        if instance is None:
+            cls = self._getModule(moduleName)
+            try:
+                instance = cls()
+            except Exception as e:
+                raise ExperimentModuleException(f"Cannot create experiment module '{moduleName}': {e!r}") from e
+            self._instances[moduleName] = instance
+        return instance
 
     def itemChanged(self, item):
         """
@@ -257,6 +274,7 @@ class ExperimentInteractor(QObject):
         :return: `True` if successful, `False` if errors occurred.
         """
         self.dataPoints = []
+        self._instances = {}
         self._frameHandlerCache = {}
         self.targetModel.clear()
         # insert header
@@ -281,7 +299,8 @@ class ExperimentInteractor(QObject):
                 moduleName = parent.data(role=PropertyItem.RawDataRole)
                 self._addSettings(moduleName, parent)
                 self.dataPoints += self._readDataPoints(moduleName)
-            except ExperimentException as e:
+                self._getInstance(moduleName)
+            except (ExperimentException, ExperimentModuleException) as e:
                 self._logger.error(e)
                 return False
 
@@ -300,6 +319,9 @@ class ExperimentInteractor(QObject):
                 else:
                     self._logger.warning(f"_applyExperiment(): Setting: '{valKey}' not "
                                          f"available for Module: '{moduleName}'")
+
+        for mod, _, settings in self.activeModules():
+            mod.settings = OrderedDict(settings)
 
         self.targetView.setModel(self.targetModel)
 
@@ -351,7 +373,7 @@ class ExperimentInteractor(QObject):
             return None
         for mod, name in self._frameHandlers(connection):
             try:
-                dataPoints = mod.handleFrame(mod, frame)
+                dataPoints = mod.handleFrame(frame)
             except Exception:
                 self._reportFrameError(name, frame)
                 continue
@@ -367,7 +389,7 @@ class ExperimentInteractor(QObject):
         """
         handlers = self._frameHandlerCache.get(connection)
         if handlers is None:
-            handlers = [(mod, name) for mod, name in self._activeModuleClasses()
+            handlers = [(mod, name) for mod, name in self._activeModuleInstances()
                         if mod.connection == connection]
             self._frameHandlerCache[connection] = handlers
         return handlers
@@ -388,14 +410,16 @@ class ExperimentInteractor(QObject):
             self._logger.error(f"Module '{name}' failed to handle {cnt} frame(s)")
         self._frameErrors = {}
 
-    def _collectParams(self, mod, name, funcName, vals, abort=False):
+    def _collectParams(self, mod, name, funcName, settings, abort=False):
         """
         Calls a parameter function of a module and converts the result to connection data.
         Errors in user code are logged instead of crashing the gui.
+        :param settings: current settings of the module, also stored in its `settings` attribute
         :param abort: re-raise the error as `ExperimentModuleException`
         """
+        mod.settings = OrderedDict(settings)
         try:
-            params = getattr(mod, funcName)(mod, vals)
+            params = getattr(mod, funcName)(list(settings.values()))
         except Exception as e:
             if abort:
                 raise ExperimentModuleException(f"{name}.{funcName}() failed: {e!r}") from e
@@ -419,10 +443,9 @@ class ExperimentInteractor(QObject):
             for mod, name, settings in self.activeModules():
 
                 self.modSets[name] = cp.copy(settings)
-                vals = list(settings.values())
 
-                data.extend(self._collectParams(mod, name, 'getStartParams', vals, abort=True))
-                data.extend(self._collectParams(mod, name, 'getParams', vals, abort=True))
+                data.extend(self._collectParams(mod, name, 'getStartParams', settings, abort=True))
+                data.extend(self._collectParams(mod, name, 'getParams', settings, abort=True))
 
         except ExperimentModuleException as eme:
             self._logger.error(eme)
@@ -449,8 +472,7 @@ class ExperimentInteractor(QObject):
             if self.modSets.get(name) == settings:
                 continue
             self.modSets[name] = cp.copy(settings)
-            vals = list(settings.values())
-            data.extend(self._collectParams(mod, name, 'getParams', vals))
+            data.extend(self._collectParams(mod, name, 'getParams', settings))
 
         for _data in data:
             self.sendData.emit(_data)
@@ -462,8 +484,7 @@ class ExperimentInteractor(QObject):
         data = []
         for mod, name, settings in self.activeModules():
 
-            vals = list(settings.values())
-            data.extend(self._collectParams(mod, name, 'getParams', vals))
+            data.extend(self._collectParams(mod, name, 'getParams', settings))
 
         for _data in data:
             self.sendData.emit(_data)
@@ -481,8 +502,7 @@ class ExperimentInteractor(QObject):
         self.runningExperiment = False
         for mod, name, settings in self.activeModules():
 
-            vals = list(settings.values())
-            data.extend(self._collectParams(mod, name, 'getStopParams', vals))
+            data.extend(self._collectParams(mod, name, 'getStopParams', settings))
 
         # stop experiment
         if broadcast:
@@ -508,11 +528,11 @@ class ExperimentInteractor(QObject):
 
         return exp
 
-    def _activeModuleClasses(self):
+    def _activeModuleInstances(self):
         """ like :meth:`activeModules`, but without reading the settings from the model """
         for row in range(self.targetModel.rowCount()):
             name = self.targetModel.item(row, 0).data(role=PropertyItem.RawDataRole)
-            yield self._getModule(name), name
+            yield self._getInstance(name), name
 
     def activeModules(self):
         for row in range(self.targetModel.rowCount()):
@@ -520,7 +540,7 @@ class ExperimentInteractor(QObject):
             parent = index.model().itemFromIndex(index)
             settings = self.getSettings(parent)
             name = parent.data(role=PropertyItem.RawDataRole)
-            mod = self._getModule(name)
+            mod = self._getInstance(name)
             yield mod, name, settings
 
     def paramsToConnData(self, params, conn):

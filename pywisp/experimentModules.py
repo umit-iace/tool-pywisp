@@ -31,21 +31,32 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
     This class provides necessary functions like start, stop and general
     parameter handling and holds all settings that can be accessed by the
     user.
+
+    An instance of the module is created when an experiment using it is applied and
+    is kept until another experiment is applied, so it can store state in attributes.
+    :attr:`publicSettings`, :attr:`dataPoints` and :attr:`connection` are read from the
+    class and have to be class attributes.
+
+    Attributes:
+        settings (OrderedDict): Current values of the :attr:`publicSettings`. They are set
+            to the values of the experiment when it is applied and updated to the values
+            passed to :meth:`getStartParams`, :meth:`getParams` and :meth:`getStopParams`
+            right before these are called. So :meth:`handleFrame` sees the values that have
+            been sent to the test rig last.
     """
     def __init__(self):
         QObject.__init__(self, None)
         self._logger = logging.getLogger(self.__class__.__name__)
+        self.settings = OrderedDict(self.publicSettings)
 
     @property
     @abstractmethod
     def publicSettings(self) -> OrderedDict:
         """
-        Public settings of the module that are shown in the GUI.
-        All entries
-        stated in this dictionary will be available as changeable settings for the
-        module. On initialization, a possibly modified (in terms of its values) version of
-        this dict will be passed back to this class and is thenceforward available
-        via the :py:attr:`settings` property.
+        Public settings of the module that are shown in the GUI, mapping their names to the
+        default values. All entries stated in this dictionary will be available as changeable
+        settings for the module. Their current values are passed to the parameter methods
+        as list in the order of this dictionary and are available by name via :attr:`settings`.
         """
         pass
 
@@ -66,7 +77,6 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
         """
         pass
 
-    @abstractmethod
     def handleFrame(self, frame: Frame) -> dict:
         """
         Handle frames from test rig so they can be shown in the GUI.
@@ -77,28 +87,28 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
         * DataPoints (dict): Dictionary of measurements where the keys are the labels and the values hold the
           actual data.
 
+        Return `None` if the frame is not meant for this module, which is also what the
+        default implementation does.
+
         Note:
             To unpack the frame use the :mod:`struct` module.
         """
-        pass
+        return None
 
-    @abstractmethod
     def getStartParams(self, *args) -> list[dict]:
         """
         Data to be sent to the test rig when starting an experiment
-        See :meth:`getParams` for details.
+        See :meth:`getParams` for details. Sends nothing by default.
         """
-        pass
+        return []
 
-    @abstractmethod
     def getStopParams(self, *args) -> list[dict]:
         """
         Data to be sent to the test rig when stopping an experiment
-        See :meth:`getParams` for details.
+        See :meth:`getParams` for details. Sends nothing by default.
         """
-        pass
+        return []
 
-    @abstractmethod
     def getParams(self, *args) -> list[dict]:
         """
         Data to be sent to the test everytime a setting is changed in the GUI
@@ -110,8 +120,10 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
               This must be unique for the whole application, or you will be in trouble.
             * msg (bytes): The actual payload.
 
+        Sends nothing by default.
+
         Note:
             To construct the payload use the :mod:`struct` module.
         """
-        pass
+        return []
 
