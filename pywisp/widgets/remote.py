@@ -134,13 +134,13 @@ class MovableWidget:
 
         names = [name for name, abbrev in gamepad.getAbbrevs().items() if abbrev == self.shortcutKeyGp]
         if not names:
-            self._logger.error("{} is not a valid gamepad button!".format(self.shortcutKeyGp))
+            self._logger.error(f"{self.shortcutKeyGp} is not a valid gamepad button!")
             return
 
         isAbsolute = names[0].startswith('Absolute')
         if isAbsolute != self.gamepadAbsolute:
-            self._logger.error("{} is {} absolute button!".format(
-                self.shortcutKeyGp, "an" if isAbsolute else "not an"))
+            article = "an" if isAbsolute else "not an"
+            self._logger.error(f"{self.shortcutKeyGp} is {article} absolute button!")
             return
 
         prefix = 'abs' if isAbsolute else 'btn'

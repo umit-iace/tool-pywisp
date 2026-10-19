@@ -71,7 +71,7 @@ extend-exclude = [
 
 [tool.ruff.lint]
 # pyflakes, bugbear and the most important pycodestyle errors
-select = ["F", "B", "E9", "E7"]
+select = ["F", "B", "E9", "E7", "UP032"]
 ignore = [
     "F403", "F405",  # star imports are used for the public api
     "B008",          # function calls in defaults

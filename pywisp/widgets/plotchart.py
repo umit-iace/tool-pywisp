@@ -50,7 +50,7 @@ class PlotChart(PlotWidget):
 
         def coordWrapper(pos):
             coords = self.getPlotItem().vb.mapSceneToView(pos)
-            coordText = "x={:.3e} y={:.3e}".format(coords.x(), coords.y())
+            coordText = f"x={coords.x():.3e} y={coords.y():.3e}"
             if self.settings.value("view/show_coordinates", type=bool):
                 coordItem.setText(coordText.replace(" ", "\n"))
                 coordItem.setPos(coords.x(), coords.y())

@@ -298,9 +298,8 @@ class ExperimentInteractor(QObject):
                         self.targetModel.setData(valueIdx, valVal, role=PropertyItem.RawDataRole)
                         break
                 else:
-                    self._logger.warning("_applyExperiment(): Setting: '{0}' not "
-                                         "available for Module: '{1}'".format(
-                        valKey, moduleName))
+                    self._logger.warning(f"_applyExperiment(): Setting: '{valKey}' not "
+                                         f"available for Module: '{moduleName}'")
 
         self.targetView.setModel(self.targetModel)
 
@@ -326,8 +325,8 @@ class ExperimentInteractor(QObject):
                         self.targetModel.dataChanged.emit(valueIdx, valueIdx)
                         break
                 else:
-                    self._logger.warning("_editExperiment(): Setting: '{0}' not "
-                                         "available for Module: '{1}'".format(valKey, moduleName))
+                    self._logger.warning(f"_editExperiment(): Setting: '{valKey}' not "
+                                         f"available for Module: '{moduleName}'")
 
         return True
 

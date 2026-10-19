@@ -100,7 +100,7 @@ def getFormattedStructString(dataLenFloat: int, dataLenInt: int , lenFloat: int)
     else:
         intStr = ''
 
-    fmtStr = '<{}{}{}'.format(intStr, lenFloat, floatStr)
+    fmtStr = f'<{intStr}{lenFloat}{floatStr}'
 
     return fmtStr
 

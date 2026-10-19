@@ -95,7 +95,7 @@ class Gamepad(QThread):
         try:
             abbv = self.abbrevs[key]
         except KeyError:
-            self._logger.error("The event {} of type {} is not supported!".format(event.code, event.ev_type))
+            self._logger.error(f"The event {event.code} of type {event.ev_type} is not supported!")
             return
 
         if event.ev_type == 'Key':

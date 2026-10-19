@@ -575,7 +575,7 @@ class MainGui(QMainWindow):
     def _updateExperimentsList(self):
         self.experimentList.clear()
         for exp in self._experiments:
-            self._logger.debug("Add '{}' to experiment list".format(exp["Name"]))
+            self._logger.debug(f"Add '{exp['Name']}' to experiment list")
             self.experimentList.addItem(exp["Name"])
 
     def detectGamepads(self):
@@ -638,7 +638,7 @@ class MainGui(QMainWindow):
         if ok and timerTime:
             timerTime = int(timerTime)
             self.config['TimerTime'] = timerTime
-            self._logger.info("Set timer time to {}".format(timerTime))
+            self._logger.info(f"Set timer time to {timerTime}")
 
     def updateCoordInfo(self, coordText):
         self.coordLabel.setText(coordText)
@@ -651,7 +651,7 @@ class MainGui(QMainWindow):
 
     # event functions
     def addPlotTreeItem(self, default=False):
-        text = "plot_{:03d}".format(self.dataPointTreeWidget.topLevelItemCount())
+        text = f"plot_{self.dataPointTreeWidget.topLevelItemCount():03d}"
         if not default:
             name, ok = QInputDialog.getText(self,
                                             "Select a plot title",
@@ -664,7 +664,7 @@ class MainGui(QMainWindow):
 
         similarItems = self.dataPointTreeWidget.findItems(name, Qt.MatchExactly)
         if similarItems:
-            self._logger.error("Name '{}' exists.".format(name))
+            self._logger.error(f"Name '{name}' exists.")
             return
 
         topLevelItem = QTreeWidgetItem()
@@ -793,9 +793,9 @@ class MainGui(QMainWindow):
         # check if a top level item has been clicked
         if not item.parent():
             if title in self.nonPlottingDocks:
-                self._logger.error("Title '{}' not allowed for a plot window since"
+                self._logger.error(f"Title '{title}' not allowed for a plot window since"
                                    "it would shadow on of the reserved "
-                                   "names".format(title))
+                                   "names")
                 return
 
             # check if plot has already been opened
@@ -823,9 +823,9 @@ class MainGui(QMainWindow):
 
         title = item.text(0)
         if title in self.nonPlottingDocks:
-            self._logger.error("Title '{}' not allowed for a plot window since"
+            self._logger.error(f"Title '{title}' not allowed for a plot window since"
                                "it would shadow on of the reserved "
-                               "names".format(title))
+                               "names")
             return
 
         # check if plot has already been opened
@@ -927,7 +927,7 @@ class MainGui(QMainWindow):
         self._currentExperimentIndex = self.experimentList.row(self._currentExpListItem)
         self._currentExperimentName = self._experiments[self._currentExperimentIndex]["Name"]
         expName = self._currentExperimentName
-        self._logger.info("Experiment: {}".format(expName))
+        self._logger.info(f"Experiment: {expName}")
 
         if self.visualizer is not None:
             self.visualizer.setExpName(expName)
@@ -1000,9 +1000,9 @@ class MainGui(QMainWindow):
                 "~current~" in self._currentLastMeasItem.text():
             self.exp.sendParameterExperiment()
         else:
-            self._logger.warning("Selected Experiment '{}' doesn't match current running Experiment '{}'!".format(
-                self._currentExperimentName,
-                self._experiments[self.experimentList.row(self._currentExpListItem)]["Name"]))
+            runningName = self._experiments[self.experimentList.row(self._currentExpListItem)]["Name"]
+            self._logger.warning(f"Selected Experiment '{self._currentExperimentName}' doesn't match "
+                                 f"current running Experiment '{runningName}'!")
 
     def sendChangedParameter(self):
         """
@@ -1013,9 +1013,9 @@ class MainGui(QMainWindow):
                 "~current~" in self._currentLastMeasItem.text():
             self.exp.sendChangedParameterExperiment()
         else:
-            self._logger.warning("Selected Experiment '{}' doesn't match current running Experiment '{}'!".format(
-                self._currentExperimentName,
-                self._experiments[self.experimentList.row(self._currentExpListItem)]["Name"]))
+            runningName = self._experiments[self.experimentList.row(self._currentExpListItem)]["Name"]
+            self._logger.warning(f"Selected Experiment '{self._currentExperimentName}' doesn't match "
+                                 f"current running Experiment '{runningName}'!")
 
     def loadExpFromFile(self, fileName):
         """
@@ -1030,21 +1030,21 @@ class MainGui(QMainWindow):
                 success = False
         else:
             if not os.path.isfile(fileName):
-                self._logger.error('Config file {} does not exists!'.format(fileName))
+                self._logger.error(f'Config file {fileName} does not exists!')
                 success = False
 
         if success:
-            self._logger.info("Load config file: {0}".format(fileName))
+            self._logger.info(f"Load config file: {fileName}")
 
             try:
                 with open(fileName, "r") as f:
                     experiments = yaml.load(f, Loader=SafeLoader)
             except yaml.YAMLError as e:
-                self._logger.error("Cannot parse config file {}: {}".format(fileName, e))
+                self._logger.error(f"Cannot parse config file {fileName}: {e}")
                 return False
 
             if not isinstance(experiments, list) or not experiments:
-                self._logger.error("Config file {} contains no experiments!".format(fileName))
+                self._logger.error(f"Config file {fileName} contains no experiments!")
                 return False
 
             experiments = validateExperiments(experiments,
@@ -1052,11 +1052,11 @@ class MainGui(QMainWindow):
                                               getRegisteredVisualizers(),
                                               logger=self._logger)
             if not experiments:
-                self._logger.error("Config file {} contains no usable experiments!".format(fileName))
+                self._logger.error(f"Config file {fileName} contains no usable experiments!")
                 return False
 
             self._experiments = experiments
-            self._logger.info("Loading {} experiments".format(len(self._experiments)))
+            self._logger.info(f"Loading {len(self._experiments)} experiments")
 
         return success
 
@@ -1145,7 +1145,7 @@ class MainGui(QMainWindow):
         else:
             self._logger.warning("visualizer is not a subclass of MplVisualizer or VtkVisualizer")
             return
-        self._logger.info("loading visualizer '{}'".format(vis.__name__))
+        self._logger.info(f"loading visualizer '{vis.__name__}'")
 
         self.visualizer.checkSaveAnimation(self.actSaveAnimation.isChecked())
         self.actSaveAnimation.disconnect()
@@ -1190,11 +1190,11 @@ class MainGui(QMainWindow):
         :return: `True` if successful, `False` if errors occurred
         """
         if index >= len(self._experiments):
-            self._logger.error("applyExperiment: index error! ({})".format(index))
+            self._logger.error(f"applyExperiment: index error! ({index})")
             return False
 
         expName = self._experiments[index]["Name"]
-        self._logger.info("Experiment '{}' applied".format(expName))
+        self._logger.info(f"Experiment '{expName}' applied")
 
         if self.isConnected:
             # check if experiment runs
@@ -1334,7 +1334,7 @@ class MainGui(QMainWindow):
             lastTime = time
 
         if lastTime is not None:
-            self.expTimeLabel.setText("Exp time={}".format(timeString(lastTime)))
+            self.expTimeLabel.setText(f"Exp time={timeString(lastTime)}")
 
     def _warnOnce(self, key, msg):
         """ log a warning only once per experiment run, the data path is called at the frame rate """
@@ -1418,14 +1418,14 @@ class MainGui(QMainWindow):
         try:
             idx = self.lastMeasList.row(item)
         except ValueError:
-            self._logger.error("loadLastMeas(): No measurement called '{0}".format(expName))
+            self._logger.error(f"loadLastMeas(): No measurement called '{expName}")
             return False
 
         if idx >= len(self.measurements):
-            self._logger.error("loadLastMeas(): Invalid index '{}')".format(idx))
+            self._logger.error(f"loadLastMeas(): Invalid index '{idx}')")
             return False
 
-        self._logger.info("Restore of measurement '{}'".format(expName))
+        self._logger.info(f"Restore of measurement '{expName}'")
 
         measurement = self.measurements[idx]
 
@@ -1442,7 +1442,7 @@ class MainGui(QMainWindow):
         for i in range(self.dataPointTreeWidget.topLevelItemCount()):
             self.updatePlot(self.dataPointTreeWidget.topLevelItem(i), dataPointBuffers)
 
-        self._logger.info("Apply measurement '{}'".format(measurement['exp']['Name']))
+        self._logger.info(f"Apply measurement '{measurement['exp']['Name']}'")
 
     def updateDataPoints(self, dataPointNames):
         """
@@ -1556,8 +1556,8 @@ class MainGui(QMainWindow):
                 config['invertSlider'] = False
             startValue = exp.get(config['Module'], {}).get(config['Parameter'])
             if startValue is None:
-                self._logger.error("Cannot create slider '{}': parameter '{}' of module '{}' not found!".format(
-                    config['name'], config['Parameter'], config['Module']))
+                self._logger.error(f"Cannot create slider '{config['name']}': parameter '{config['Parameter']}' "
+                                   f"of module '{config['Module']}' not found!")
                 return
             sliderLabel = QLabel()
             sliderLabel.setFixedHeight(15)
@@ -1637,14 +1637,14 @@ class MainGui(QMainWindow):
                         wid.setValue(float(value))
                         wid.blockSignals(False)
                         wid.valueOn = value
-                        wid.label.setText(wid.widgetName + ": {:.3f}".format(wid.value))
+                        wid.label.setText(wid.widgetName + f": {wid.value:.3f}")
         else:
             widget.valueOn = value
 
             if isinstance(widget, MovableSlider):
                 value = widget.calcValue(value)
 
-            widget.label.setText(widget.widgetName + ": {:.3f}".format(value))
+            widget.label.setText(widget.widgetName + f": {value:.3f}")
 
     def remoteSendParameter(self, module, parameter, value):
         self.remoteSetParameter(module, parameter, value)
@@ -1721,9 +1721,5 @@ def findDefaultConfig(name='default.sreg'):
 
 
 def timeString(seconds):
-    return "{:02d}:{:02d}:{:02d}".format(
-            int(seconds // 3600),
-            int(seconds % 3600 // 60),
-            int(seconds % 60),
-        )
+    return f"{int(seconds // 3600):02d}:{int(seconds % 3600 // 60):02d}:{int(seconds % 60):02d}"
 

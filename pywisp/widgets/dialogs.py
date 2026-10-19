@@ -34,10 +34,10 @@ class DataIntDialog(QDialog):
         inputLayout = QHBoxLayout()
 
         minLabel = QLabel(self)
-        minLabel.setText("min. value: {}".format(self.minValue))
+        minLabel.setText(f"min. value: {self.minValue}")
         labelLayout.addWidget(minLabel)
         maxLabel = QLabel(self)
-        maxLabel.setText("max. value: {}".format(self.maxValue))
+        maxLabel.setText(f"max. value: {self.maxValue}")
         labelLayout.addWidget(maxLabel)
         mainLayout.addLayout(labelLayout)
 
