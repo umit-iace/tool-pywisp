@@ -29,14 +29,17 @@ try:
 except ImportError:
     from yaml import SafeLoader
 from PyQt6.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QCoreApplication
-from PyQt6.QtGui import *
-from PyQt6.QtWidgets import *
-from pyqtgraph.dockarea import *
+from PyQt6.QtGui import QAction, QBrush, QGuiApplication, QIcon, QKeySequence, QPixmap
+from PyQt6.QtWidgets import QAbstractItemView, QApplication, QComboBox, QFileDialog, QFrame, QHBoxLayout, \
+    QInputDialog, QLabel, QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox, QPushButton, \
+    QSizePolicy, QSplashScreen, QStatusBar, QTextEdit, QToolBar, QTreeWidget, QTreeWidgetItem, QVBoxLayout, \
+    QWidget
+from pyqtgraph.dockarea import Dock, DockArea
 
 from .config import dumpExperiments, validateExperiments
 from .connection import SerialConnection, SocketConnection
 from .experiments import ExperimentInteractor, ExperimentView
-from .registry import *
+from .registry import getRegisteredConnections, getRegisteredExperimentModules, getRegisteredVisualizers
 from .buffer import DataPointBuffer
 from .export import Exporter
 from .measurement import Measurement
@@ -83,17 +86,8 @@ class MainGui(QMainWindow):
                        'HeartbeatTime': 0,
                        }
         self.configDefaults = self.config.copy()
-        QStyleSheet = """
-            QListView::item:selected {
-                color: black;
-            }
-            QListView::item:selected:!active {
-                background: transparent;
-            }
-            QListView::item:selected:active {
-                background: transparent;
-            }
-            QListView::item:hover { }
+        # the selection of the plot tree is drawn by TreeWidgetStyledItemDelegate
+        treeStyleSheet = """
             QTreeView {
                 selection-background-color: transparent;
             }
@@ -203,8 +197,9 @@ class MainGui(QMainWindow):
         # experiment dock
         self.experimentList = QListWidget(self)
         self.experimentList.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.experimentList.setStyleSheet(QStyleSheet)
-        self.experimentList.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        # experiments are applied by a double click, the applied one is shown in bold and
+        # the running one with a background, a selection would hide both
+        self.experimentList.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.experimentDock.addWidget(self.experimentList)
         self.experimentList.itemDoubleClicked.connect(self.experimentDoubleClicked)
         self._currentExperimentIndex = None
@@ -231,7 +226,7 @@ class MainGui(QMainWindow):
         # lastmeas dock
         self.lastMeasList = QListWidget(self)
         self.lastMeasList.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.lastMeasList.setStyleSheet(QStyleSheet)
+        self.lastMeasList.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.lastMeasDock.addWidget(self.lastMeasList)
         self.lastMeasList.itemDoubleClicked.connect(self.loadLastMeas)
         # all recorded measurements, each list item holds its measurement as user data
@@ -309,7 +304,7 @@ class MainGui(QMainWindow):
         self.dataPointTreeWidget = QTreeWidget()
         custom_QStyledItemDelegate = TreeWidgetStyledItemDelegate()
         self.dataPointTreeWidget.setItemDelegate(custom_QStyledItemDelegate)
-        self.dataPointTreeWidget.setStyleSheet(QStyleSheet)
+        self.dataPointTreeWidget.setStyleSheet(treeStyleSheet)
         self.dataPointTreeWidget.setHeaderLabels(["PlotTitle", "DataPoint"])
         self.dataPointTreeWidget.itemDoubleClicked.connect(self.plotVectorClicked)
         self.dataPointTreeWidget.setExpandsOnDoubleClick(0)
@@ -347,7 +342,7 @@ class MainGui(QMainWindow):
 
         # view
         self.viewMenu = self.menuBar().addMenu('&View')
-        self.actLoadStandardState = QAction('&Load default view')
+        self.actLoadStandardState = QAction('&Load default view', self)
         self.viewMenu.addAction(self.actLoadStandardState)
         self.actLoadStandardState.triggered.connect(self.loadStandardDockState)
         self.actShowCoords = QAction("&Show coordinates", self)
@@ -404,22 +399,22 @@ class MainGui(QMainWindow):
             self.connMenu.addSeparator()
 
         self.expMenu.addSeparator()
-        self.actConnect = QAction('&Connect')
+        self.actConnect = QAction('&Connect', self)
         self.actConnect.setIcon(QIcon(getResource("connected.png")))
         self.actConnect.setShortcut(QKeySequence("F9"))
         self.expMenu.addAction(self.actConnect)
         self.actConnect.triggered.connect(self.connectRig)
 
-        self.actDisconnect = QAction('&Disconnect')
+        self.actDisconnect = QAction('&Disconnect', self)
         self.actDisconnect.setEnabled(False)
         self.actDisconnect.setIcon(QIcon(getResource("disconnected.png")))
         self.actDisconnect.setShortcut(QKeySequence("F10"))
-        self.actSendParameter = QAction('&Send all parameter')
+        self.actSendParameter = QAction('&Send all parameter', self)
         self.actSendParameter.setEnabled(False)
         self.actSendParameter.setShortcut(QKeySequence("F7"))
         self.expMenu.addAction(self.actSendParameter)
         self.actSendParameter.triggered.connect(self.sendParameter)
-        self.actSendChangedParameter = QAction('&Send changed parameter')
+        self.actSendChangedParameter = QAction('&Send changed parameter', self)
         self.actSendChangedParameter.setEnabled(False)
         self.actSendChangedParameter.setShortcut(QKeySequence("F8"))
         self.expMenu.addAction(self.actSendChangedParameter)
@@ -429,8 +424,6 @@ class MainGui(QMainWindow):
         self.expMenu.addSeparator()
         self.expMenu.addAction(self.actStartExperiment)
         self.expMenu.addAction(self.actStopExperiment)
-        self.expMenu.addAction(self.actSendParameter)
-        self.expMenu.addAction(self.actSendChangedParameter)
 
         # toolbar
         self.toolbarExp = QToolBar("Experiment")
@@ -965,8 +958,6 @@ class MainGui(QMainWindow):
         self.actSendParameter.setDisabled(False)
         self.actSendChangedParameter.setDisabled(False)
         self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.GlobalColor.darkGreen))
-        # the style sheet paints selected items transparent, which hides the background
-        self.experimentList.clearSelection()
         self.experimentList.repaint()
 
         measurement = Measurement(len(self.measurements) + 1, self.exp.getExperiment(), dataPointNames)
