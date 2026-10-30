@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import QItemDelegate, QTreeView
 
 from .config import RESERVED_KEYS as NON_MODULE_KEYS
 from .experimentModules import ExperimentModuleException
-from .min import CONTROL_FRAME_ID, Control, controlFrame, frameCrc
+from .min import CONTROL_FRAME_ID, Control, controlFrame
 from .registry import *
 import copy as cp
 
@@ -486,8 +486,8 @@ class ExperimentInteractor(QObject):
         Sends all start parameters of all modules that are registered in the target model to start an experiment and
         adds and frame with id 1 and payload 1 as general start command.
 
-        :return: (number, CRC32) of the frames sent before the start command by connection name, for the rig to
-            confirm, see :meth:`ConnectionManager.expectStart`, `None` if the experiment could not be started
+        :return: the frames sent before the start command by connection name, for the rig to confirm, see
+            :meth:`ConnectionManager.expectStart`, `None` if the experiment could not be started
         """
         data = []
         self.runningExperiment = True
@@ -514,18 +514,18 @@ class ExperimentInteractor(QObject):
 
     @staticmethod
     def _expected(data):
-        """ (number, CRC32) of the frames by connection name, control frames excluded """
+        """ the sent frames by connection name, control frames excluded """
         frames = {}
         for _data in data:
             if _data['id'] != CONTROL_FRAME_ID:
                 frames.setdefault(_data['connection'], []).append(_data)
-        return {conn: frameCrc(connFrames) for conn, connFrames in frames.items()}
+        return frames
 
     def sendChangedParameterExperiment(self):
         """
         Sends changed parameters of all modules that are registered in the target model to an experiment.
 
-        :return: (number, CRC32) of the sent frames by connection name, for the rig to confirm, see
+        :return: the sent frames by connection name, for the rig to confirm, see
             :meth:`ConnectionManager.sync`, `None` if nothing was sent
         """
         data = []

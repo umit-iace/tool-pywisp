@@ -102,6 +102,8 @@ class MainGui(QMainWindow):
         self._startRetried = False
         # sync id of all parameters sent again after a failed sync, None if none is pending
         self._recoverySyncId = None
+        # problem of the communication with the rig, shown by the yellow traffic light
+        self._commError = None
         # looked up on every call, so it can be replaced, e.g. in tests
         self.connectionManager.framesReceived.connect(lambda frames, name: self.updateData(frames, name))
         self.selectedExp = False
@@ -129,7 +131,13 @@ class MainGui(QMainWindow):
         # status bar
         self.statusBar = QStatusBar(self)
         self.setStatusBar(self.statusBar)
-        self.statusbarLabel = QLabel("Not connected!")
+        # traffic light of the connection: red not connected, green connected, yellow a problem,
+        # the tooltip tells which
+        self.connectionLed = QLabel()
+        self.connectionLed.setFixedSize(14, 14)
+        self.statusBar.addPermanentWidget(self.connectionLed, 0)
+        self._setConnectionLed('red', "Not connected")
+        self.statusbarLabel = QLabel("")
         self.statusBar.addPermanentWidget(self.statusbarLabel, 1)
         self.guiStartTime = 0.0
         self.guiTimer = QTimer()
@@ -541,6 +549,7 @@ class MainGui(QMainWindow):
                 self._logger.warning(f"{name}: the rig does not respond")
         self._startConfirmed = False
         self._startRetried = False
+        self._setCommError(None)
         self._startRig()
 
         if self.actStopExperiment.isEnabled():
@@ -619,6 +628,7 @@ class MainGui(QMainWindow):
     def _onSyncConfirmed(self, syncId):
         if syncId == self._recoverySyncId:
             self._recoverySyncId = None
+            self._setCommError(None)
             self._logger.info("Parameters confirmed by the rig after sending them again")
 
     def _onSyncFailed(self, syncId, reason):
@@ -628,10 +638,12 @@ class MainGui(QMainWindow):
         if self._recoverySyncId is not None:
             if syncId == self._recoverySyncId:
                 self._logger.error(f"Parameters not confirmed, experiment stopped: {reason}")
+                self._setCommError(f"Parameters not confirmed, experiment stopped: {reason}")
                 self.stopExperiment()
             # older changes are covered by sending all parameters again
             return
         self._logger.warning(f"Parameters not confirmed, sending all of them again: {reason}")
+        self._setCommError(f"Parameters not confirmed, sending all of them again: {reason}")
         self.connectionManager.cancelSyncChecks()
         expected = self.exp.sendParameterExperiment()
         if expected is not None:
@@ -881,6 +893,7 @@ class MainGui(QMainWindow):
         self._startConfirmed = True
         self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.GlobalColor.darkGreen))
         self.experimentList.repaint()
+        self._setCommError(None)
         self._logger.info("Start confirmed by the rig")
 
     def _onStartFailed(self, reason):
@@ -890,31 +903,50 @@ class MainGui(QMainWindow):
         if not self._startRetried:
             self._startRetried = True
             self._logger.warning(f"Start not confirmed, trying again: {reason}")
+            self._setCommError(f"Start not confirmed, trying again: {reason}")
             self.exp.stopExperiment()
             self._startRig()
             return
         self._logger.error(f"Start not confirmed, experiment stopped: {reason}")
+        self._setCommError(f"Start not confirmed, experiment stopped: {reason}")
         self.stopExperiment()
 
     def _onRigStatusChanged(self, name):
         """ shows the status of the rigs, stops the experiment if a rig ended it by itself """
-        if self.connectionManager.isConnected:
-            self.statusbarLabel.setText(self._rigStatusText())
         status = self.connectionManager.rigStatus.get(name)
         if (status is not None and self._startConfirmed and not status[0].running
                 and self.actStopExperiment.isEnabled()):
             self._logger.error(f"{name}: the rig ended the experiment, e.g. by a restart")
+            self._commError = f"{name}: the rig ended the experiment, e.g. by a restart"
             self.stopExperiment()
+        self._updateConnectionStatus()
 
-    def _rigStatusText(self):
-        """ text of the status bar: connected, and for every rig with status frames how it is doing """
-        parts = []
+    #: colors of the traffic light
+    LED_COLORS = {'red': '#d9534f', 'yellow': '#f0ad4e', 'green': '#5cb85c'}
+
+    def _setConnectionLed(self, state, tooltip):
+        """ :param state: 'red', 'yellow' or 'green' """
+        self.connectionLedState = state
+        self.connectionLed.setStyleSheet(f"background-color: {self.LED_COLORS[state]}; border-radius: 7px;")
+        self.connectionLed.setToolTip(tooltip)
+
+    def _setCommError(self, error):
+        """ problem of the communication shown by the traffic light, `None` once solved """
+        self._commError = error
+        self._updateConnectionStatus()
+
+    def _updateConnectionStatus(self):
+        """ traffic light and text of the status bar while connected """
+        if not self.connectionManager.isConnected:
+            return
+        parts, problems = [], []
         for name in self.connectionManager.connections:
             responding = self.connectionManager.isResponding(name)
             if responding is None:
                 continue
             if not responding:
                 parts.append(f"{name}: no response")
+                problems.append(f"{name}: the rig does not respond")
                 continue
             status = self.connectionManager.rigStatus[name][0]
             text = f"{name}: {'RUN' if status.running else 'IDLE'}"
@@ -922,28 +954,35 @@ class MainGui(QMainWindow):
                        if not status.flags & (1 << bit)]
             if missing:
                 text += f", missing: {', '.join(missing)}"
+                problems.append(f"{name}: missing {', '.join(missing)}")
             parts.append(text)
-        return "Connected!" + (" " + " | ".join(parts) if parts else "")
+        if self._commError:
+            problems.append(self._commError)
+        self._setConnectionLed('yellow' if problems else 'green', "\n".join(["Connected"] + problems))
+        self.statusbarLabel.setText(" | ".join(parts))
 
     def _onConnectionStateChanged(self, state):
         """ sets the button states and the status bar """
         if state == ConnectionManager.CONNECTING:
             self.actConnect.setEnabled(False)
             self.actDisconnect.setEnabled(True)
-            self.statusbarLabel.setText("Connecting ...")
+            self._setConnectionLed('red', "Connecting ...")
+            self.statusbarLabel.setText("")
         elif state == ConnectionManager.CONNECTED:
             self.actConnect.setEnabled(False)
             self.actDisconnect.setEnabled(True)
             if self._currentExpListItem is not None and self.selectedExp:
                 self.actStartExperiment.setEnabled(True)
             self.actStopExperiment.setEnabled(False)
-            self.statusbarLabel.setText(self._rigStatusText())
+            self._commError = None
+            self._updateConnectionStatus()
         else:
             self.actConnect.setEnabled(True)
             self.actDisconnect.setEnabled(False)
             self.actStartExperiment.setEnabled(False)
             self.actStopExperiment.setEnabled(False)
-            self.statusbarLabel.setText('Not Connected')
+            self._setConnectionLed('red', "Not connected")
+            self.statusbarLabel.setText("")
 
     def updateData(self, frames, connection):
         """

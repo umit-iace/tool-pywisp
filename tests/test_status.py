@@ -14,6 +14,11 @@ def statusFrame(running=False, flags=0, seq=0, count=0, crc=0, uptime=1000, sync
     return Frame(STATUS_FRAME_ID, payload)
 
 
+# parameter frames sent before a start or sync command
+FRAMES = [{'id': 20, 'msg': bytes([1, 2, 3])}, {'id': 21, 'msg': b''}]
+COUNT, CRC = frameCrc(FRAMES)
+
+
 def test_status_payload():
     status = RigStatus.fromPayload(statusFrame(True, 0b101, 3, 2, 0x12345678, 4242).payload)
     assert status == RigStatus(1, True, 0b101, 3, 2, 0x12345678, 4242)
@@ -71,37 +76,37 @@ def test_rig_stops_responding(manager, qtbot, monkeypatch):
 
 def test_start_confirmed(manager, qtbot):
     manager._onFrames([statusFrame(seq=4)], 'rig')
-    assert manager.expectStart({'rig': (2, 0xabc)})
+    assert manager.expectStart({'rig': FRAMES})
     # older status without the new start is not yet a confirmation
     manager._onFrames([statusFrame(seq=4)], 'rig')
     with qtbot.waitSignal(manager.startConfirmed, timeout=500):
-        manager._onFrames([statusFrame(True, seq=5, count=2, crc=0xabc)], 'rig')
+        manager._onFrames([statusFrame(True, seq=5, count=COUNT, crc=CRC)], 'rig')
 
 
 def test_start_with_other_parameters_fails(manager, qtbot):
     manager._onFrames([statusFrame(seq=4)], 'rig')
-    manager.expectStart({'rig': (2, 0xabc)})
+    manager.expectStart({'rig': FRAMES})
     with qtbot.waitSignal(manager.startFailed, timeout=500) as blocker:
-        manager._onFrames([statusFrame(True, seq=5, count=1, crc=0xabc)], 'rig')
+        manager._onFrames([statusFrame(True, seq=5, count=1, crc=CRC)], 'rig')
     assert '1 frames' in blocker.args[0]
 
 
 def test_start_without_confirmation_fails(manager, qtbot):
     manager._onFrames([statusFrame(seq=4)], 'rig')
-    manager.expectStart({'rig': (2, 0xabc)})
+    manager.expectStart({'rig': FRAMES})
     with qtbot.waitSignal(manager.startFailed, timeout=1000) as blocker:
         pass
     assert 'no confirmation' in blocker.args[0]
 
 
 def test_rigs_without_status_are_not_checked(manager):
-    assert not manager.expectStart({'rig': (2, 0xabc)})
+    assert not manager.expectStart({'rig': FRAMES})
 
 
 def test_start_command_to_rig_without_parameters(manager, qtbot):
     # the start command goes to all rigs, a rig without parameters confirms 0 frames
     manager._onFrames([statusFrame(seq=0)], 'other')
-    manager.expectStart({'rig': (2, 0xabc)})
+    manager.expectStart({'rig': FRAMES})
     with qtbot.waitSignal(manager.startConfirmed, timeout=500):
         manager._onFrames([statusFrame(True, seq=1)], 'other')
 
@@ -110,20 +115,20 @@ def test_sync_confirmed(manager, qtbot):
     sent = []
     manager.write = sent.append
     manager._onFrames([statusFrame(True, sync=(0, 0, 0))], 'rig')
-    syncId = manager.sync({'rig': (2, 0xabc)})
+    syncId = manager.sync({'rig': FRAMES})
     assert syncId == 1
     assert sent == [{'id': 1, 'msg': bytes([0b110, 1])}]
     # periodic status of the old sync is no answer yet
     manager._onFrames([statusFrame(True, sync=(0, 0, 0))], 'rig')
     with qtbot.waitSignal(manager.syncConfirmed, timeout=500) as blocker:
-        manager._onFrames([statusFrame(True, sync=(1, 2, 0xabc))], 'rig')
+        manager._onFrames([statusFrame(True, sync=(1, COUNT, CRC))], 'rig')
     assert blocker.args == [1]
 
 
 def test_sync_with_other_parameters_fails(manager, qtbot):
     manager.write = lambda data: None
     manager._onFrames([statusFrame(True, sync=(0, 0, 0))], 'rig')
-    syncId = manager.sync({'rig': (2, 0xabc)})
+    syncId = manager.sync({'rig': FRAMES})
     with qtbot.waitSignal(manager.syncFailed, timeout=500) as blocker:
         manager._onFrames([statusFrame(True, sync=(syncId, 1, 0x123))], 'rig')
     assert blocker.args[0] == syncId
@@ -133,7 +138,7 @@ def test_sync_with_other_parameters_fails(manager, qtbot):
 def test_sync_without_confirmation_fails(manager, qtbot):
     manager.write = lambda data: None
     manager._onFrames([statusFrame(True, sync=(0, 0, 0))], 'rig')
-    syncId = manager.sync({'rig': (2, 0xabc)})
+    syncId = manager.sync({'rig': FRAMES})
     with qtbot.waitSignal(manager.syncFailed, timeout=1500) as blocker:
         pass
     assert blocker.args[0] == syncId
@@ -144,7 +149,7 @@ def test_rigs_without_sync_support_get_no_sync(manager):
     sent = []
     manager.write = sent.append
     manager._onFrames([statusFrame(True)], 'rig')
-    assert manager.sync({'rig': (2, 0xabc)}) is None
+    assert manager.sync({'rig': FRAMES}) is None
     assert sent == []
 
 
@@ -153,3 +158,19 @@ def test_sync_ids_wrap_without_zero(manager):
     manager._onFrames([statusFrame(True, sync=(0, 0, 0))], 'rig')
     manager._syncId = 254
     assert [manager.sync({}) for _ in range(3)] == [255, 1, 2]
+
+
+def test_tcp_rig_receives_padded_frames(manager, qtbot):
+    from pywisp.connection import TcpConnection
+    conn = TcpConnection('127.0.0.1', 1, maxPayload=8)
+    # payloads are padded to maxPayload, longer ones are not sent at all
+    assert conn.rigFrame({'id': 20, 'msg': b'ab'}) == {'id': 20, 'msg': b'ab' + bytes(6)}
+    assert conn.rigFrame({'id': 20, 'msg': bytes(9)}) is None
+    manager.connections['rig'] = {'inst': conn}
+    frames = FRAMES + [{'id': 22, 'msg': bytes(9)}]
+    count, crc = frameCrc([conn.rigFrame(f) for f in FRAMES])
+    assert crc != CRC
+    manager._onFrames([statusFrame(seq=4)], 'rig')
+    manager.expectStart({'rig': frames})
+    with qtbot.waitSignal(manager.startConfirmed, timeout=500):
+        manager._onFrames([statusFrame(True, seq=5, count=count, crc=crc)], 'rig')

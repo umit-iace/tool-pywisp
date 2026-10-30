@@ -159,6 +159,38 @@ def test_connection_names_are_bound_correctly(gui, qtbot):
     assert "inst" not in gui.connectionManager.connections["DummyConnection"]
 
 
+def test_connection_traffic_light(gui, qtbot):
+    """ green while connected, yellow if the rig does not respond or misses status bits """
+    import struct
+    gui.connectionManager.connections = {"DummyConnection": {"cls": DummyConnection}}
+    assert gui.connectionLedState == 'red'
+    with mock.patch.object(DummyConnection, "_connect", return_value=True):
+        connectRig(gui, qtbot)
+    try:
+        # a rig without status frames is not checked
+        assert gui.connectionLedState == 'green'
+
+        def status(flags):
+            payload = struct.pack('<BBBBHIIBHI', 1, 0, flags, 0, 0, 0, 1000, 0, 0, 0)
+            gui.connectionManager._onFrames([pw.Frame(63, payload)], "DummyConnection")
+
+        with mock.patch.object(DummyConnection, "statusFlags", ['ODrive', 'Motor'], create=True):
+            status(0b11)
+            assert gui.connectionLedState == 'green'
+            assert gui.statusbarLabel.text() == "DummyConnection: IDLE"
+            status(0b01)
+            assert gui.connectionLedState == 'yellow'
+            assert "missing Motor" in gui.connectionLed.toolTip()
+            status(0b11)
+            assert gui.connectionLedState == 'green'
+            gui._setCommError("Start not confirmed")
+            assert gui.connectionLedState == 'yellow'
+            assert "Start not confirmed" in gui.connectionLed.toolTip()
+    finally:
+        gui.disconnectRig()
+    assert gui.connectionLedState == 'red'
+
+
 def test_failed_connection_closes_others(gui, qtbot):
     with mock.patch.object(DummyConnection, "_connect", return_value=True), \
             mock.patch.object(DummySerial, "_connect", return_value=False):
@@ -181,7 +213,8 @@ def test_connecting_does_not_block_the_gui(gui, qtbot):
     gui.connectionManager.connections = {"DummyConnection": {"cls": DummyConnection}}
     with mock.patch.object(DummyConnection, "_connect", slowConnect):
         gui.connectRig()
-        assert gui.statusbarLabel.text() == "Connecting ..."
+        assert gui.connectionLedState == 'red'
+        assert gui.connectionLed.toolTip() == "Connecting ..."
         assert not gui.isConnected and not gui.actConnect.isEnabled()
         # abort while the connection is still being established
         gui.disconnectRig()
@@ -189,7 +222,8 @@ def test_connecting_does_not_block_the_gui(gui, qtbot):
         release.set()
         qtbot.waitUntil(lambda: not pw.Connection._aborting, timeout=5000)
     assert not gui.isConnected
-    assert gui.statusbarLabel.text() == "Not Connected"
+    assert gui.connectionLedState == 'red'
+    assert gui.connectionLed.toolTip() == "Not connected"
 
 
 def test_close_waits_for_aborted_connections(gui, qtbot):
@@ -681,5 +715,6 @@ def test_connection_manager_reports_lost_connections(gui, qtbot):
         inst.close()
     assert manager.state == manager.DISCONNECTED
     assert not gui.actStopExperiment.isEnabled() and gui.actConnect.isEnabled()
-    assert gui.statusbarLabel.text() == "Not Connected"
+    assert gui.connectionLedState == 'red'
+    assert gui.connectionLed.toolTip() == "Not connected"
     assert "inst" not in manager.connections["DummyConnection"]

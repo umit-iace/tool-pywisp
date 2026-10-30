@@ -195,7 +195,8 @@ bytes  content
 
 PyWisp takes these frames out before the experiment modules see them. The status bar shows whether the rig responds,
 its state and the missing status bits, named by the list ``statusFlags`` of the connection class.
-For a start, PyWisp computes the same CRC32 over the frames it sent (:func:`pywisp.min.frameCrc`) and waits up to
+For a start, PyWisp computes the same CRC32 over the frames as the rig receives them (:func:`pywisp.min.frameCrc`
+over :meth:`pywisp.connection.Connection.rigFrame`, a TCP rig gets every payload padded to ``maxPayload``) and waits up to
 1 s for the confirmation. The experiment turns yellow until then and green once confirmed. If the confirmation is
 missing or the rig received other frames, PyWisp stops and starts once more, after a second failure the experiment
 is stopped. Rigs without status frames are not checked and behave as before.

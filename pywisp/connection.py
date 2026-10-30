@@ -140,6 +140,16 @@ class Connection(QObject, metaclass=ConnectionMeta):
             for frame in frames:
                 self.received.emit(frame)
 
+    def rigFrame(self, frame):
+        """
+        the frame as the rig receives it, for the check of the received frames, see
+        :meth:`pywisp.connectionManager.ConnectionManager.expectStart`
+
+        :param frame: dict with the keys 'id' and 'msg'
+        :return: the received frame or `None` if the frame is not sent at all
+        """
+        return frame
+
     def writeData(self, data):
         """
         push application data through min
@@ -362,6 +372,7 @@ class TcpConnection(SocketConnection):
 
     def __init__(self, ip, port, maxPayload=80, **kwargs):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.maxPayload = maxPayload
 
         @coroutine
         def Sender(sink):
@@ -388,6 +399,12 @@ class TcpConnection(SocketConnection):
                     sink.send((f[0], bytes(f[1:])))
 
         super().__init__(sock, ip, port, tx=Sender, rx=Receiver, **kwargs)
+
+    def rigFrame(self, frame):
+        """ the rig receives every payload padded to `maxPayload`, longer ones are dropped """
+        if len(frame['msg']) > self.maxPayload:
+            return None
+        return {**frame, 'msg': bytes(frame['msg']) + bytes(self.maxPayload - len(frame['msg']))}
 
 
 class UdpConnection(SocketConnection):

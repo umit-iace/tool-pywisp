@@ -10,7 +10,7 @@ import serial.tools.list_ports
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
 from .connection import Connection, SerialConnection, SocketConnection
-from .min import CONTROL_FRAME_ID, STATUS_FRAME_ID, Control, RigStatus, controlFrame, syncFrame
+from .min import CONTROL_FRAME_ID, STATUS_FRAME_ID, Control, RigStatus, controlFrame, frameCrc, syncFrame
 from .registry import getRegisteredConnections
 from .widgets.dialogs import DataTcpIpDialog
 
@@ -252,12 +252,19 @@ class ConnectionManager(QObject):
 
     # check of the start
 
+    def _rigCrc(self, name, frames):
+        """ (number, CRC32) of the frames as the rig of the connection receives them,
+        see :meth:`pywisp.connection.Connection.rigFrame` and :func:`pywisp.min.frameCrc` """
+        inst = self.connections.get(name, {}).get('inst')
+        if inst is not None:
+            frames = [f for f in map(inst.rigFrame, frames) if f is not None]
+        return frameCrc(frames)
+
     def expectStart(self, expected):
         """
         Checks the next start of the rigs that send status frames.
 
-        :param expected: (number, CRC32) of the frames sent before the start command by
-            connection name, see :func:`pywisp.min.frameCrc`
+        :param expected: the frames sent before the start command by connection name
         :return: `True` if a rig is checked, :attr:`startConfirmed` or :attr:`startFailed` follow
         """
         self.cancelStartCheck()
@@ -265,7 +272,7 @@ class ConnectionManager(QObject):
             if self._isStale(received):
                 continue
             # the start command goes to all rigs, also to those without parameters
-            count, crc = expected.get(name, (0, 0))
+            count, crc = self._rigCrc(name, expected.get(name, []))
             self._expectedStart[name] = (status.startSeq, count, crc)
         if not self._expectedStart:
             return False
@@ -299,8 +306,7 @@ class ConnectionManager(QObject):
         Sends a sync command after parameters sent during the run, the rigs that support it confirm
         what they received since the last control frame.
 
-        :param expected: (number, CRC32) of the frames sent since the last control frame by
-            connection name, see :func:`pywisp.min.frameCrc`
+        :param expected: the frames sent since the last control frame by connection name
         :return: the sync id, :attr:`syncConfirmed` or :attr:`syncFailed` follow with it,
             `None` if no rig supports sync commands (nothing is sent then)
         """
@@ -309,7 +315,7 @@ class ConnectionManager(QObject):
             if status.syncId is None or self._isStale(received):
                 continue
             # the sync command goes to all rigs, also to those without parameters
-            names[name] = expected.get(name, (0, 0))
+            names[name] = self._rigCrc(name, expected.get(name, []))
         if not names:
             return None
         # ids 1..255, the rig reports 0 before the first sync
