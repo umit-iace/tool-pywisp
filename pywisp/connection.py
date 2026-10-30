@@ -9,7 +9,7 @@ import time
 from abc import ABCMeta, abstractmethod
 
 import serial
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal
 
 from .min import Packer, Unpacker, Frame, Bytewise, HDRStuf
 from .utils import coroutine, pipe
@@ -308,4 +308,34 @@ class UdpConnection(SocketConnection):
 
     def __init__(self, ip, port, **kwargs):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._pending = bytearray()
         super().__init__(sock, ip, port, tx=Packer, rx=[Bytewise, HDRStuf, Unpacker], **kwargs)
+
+    # [byte] upper limit of a datagram, stays below the MTU and the receive buffer of the ESP (1460)
+    maxDatagram = 1400
+
+    def _flush(self):
+        """ send all collected frames as one datagram """
+        if not self._pending or not self.connected:
+            self._pending.clear()
+            return
+        data, self._pending = bytes(self._pending), bytearray()
+        try:
+            self.sock.sendall(data)
+        except OSError as e:
+            self._logger.error(f"cannot send data: {e}")
+
+    @coroutine
+    def _send(self):
+        """
+        collect the frames of one event loop iteration (e.g. all parameters and the start command
+        of an experiment) and send them as one datagram, the bridge only buffers a few datagrams
+        and loses the rest of a burst of single frames
+        """
+        while True:
+            data = yield
+            if len(self._pending) + len(data) > self.maxDatagram:
+                self._flush()
+            if not self._pending:
+                QTimer.singleShot(0, self._flush)
+            self._pending.extend(data)
