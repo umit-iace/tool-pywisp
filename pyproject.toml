@@ -34,10 +34,8 @@ dependencies = [
     'pandas',
     'pysdl2',
     'pysdl2-dll',
+    'vtk',
 ]
-
-[project.optional-dependencies]
-vtk = ["vtk"]
 
 [tool.setuptools.dynamic]
 version = {attr = "pywisp.__version__"}
