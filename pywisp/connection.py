@@ -26,6 +26,8 @@ class ConnReader(QObject):
     """
     err = pyqtSignal(str)
     frames = pyqtSignal(object)
+    # result of establishing the connection in the thread, see Connection.openAsync
+    opened = pyqtSignal(bool)
     # [s] maximum time frames are held back before they are passed on
     flushInterval = 0.01
 
@@ -34,6 +36,8 @@ class ConnReader(QObject):
         self.conn = conn
         self.stop = False
         self.pending = []
+        # establish the connection in the thread before receiving
+        self.connectFirst = False
         self.rx = pipe([rx, self.collector])
 
     @coroutine
@@ -50,6 +54,11 @@ class ConnReader(QObject):
             self.frames.emit(frames)
 
     def run(self):
+        if self.connectFirst:
+            ok = self.conn._connect()
+            self.opened.emit(ok)
+            if not ok:
+                return
         lastFlush = time.monotonic()
         while not self.stop:
             try:
@@ -90,6 +99,13 @@ class Connection(QObject, metaclass=ConnectionMeta):
     #: emitted with a list of all frames received since the last emission
     receivedFrames = pyqtSignal(object)
     finished = pyqtSignal()
+    #: result of :meth:`openAsync`, `True` if the connection has been established
+    opened = pyqtSignal(bool)
+    # [ms] time to wait for the reader thread when closing
+    closeTimeout = 1000
+    # connections closed while connecting keep themselves alive until their thread has ended,
+    # destroying a running QThread aborts the process
+    _aborting = set()
 
     def __init__(self, rx, tx, *args, **kwargs):
         super().__init__()
@@ -100,11 +116,15 @@ class Connection(QObject, metaclass=ConnectionMeta):
         worker.moveToThread(thread)
         worker.err.connect(self.workerError)
         worker.frames.connect(self._onFrames)
+        worker.opened.connect(self._onOpened)
         thread.started.connect(worker.run)
         thread.finished.connect(thread.deleteLater)
         self.readerThread = thread
         self.worker = worker
         self.connected = False
+        # openAsync has been called and the result is not known yet
+        self.connecting = False
+        self._aborted = False
 
     def workerError(self, err):
         self.worker.deleteLater()
@@ -135,22 +155,61 @@ class Connection(QObject, metaclass=ConnectionMeta):
             self.close()
 
     def open(self):
-        """ establish the connection """
+        """
+        establish the connection, blocks until the connection is established or has failed.
+        Use :meth:`openAsync` in the gui.
+        """
         if self._connect():
             self.readerThread.start()
             self.connected = True
             return True
         return False
 
+    def openAsync(self):
+        """
+        establish the connection in the reader thread, so a slow or unreachable rig does
+        not block the gui. The result is emitted with :attr:`opened`.
+        """
+        self.connecting = True
+        self.worker.connectFirst = True
+        self.readerThread.start()
+
+    def _onOpened(self, ok):
+        """ result of the connection attempt of the reader thread, runs in the thread of the connection """
+        self.connecting = False
+        if self._aborted:
+            # closed while connecting, the worker has already been asked to stop
+            if ok:
+                self._disconnect()
+            self._stopThread()
+            Connection._aborting.discard(self)
+            return
+        self.connected = ok
+        if not ok:
+            self._stopThread()
+        self.opened.emit(ok)
+
     def close(self):
         """ close the connection, stop worker and thread """
+        if self.connecting:
+            # the result of the connection attempt is handled in _onOpened
+            self._aborted = True
+            self.worker.quit()
+            Connection._aborting.add(self)
+            return
         if not self.connected:
             return
         self.connected = False
         self.worker.quit()
         self._disconnect()
-        self.readerThread.quit()
+        self._stopThread()
         self.finished.emit()
+
+    def _stopThread(self):
+        self.readerThread.quit()
+        # the receive loop polls with a short timeout, so the thread ends quickly
+        if not self.readerThread.wait(self.closeTimeout):
+            self._logger.warning("the reader thread did not stop in time")
 
     @abstractmethod
     def _connect(self):

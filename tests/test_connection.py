@@ -82,3 +82,32 @@ def test_tcp_connect_failure_returns_false(qapp):
     conn = TcpConnection("127.0.0.1", port)
     assert conn.open() is False
     assert not conn.connected
+
+
+def test_tcp_connect_async(qtbot):
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    conn = TcpConnection("127.0.0.1", server.getsockname()[1])
+    try:
+        with qtbot.waitSignal(conn.opened, timeout=5000) as blocker:
+            conn.openAsync()
+        assert blocker.args == [True]
+        assert conn.connected and not conn.connecting
+        with qtbot.waitSignal(conn.finished, timeout=5000):
+            conn.close()
+        assert not conn.connected
+    finally:
+        server.close()
+
+
+def test_tcp_connect_async_failure(qtbot):
+    probe = socket.socket()
+    probe.bind(("127.0.0.1", 0))
+    port = probe.getsockname()[1]
+    probe.close()
+    conn = TcpConnection("127.0.0.1", port)
+    with qtbot.waitSignal(conn.opened, timeout=5000) as blocker:
+        conn.openAsync()
+    assert blocker.args == [False]
+    assert not conn.connected

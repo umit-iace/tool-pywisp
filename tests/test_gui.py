@@ -121,10 +121,16 @@ def test_movable_widgets_use_mixin_handlers():
         assert cls.mouseReleaseEvent is MovableWidget.mouseReleaseEvent
 
 
-def test_connection_names_are_bound_correctly(gui):
+def connectRig(gui, qtbot):
+    """ connect like the user does and wait for the result of the background connection """
+    gui.connectRig()
+    qtbot.waitUntil(lambda: not gui._pendingConnections, timeout=5000)
+
+
+def test_connection_names_are_bound_correctly(gui, qtbot):
     gui.connections = {"DummyConnection": {"cls": DummyConnection}}
     with mock.patch.object(DummyConnection, "_connect", return_value=True):
-        gui.connect()
+        connectRig(gui, qtbot)
     try:
         assert gui.isConnected
         with mock.patch.object(gui, "updateData") as updateData:
@@ -132,17 +138,42 @@ def test_connection_names_are_bound_correctly(gui):
         updateData.assert_called_once()
         assert updateData.call_args.args[1] == "DummyConnection"
     finally:
-        gui.disconnect()
+        gui.disconnectRig()
     assert not gui.isConnected
     assert "inst" not in gui.connections["DummyConnection"]
 
 
-def test_failed_connection_closes_others(gui):
+def test_failed_connection_closes_others(gui, qtbot):
     with mock.patch.object(DummyConnection, "_connect", return_value=True), \
             mock.patch.object(DummySerial, "_connect", return_value=False):
-        gui.connect()
+        connectRig(gui, qtbot)
+        qtbot.waitUntil(lambda: not pw.Connection._aborting, timeout=5000)
     assert not gui.isConnected
+    assert gui.actConnect.isEnabled()
     assert all("inst" not in c for c in gui.connections.values())
+
+
+def test_connecting_does_not_block_the_gui(gui, qtbot):
+    """ the gui stays responsive while the rig does not answer, and connecting can be aborted """
+    import threading
+    release = threading.Event()
+
+    def slowConnect(self):
+        release.wait(5)
+        return True
+
+    gui.connections = {"DummyConnection": {"cls": DummyConnection}}
+    with mock.patch.object(DummyConnection, "_connect", slowConnect):
+        gui.connectRig()
+        assert gui.statusbarLabel.text() == "Connecting ..."
+        assert not gui.isConnected and not gui.actConnect.isEnabled()
+        # abort while the connection is still being established
+        gui.disconnectRig()
+        assert gui.actConnect.isEnabled()
+        release.set()
+        qtbot.waitUntil(lambda: not pw.Connection._aborting, timeout=5000)
+    assert not gui.isConnected
+    assert gui.statusbarLabel.text() == "Not Connected"
 
 
 def test_gamepad_slider_mapping(gui):

@@ -113,6 +113,8 @@ class MainGui(QMainWindow):
 
         self.connections = {}
         self.isConnected = False
+        # names of the connections that are still being established
+        self._pendingConnections = set()
         self.selectedExp = False
 
         self.timer = QTimer()
@@ -406,7 +408,7 @@ class MainGui(QMainWindow):
         self.actConnect.setIcon(QIcon(getResource("connected.png")))
         self.actConnect.setShortcut(QKeySequence("F9"))
         self.expMenu.addAction(self.actConnect)
-        self.actConnect.triggered.connect(self.connect)
+        self.actConnect.triggered.connect(self.connectRig)
 
         self.actDisconnect = QAction('&Disconnect')
         self.actDisconnect.setEnabled(False)
@@ -423,7 +425,7 @@ class MainGui(QMainWindow):
         self.expMenu.addAction(self.actSendChangedParameter)
         self.actSendChangedParameter.triggered.connect(self.sendChangedParameter)
         self.expMenu.addAction(self.actDisconnect)
-        self.actDisconnect.triggered.connect(self.disconnect)
+        self.actDisconnect.triggered.connect(self.disconnectRig)
         self.expMenu.addSeparator()
         self.expMenu.addAction(self.actStartExperiment)
         self.expMenu.addAction(self.actStopExperiment)
@@ -467,7 +469,7 @@ class MainGui(QMainWindow):
         self.runExp.connect(self.exp.runExperiment)
         self.stopExp.connect(self.exp.stopExperiment)
         self.exp.expFinished.connect(self.saveLastMeas)
-        self.exp.missedbeat.connect(self.disconnect)
+        self.exp.missedbeat.connect(self.disconnectRig)
         self.exp.expStop.connect(self.stopExperiment)
 
         self.visualizer = None
@@ -1256,8 +1258,7 @@ class MainGui(QMainWindow):
         :param QCloseEvent:
         """
         self._logger.info("Close Event received, shutting down.")
-        if self.isConnected:
-            self.disconnect()
+        self.disconnectRig()
         self.stopGamepad()
         if self.exporter is not None:
             self._logger.warning("Export in progress, waiting!")
@@ -1266,26 +1267,47 @@ class MainGui(QMainWindow):
         super().closeEvent(QCloseEvent)
 
     @pyqtSlot()
-    def connect(self):
+    def connectRig(self):
         """
-        Connects all connections and sets the button states.
+        Establishes all connections in the background, the button states are set
+        once all of them are open, see :meth:`_onConnectionOpened`.
         """
         if not self.connections:
             self._logger.error("No connections registered!")
             return
+        if self.isConnected or self._pendingConnections:
+            return
 
+        self.actConnect.setEnabled(False)
+        self.actDisconnect.setEnabled(True)
+        self.statusbarLabel.setText("Connecting ...")
+        self._pendingConnections = set(self.connections)
         for name, conn in self.connections.items():
-            connInstance = conn['cls']()
-            if not connInstance.open():
-                self._logger.warning(f"No connection for {name} established! Check your settings!")
-                # do not leave the other connections half open
-                self.disconnect()
-                return
-            self._logger.info(f"Connection for {name} established!")
+            try:
+                connInstance = conn['cls']()
+            except Exception:
+                self.disconnectRig()
+                raise
             # bind name as default argument, otherwise all lambdas would see the last name
             connInstance.receivedFrames.connect(lambda frames, name=name: self.updateData(frames, name))
-            connInstance.finished.connect(self.disconnect)
+            connInstance.finished.connect(self.disconnectRig)
+            connInstance.opened.connect(lambda ok, name=name: self._onConnectionOpened(name, ok))
             conn['inst'] = connInstance
+            connInstance.openAsync()
+
+    def _onConnectionOpened(self, name, ok):
+        """ result of establishing the connection with the given name """
+        if name not in self._pendingConnections:
+            return
+        if not ok:
+            self._logger.warning(f"No connection for {name} established! Check your settings!")
+            # do not leave the other connections half open
+            self.disconnectRig()
+            return
+        self._logger.info(f"Connection for {name} established!")
+        self._pendingConnections.discard(name)
+        if self._pendingConnections:
+            return
 
         self.actConnect.setEnabled(False)
         self.actDisconnect.setEnabled(True)
@@ -1315,10 +1337,11 @@ class MainGui(QMainWindow):
                 conn['inst'].writeData(data)
 
     @pyqtSlot()
-    def disconnect(self):
+    def disconnectRig(self):
         """
         Disconnects all connections and resets the button states.
         """
+        self._pendingConnections.clear()
         if self.actStopExperiment.isEnabled():
             self.stopExperiment()
 

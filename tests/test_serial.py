@@ -21,8 +21,10 @@ def test_valid_baudrate(qtbot, cleanRegistry):
     form = pw.MainGui()
     qtbot.addWidget(form)
     # the port does not exist, so connecting fails gracefully
-    form.connect()
+    form.connectRig()
+    qtbot.waitUntil(lambda: not form._pendingConnections, timeout=5000)
     assert not form.isConnected
+    assert form.actConnect.isEnabled()
 
 
 def test_invalid_baudrate(qtbot, cleanRegistry):
@@ -30,4 +32,4 @@ def test_invalid_baudrate(qtbot, cleanRegistry):
     form = pw.MainGui()
     qtbot.addWidget(form)
     with pytest.raises(ValueError):
-        form.connect()
+        form.connectRig()
