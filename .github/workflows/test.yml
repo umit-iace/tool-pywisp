@@ -1,0 +1,54 @@
+# runs the same checks as the test job of .gitlab-ci.yml
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # the lowest supported version and the one used for development
+        python-version: ["3.10", "3.12"]
+
+    env:
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system libraries
+        # Qt needs them even on the offscreen platform, vtk renders with OpenGL on the virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb libegl1 libgl1 libxkbcommon0 libxkbcommon-x11-0 libfontconfig1 libdbus-1-3 \
+            libx11-6 libxrender1 libxi6
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Lint
+        run: uv run ruff check pywisp tests examples
+
+      - name: Test
+        run: >
+          xvfb-run -a -s "-screen 0 1400x900x24"
+          uv run pytest -m "not slow" --cov --cov-report=term --cov-report=xml:coverage.xml
+          --junitxml=report.xml
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ matrix.python-version }}
+          path: |
+            report.xml
+            coverage.xml
