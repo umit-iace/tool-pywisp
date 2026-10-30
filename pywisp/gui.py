@@ -665,7 +665,12 @@ class MainGui(QMainWindow):
 
     # event functions
     def addPlotTreeItem(self, default=False):
-        text = f"plot_{self.dataPointTreeWidget.topLevelItemCount():03d}"
+        existingNames = {self.dataPointTreeWidget.topLevelItem(index).text(0)
+                         for index in range(self.dataPointTreeWidget.topLevelItemCount())}
+        index = 0
+        while f"plot_{index:03d}" in existingNames:
+            index += 1
+        text = f"plot_{index:03d}"
         if not default:
             name, ok = QInputDialog.getText(self,
                                             "Select a plot title",
@@ -959,6 +964,8 @@ class MainGui(QMainWindow):
         self.actSendParameter.setDisabled(False)
         self.actSendChangedParameter.setDisabled(False)
         self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.GlobalColor.darkGreen))
+        # the style sheet paints selected items transparent, which hides the background
+        self.experimentList.clearSelection()
         self.experimentList.repaint()
 
         measurement = Measurement(len(self.measurements) + 1, self.exp.getExperiment(), dataPointNames)
