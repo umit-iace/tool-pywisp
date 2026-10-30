@@ -37,6 +37,9 @@ PyWisp already comes with generic connection types like
 
 To implement your specific connection, just derive from
 :class:`pywisp.connection.Connection` or one of the classes mentioned above.
+Its ``_connect`` method is called in the reader thread of the connection, so it may block, e.g. until a
+timeout, but must not access the gui. Scripts without a gui can use the blocking
+:meth:`pywisp.connection.Connection.open` instead of :meth:`pywisp.connection.Connection.openAsync`.
 The actual settings such as ports and baud rate can also be changed in the GUI later on.
 A simple UDP based setup could look like this:
 
@@ -250,6 +253,29 @@ to the bench at once:
           targets:
             - {Module: Motor1, Parameter: speed, value: 0}
             - {Module: Motor2, Parameter: speed, value: 0}
+
+In the widget editor the shortcut is recorded by pressing a key in the shortcut field, Backspace or Delete clear it.
+Escape and Space can be used as shortcuts as well.
+
+Own widget types can be added by deriving from :class:`pywisp.MovableWidget` and a Qt widget and registering the
+class with :func:`pywisp.registerRemoteWidget`. The class defines its ``widgetType`` used in the config files, its
+required and optional keys, how it is created from its config, the settings in the widget editor and the parameters
+it sets when activated, see :class:`pywisp.widgets.remote.MovablePushButton` for an example. The config files, the
+widget editor and the remote dock then handle the new type like the built in ones:
+
+.. code-block:: python
+
+    import pywisp as pw
+    from pywisp.widgets.remote import MovablePushButton
+
+    class Doubler(MovablePushButton):
+        """ sends twice the configured value """
+        widgetType = 'Doubler'
+
+        def updates(self):
+            return [(self.module, self.parameter, 2 * float(self.valueOn))]
+
+    pw.registerRemoteWidget(Doubler)
 
 For detailed information see the :ref:`chapter_examples` section.
 
