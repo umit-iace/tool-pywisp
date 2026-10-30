@@ -4,8 +4,8 @@ Dialogs for settings and the configuration of remote widgets.
 """
 from PyQt6.QtCore import Qt, QRegularExpression
 from PyQt6.QtGui import QIcon, QIntValidator, QKeySequence, QRegularExpressionValidator
-from PyQt6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, \
-    QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QLayout, \
+    QLineEdit, QPushButton, QVBoxLayout, QWidget
 
 from ..utils import getResource
 
@@ -156,6 +156,7 @@ class RemoteWidgetEdit(QDialog):
         self.shortcutMinus = str(kwargs.get('shortcutMinus', ""))
         self.shortcutGp = kwargs.get('shortcut-Gp', None)
         self.invertSlider = kwargs.get('invertSlider', False)
+        self.targets = [dict(t) for t in kwargs.get('targets', None) or []]
 
         self.curModule = kwargs.get('Module', None)
         self.curParameter = kwargs.get('Parameter', None)
@@ -172,6 +173,8 @@ class RemoteWidgetEdit(QDialog):
         self.shortcutField = None
         self.shortcutFieldPlus = None
         self.shortcutFieldMinus = None
+        self.targetLayout = None
+        self.targetRows = []
 
         mainLayout = QFormLayout()
 
@@ -180,7 +183,7 @@ class RemoteWidgetEdit(QDialog):
         self.nameText.mousePressEvent = lambda event: self.nameText.selectAll()
 
         self.typeList = QComboBox()
-        self.typeList.addItems(["PushButton", "Switch", "Slider"])
+        self.typeList.addItems(["PushButton", "Switch", "Slider", "MultiButton"])
         self.typeList.setCurrentText(self.widgetType)
         self.typeList.currentIndexChanged.connect(self.typeListChanged)
         self.typeList.setEnabled(not self.editWidget)
@@ -208,6 +211,7 @@ class RemoteWidgetEdit(QDialog):
 
         mainLayout.addRow(QLabel("Modules:"), self.moduleList)
         mainLayout.addRow(QLabel("Parameter:"), self.paramList)
+        self.mainLayout = mainLayout
 
         self.settingsWidget = QWidget()
         self.settingsWidgetLayout = QFormLayout()
@@ -230,11 +234,18 @@ class RemoteWidgetEdit(QDialog):
         resPath = getResource("icon.svg")
         self.icon = QIcon(resPath)
         self.setWindowIcon(self.icon)
-        self.setFixedSize(self.sizeHint())
+        # the size follows the settings of the selected widget type
+        mainLayout.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
 
     def typeListChanged(self):
-        for i in reversed(range(self.settingsWidgetLayout.count())):
-            self.settingsWidgetLayout.itemAt(i).widget().deleteLater()
+        while self.settingsWidgetLayout.rowCount():
+            self.settingsWidgetLayout.removeRow(0)
+        self.targetRows = []
+
+        # a multi button has its own module and parameter for every target
+        isMulti = self.typeList.currentText() == "MultiButton"
+        self.mainLayout.setRowVisible(self.moduleList, not isMulti)
+        self.mainLayout.setRowVisible(self.paramList, not isMulti)
 
         height = QLineEdit().sizeHint().height()
         doubleValidator = QRegularExpressionValidator(QRegularExpression("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?"), self)
@@ -292,6 +303,66 @@ class RemoteWidgetEdit(QDialog):
             self.shortcutFieldMinus = ShortcutCreator()
             self.shortcutFieldMinus.setText(self.shortcutMinus)
             self.settingsWidgetLayout.addRow(QLabel("Shortcut Minus:"), self.shortcutFieldMinus)
+        elif self.typeList.currentText() == "MultiButton":
+            self.shortcutField = ShortcutCreator()
+            self.shortcutField.setText(self.shortcut)
+            self.settingsWidgetLayout.addRow(QLabel("Shortcut:"), self.shortcutField)
+            targetWidget = QWidget()
+            self.targetLayout = QVBoxLayout()
+            self.targetLayout.setContentsMargins(0, 0, 0, 0)
+            targetWidget.setLayout(self.targetLayout)
+            self.settingsWidgetLayout.addRow(QLabel("Targets:"), targetWidget)
+            for target in self.targets or [{}]:
+                self.addTargetRow(**target)
+            addButton = QPushButton("Add target")
+            addButton.clicked.connect(lambda: self.addTargetRow())
+            self.settingsWidgetLayout.addRow(None, addButton)
+
+    def addTargetRow(self, Module=None, Parameter=None, value=0.0):
+        """
+        Adds a row with module, parameter and value to the targets of a multi button
+        """
+        row = QWidget()
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        row.setLayout(layout)
+
+        moduleList = QComboBox()
+        moduleList.addItems(list(self.modules))
+        paramList = QComboBox()
+
+        def moduleChanged():
+            paramList.clear()
+            paramList.addItems(self.modules.get(moduleList.currentText(), []))
+
+        moduleList.currentIndexChanged.connect(moduleChanged)
+        if Module is not None:
+            moduleList.setCurrentText(Module)
+        moduleChanged()
+        if Parameter is not None:
+            paramList.setCurrentText(Parameter)
+
+        valueText = QLineEdit(str(value))
+        valueText.setValidator(QRegularExpressionValidator(
+            QRegularExpression("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?"), self))
+        valueText.setFixedWidth(80)
+        removeButton = QPushButton("-")
+        removeButton.setFixedWidth(30)
+
+        layout.addWidget(moduleList)
+        layout.addWidget(paramList)
+        layout.addWidget(valueText)
+        layout.addWidget(removeButton)
+
+        entry = (row, moduleList, paramList, valueText)
+        removeButton.clicked.connect(lambda: self.removeTargetRow(entry))
+        self.targetRows.append(entry)
+        self.targetLayout.addWidget(row)
+
+    def removeTargetRow(self, entry):
+        self.targetRows.remove(entry)
+        self.targetLayout.removeWidget(entry[0])
+        entry[0].deleteLater()
 
     def moduleChanged(self):
         self.paramList.clear()
@@ -323,6 +394,13 @@ class RemoteWidgetEdit(QDialog):
             msg['shortcutPlus'] = self.shortcutFieldPlus.getKeySequence()
             msg['shortcutMinus'] = self.shortcutFieldMinus.getKeySequence()
             msg['invertSlider'] = self.invertSlider
+        elif self.typeList.currentText() == "MultiButton":
+            del msg['Module'], msg['Parameter']
+            msg['shortcut'] = self.shortcutField.getKeySequence()
+            msg['targets'] = [{'Module': moduleList.currentText(),
+                               'Parameter': paramList.currentText(),
+                               'value': valueText.text()}
+                              for _, moduleList, paramList, valueText in self.targetRows]
 
         return msg
 

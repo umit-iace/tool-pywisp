@@ -55,7 +55,15 @@ REMOTE_KEYS = {
         'required': ('minSlider', 'maxSlider', 'stepSlider'),
         'optional': {'shortcutPlus': '', 'shortcutMinus': '', 'shortcut-Gp': None, 'invertSlider': False},
     },
+    # sets several parameters at once, e.g. an emergency stop for multiple motors
+    'MultiButton': {
+        'required': ('targets',),
+        'optional': {'shortcut': '', 'shortcut-Gp': None},
+    },
 }
+# widget types that set a list of targets instead of a single Module and Parameter
+REMOTE_MULTI_TYPES = ('MultiButton',)
+REMOTE_TARGET_KEYS = ('Module', 'Parameter', 'value')
 
 
 class _Report:
@@ -207,11 +215,12 @@ def _checkWidget(report, widgetName, widget, exp, modules):
         return f"'widgetType' must be one of {list(REMOTE_KEYS)}, got {widgetType!r}"
     spec = REMOTE_KEYS[widgetType]
 
-    module, parameter = widget.get('Module'), widget.get('Parameter')
-    if module not in exp or module in RESERVED_KEYS:
-        return f"'Module' must name a module of this experiment, got {module!r}"
-    if parameter not in modules[module].publicSettings:
-        return f"module '{module}' has no setting {parameter!r}"
+    if widgetType in REMOTE_MULTI_TYPES:
+        problem = _checkTargets(widget.get('targets'), exp, modules)
+    else:
+        problem = _checkTarget(widget.get('Module'), widget.get('Parameter'), exp, modules)
+    if problem:
+        return problem
 
     missing = [key for key in spec['required'] if key not in widget]
     if missing:
@@ -232,6 +241,26 @@ def _checkWidget(report, widgetName, widget, exp, modules):
     for key, default in spec['optional'].items():
         if widget.get(key) is None:
             widget[key] = default
+    return None
+
+
+def _checkTarget(module, parameter, exp, modules):
+    if module not in exp or module in RESERVED_KEYS:
+        return f"'Module' must name a module of this experiment, got {module!r}"
+    if parameter not in modules[module].publicSettings:
+        return f"module '{module}' has no setting {parameter!r}"
+    return None
+
+
+def _checkTargets(targets, exp, modules):
+    if not isinstance(targets, list) or not targets:
+        return "'targets' must be a non-empty list"
+    for idx, target in enumerate(targets):
+        if not isinstance(target, dict) or any(key not in target for key in REMOTE_TARGET_KEYS):
+            return f"target {idx + 1} must be a mapping with the keys {list(REMOTE_TARGET_KEYS)}"
+        problem = _checkTarget(target['Module'], target['Parameter'], exp, modules)
+        if problem:
+            return f"target {idx + 1}: {problem}"
     return None
 
 

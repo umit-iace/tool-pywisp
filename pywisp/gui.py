@@ -44,7 +44,7 @@ from .min import CONTROL_FRAME_ID, Control, controlFrame
 from .utils import getResource, setupLogging
 from .widgets.common import PlainTextLogger, PinnedDock, TreeWidgetStyledItemDelegate
 from .widgets.dialogs import DataIntDialog, DataTcpIpDialog, RemoteWidgetEdit
-from .widgets.remote import FreeLayout, MovablePushButton, MovableSwitch, MovableSlider
+from .widgets.remote import FreeLayout, MovableMultiButton, MovablePushButton, MovableSwitch, MovableSlider
 
 from .visualization import MplVisualizer, VtkVisualizer
 from .gamepad import getAllGamepads, openGamepad
@@ -1531,9 +1531,12 @@ class MainGui(QMainWindow):
 
         widget.widgetName = config['name']
         widget.widgetType = config['widgetType']
-        widget.module = config['Module']
-        widget.parameter = config['Parameter']
-        if config['widgetType'] == "PushButton":
+        widget.module = config.get('Module')
+        widget.parameter = config.get('Parameter')
+        if config['widgetType'] == "MultiButton":
+            widget.targets = config['targets']
+            widget.shortcut.setKey(config['shortcut'])
+        elif config['widgetType'] == "PushButton":
             widget.valueOn = config['valueOn']
             widget.valueReset = config['valueReset']
             widget.shortcut.setKey(config['shortcut'])
@@ -1621,6 +1624,17 @@ class MainGui(QMainWindow):
             widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
                 widget, editWidget=True))
             widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
+        elif config['widgetType'] == "MultiButton":
+            if 'shortcut-Gp' not in config:
+                config['shortcut-Gp'] = None
+            widget = MovableMultiButton(config['name'], config['targets'], config.get('shortcut', ''),
+                                        config['shortcut-Gp'])
+            widget.setFixedHeight(40)
+            widget.setFixedWidth(100)
+            widget.clicked.connect(lambda: self.remoteMultiButtonSendParameter(widget))
+            widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
+                widget, editWidget=True))
+            widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
         else:
             return
         position = config.get('position')
@@ -1644,6 +1658,18 @@ class MainGui(QMainWindow):
         if widget.valueReset != '':
             self.remoteSetParameter(widget.module, widget.parameter, widget.valueReset)
             self.exp.updateSendParameter(widget.module, widget.parameter, widget.valueReset)
+
+    def remoteMultiButtonSendParameter(self, widget):
+        """
+        Gets called when a user interacts with the multi button, sets all its targets and sends them
+        to the bench at once
+        :param widget: the widget the user interacted with
+        """
+        for target in widget.targets:
+            self.remoteSetParameter(target['Module'], target['Parameter'], target['value'])
+            self.remoteSyncSliders(target['Module'], target['Parameter'], target['value'])
+        if self.actSendParameter.isEnabled():
+            self.sendChangedParameter()
 
     def remoteSwitchSendParameter(self, widget):
         """
@@ -1677,14 +1703,7 @@ class MainGui(QMainWindow):
         :param sliderMoved: False if gets called from another widget
         """
         if not sliderMoved:
-            for wid in self.remoteWidgetLayout.list:
-                if isinstance(wid, MovableSlider):
-                    if wid.module == widget.module and wid.parameter == widget.parameter:
-                        wid.blockSignals(True)
-                        wid.setValue(float(value))
-                        wid.blockSignals(False)
-                        wid.valueOn = value
-                        wid.label.setText(wid.widgetName + f": {wid.value:.3f}")
+            self.remoteSyncSliders(widget.module, widget.parameter, value)
         else:
             widget.valueOn = value
 
@@ -1692,6 +1711,19 @@ class MainGui(QMainWindow):
                 value = widget.calcValue(value)
 
             widget.label.setText(widget.widgetName + f": {value:.3f}")
+
+    def remoteSyncSliders(self, module, parameter, value):
+        """
+        Moves all sliders connected to the given parameter to the value, without sending it
+        """
+        for wid in self.remoteWidgetLayout.list:
+            if isinstance(wid, MovableSlider):
+                if wid.module == module and wid.parameter == parameter:
+                    wid.blockSignals(True)
+                    wid.setValue(float(value))
+                    wid.blockSignals(False)
+                    wid.valueOn = value
+                    wid.label.setText(wid.widgetName + f": {wid.value:.3f}")
 
     def remoteSendParameter(self, module, parameter, value):
         self.remoteSetParameter(module, parameter, value)

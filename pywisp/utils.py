@@ -179,6 +179,7 @@ _MOVED = {
     'DoubleSlider': 'pywisp.widgets.remote',
     'MovableSlider': 'pywisp.widgets.remote',
     'MovableSwitch': 'pywisp.widgets.remote',
+    'MovableMultiButton': 'pywisp.widgets.remote',
     'PlainTextLogger': 'pywisp.widgets.common',
     'PinnedDock': 'pywisp.widgets.common',
     'ContextLineEditAction': 'pywisp.widgets.common',

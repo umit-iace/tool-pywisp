@@ -133,3 +133,25 @@ def test_dump_round_trip(validate):
 def test_dump_keeps_invalid_experiments():
     experiments = [{"Name": "A", "Unknown": {}}, "garbage", {"Mod": {}}]
     assert yaml.safe_load(dumpExperiments(experiments)) == experiments
+
+
+def multiButton(targets):
+    return {"widgetType": "MultiButton", "targets": targets, "shortcut": "Esc"}
+
+
+def test_multi_button(validate):
+    targets = [{"Module": "Mod", "Parameter": "gain", "value": 0}, {"Module": "Mod", "Parameter": "offset", "value": 0}]
+    exp = {"Name": "A", "Mod": {}, "Remote": {
+        "Stop": multiButton(targets),
+        "empty": multiButton([]),
+        "badTarget": multiButton([{"Module": "Mod", "Parameter": "gain"}]),
+        "badParam": multiButton([targets[0], {"Module": "Mod", "Parameter": "x", "value": 0}]),
+    }}
+    valid, messages = validate([exp])
+    assert list(exp["Remote"]) == ["Stop"]
+    assert any("non-empty list" in m for m in messages)
+    assert any("target 1 must be a mapping" in m for m in messages)
+    assert any("target 2: module 'Mod' has no setting 'x'" in m for m in messages)
+
+    loaded = yaml.safe_load(dumpExperiments(valid))
+    assert loaded[0]["Remote"]["Stop"] == multiButton(targets)

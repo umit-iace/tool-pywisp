@@ -4,7 +4,7 @@ from PyQt6.QtGui import QValidator
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QDialog, QFileDialog
 
-from pywisp.config import REMOTE_KEYS, validateExperiments
+from pywisp.config import REMOTE_KEYS, REMOTE_MULTI_TYPES, validateExperiments
 from pywisp.experimentModules import ExperimentModule
 from pywisp.settings import Settings
 from pywisp.widgets.dialogs import DataIntDialog, DataTcpIpDialog, RemoteWidgetEdit, ShortcutCreator
@@ -88,7 +88,7 @@ def test_remote_edit_without_experiment(qtbot):
     assert dialog._getData()['Module'] == ''
 
 
-@pytest.mark.parametrize("widgetType", list(REMOTE_KEYS))
+@pytest.mark.parametrize("widgetType", [t for t in REMOTE_KEYS if t not in REMOTE_MULTI_TYPES])
 def test_remote_edit_creates_valid_widgets(qtbot, monkeypatch, widgetType):
     """ the dialog output must pass the validation of the config files """
     acceptDialogs(monkeypatch)
@@ -136,6 +136,37 @@ def test_remote_edit_change_type(qtbot):
     msg = dialog._getData()
     assert msg['widgetType'] == 'Slider'
     assert (msg['minSlider'], msg['maxSlider'], msg['stepSlider']) == ('-1', '1', '0.1')
+
+
+def test_remote_edit_multi_button(qtbot):
+    targets = [{'Module': 'Model', 'Parameter': 'gain', 'value': '0'},
+               {'Module': 'Trajectory', 'Parameter': 'start', 'value': '1.5'}]
+    dialog = RemoteWidgetEdit(editWidget=True, exp=EXP, widgetType='MultiButton', name='stop',
+                              targets=targets, shortcut='Esc')
+    qtbot.addWidget(dialog)
+    # module and parameter are chosen per target
+    assert not dialog.mainLayout.isRowVisible(dialog.moduleList)
+    msg = dialog._getData()
+    assert msg['targets'] == targets
+    assert 'Module' not in msg and 'Parameter' not in msg
+
+    dialog.addTargetRow(Module='Model', Parameter='offset', value=2)
+    dialog.removeTargetRow(dialog.targetRows[0])
+    assert dialog._getData()['targets'] == [targets[1], {'Module': 'Model', 'Parameter': 'offset', 'value': '2'}]
+
+    exp = dict(EXP, Name='exp', Remote={'stop': dialog._getData()})
+    valid = validateExperiments([exp], {'Model': Model, 'Trajectory': Trajectory}, {})
+    assert valid and 'stop' in valid[0]['Remote']
+
+
+def test_remote_edit_change_type_to_multi_button(qtbot):
+    dialog = RemoteWidgetEdit(exp=EXP)
+    qtbot.addWidget(dialog)
+    dialog.typeList.setCurrentText('MultiButton')
+    assert len(dialog.targetRows) == 1
+    assert dialog._getData()['targets'] == [{'Module': 'Model', 'Parameter': 'gain', 'value': '0.0'}]
+    dialog.typeList.setCurrentText('PushButton')
+    assert dialog.mainLayout.isRowVisible(dialog.moduleList)
 
 
 def test_shortcut_creator(qtbot):

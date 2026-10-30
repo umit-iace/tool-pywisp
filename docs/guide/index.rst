@@ -237,6 +237,20 @@ In this example `Test` and `SeriesTrajectory` are derived :mod:`pywisp.experimen
 of `Remote` configures a Push Button, that is connected to ´Value1` of the :mod:`pywisp.experimentModules` class
 `Test`. The 'Config' section shows the settings for the plot configuration.
 
+A `MultiButton` sets several parameters with a single click, e.g. as an emergency stop that sets the speed of
+multiple motors to zero. Instead of `Module` and `Parameter` it has a list of `targets`, all of them are sent
+to the bench at once:
+
+.. code-block:: yaml
+
+      Remote:
+        Stop:
+          widgetType: MultiButton
+          shortcut: Esc
+          targets:
+            - {Module: Motor1, Parameter: speed, value: 0}
+            - {Module: Motor2, Parameter: speed, value: 0}
+
 For detailed information see the :ref:`chapter_examples` section.
 
 

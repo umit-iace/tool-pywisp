@@ -14,7 +14,7 @@ from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMenu
 
 import pywisp as pw
-from pywisp.widgets.remote import MovablePushButton, MovableSlider, MovableSwitch, MovableWidget
+from pywisp.widgets.remote import MovableMultiButton, MovablePushButton, MovableSlider, MovableSwitch, MovableWidget
 
 SREG = """
 - Name: First
@@ -447,3 +447,21 @@ def test_load_last_measurement(gui):
     assert gui.exp.getExperiment()['Name'] == 'First'
     assert gui._currentMeasurement() is gui.measurements[0]
     assert list(gui.getCurrentDataPoints()['x'].values) == [1.0]
+
+
+def test_multi_button_sets_all_targets(gui):
+    config = {'name': 'Stop', 'widgetType': 'MultiButton', 'shortcut': '',
+              'targets': [{'Module': 'Dummy', 'Parameter': 'gain', 'value': '0'}]}
+    gui.remoteAddWidget(config)
+    button = remoteWidget(gui, MovableMultiButton)
+    slider = remoteWidget(gui, MovableSlider)
+    assert slider.value == 2.0
+
+    with mock.patch.object(gui, 'sendChangedParameter') as send:
+        gui.actSendParameter.setEnabled(True)
+        button.click()
+    assert gui.exp.getExperiment()['Dummy']['gain'] == '0'
+    # the sliders of the parameter follow and everything is sent at once
+    assert slider.value == 0
+    send.assert_called_once()
+    assert button.getData()['targets'] == config['targets']

@@ -8,7 +8,8 @@ from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QShortcut
 from PyQt6.QtWidgets import QLabel, QLayout, QMenu, QPushButton, QSlider
 
-__all__ = ["FreeLayout", "MovableWidget", "MovablePushButton", "DoubleSlider", "MovableSlider", "MovableSwitch"]
+__all__ = ["FreeLayout", "MovableWidget", "MovablePushButton", "DoubleSlider", "MovableSlider", "MovableSwitch",
+           "MovableMultiButton"]
 
 
 class FreeLayout(QLayout):
@@ -353,3 +354,49 @@ class MovableSwitch(MovableWidget, QPushButton):
     def updateData(self):
         self.setChecked(False)
         self.setText(self.widgetName + '\n' + self.valueOn)
+
+
+class MovableMultiButton(MovableWidget, QPushButton):
+    """
+    Push button that sets several parameters at once, e.g. an emergency stop for multiple motors.
+
+    The targets are a list of dicts with the keys `Module`, `Parameter` and `value`.
+    """
+
+    def __init__(self, name, targets, shortcutKey, shortcutKeyGp):
+        QPushButton.__init__(self)
+        MovableWidget.__init__(self, name, shortcutKeyGp=shortcutKeyGp)
+        self.setObjectName(name)
+
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+        self.targets = targets
+        # the widget is not bound to a single parameter
+        self.parameter = None
+        self.module = None
+
+        self.shortcut = QShortcut(self)
+        self.shortcut.setKey(shortcutKey)
+        self.shortcut.setAutoRepeat(False)
+        self.shortcut.activated.connect(lambda: self.animateClick())
+
+        self.updateData()
+
+    def _onGamepad(self):
+        self.click()
+
+    def getData(self):
+        data = dict()
+
+        data['widgetType'] = 'MultiButton'
+        data['name'] = self.widgetName
+        data['targets'] = [dict(target) for target in self.targets]
+        data['shortcut'] = self.shortcut.key().toString()
+        data['shortcut-Gp'] = self.shortcutKeyGp
+        data['position'] = self.position()
+
+        return data
+
+    def updateData(self):
+        self.setText(self.widgetName + '\n' + f"{len(self.targets)} parameter")
+        self.setToolTip('\n'.join(f"{t['Module']}.{t['Parameter']} = {t['value']}" for t in self.targets))
