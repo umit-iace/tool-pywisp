@@ -62,6 +62,13 @@ class Exporter(QObject):
             self.df = None
 
         def run(self):
+            # always report the end, otherwise the gui would wait for this export forever
+            try:
+                self._run()
+            except Exception as e:
+                self.info.emit(True, logging.ERROR, f"Export failed: {e!r}")
+
+        def _run(self):
             if self.dataPoints is None:
                 self.info.emit(True, logging.ERROR, "Export failed: No data given")
                 return

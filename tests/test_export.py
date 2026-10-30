@@ -56,6 +56,12 @@ def test_export_without_data(qtbot, tmp_path):
     assert not fileName.exists()
 
 
+def test_export_write_error_is_reported(qtbot, tmp_path, dataPoints):
+    """ a failing write must end the export, otherwise the gui would wait for it forever """
+    fileName = tmp_path / "missing" / "data.csv"
+    assert not runExport(qtbot, dataPoints=dataPoints, fileName=str(fileName))
+
+
 def test_export_survives_owner_deletion(qtbot, tmp_path):
     """ dropping the last reference to a running export must not destroy its thread """
     t = np.arange(200000) * 1e-3
