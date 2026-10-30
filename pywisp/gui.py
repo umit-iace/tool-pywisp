@@ -6,7 +6,6 @@ import sys
 import tempfile
 import time
 
-import serial.tools.list_ports
 import yaml
 
 # vtk
@@ -29,29 +28,24 @@ except ImportError:
     from yaml import SafeLoader
 from PyQt6.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QCoreApplication
 from PyQt6.QtGui import QAction, QBrush, QGuiApplication, QIcon, QKeySequence, QPixmap
-from PyQt6.QtWidgets import QAbstractItemView, QApplication, QComboBox, QFileDialog, QFrame, QHBoxLayout, \
-    QInputDialog, QLabel, QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox, QPushButton, \
-    QSizePolicy, QSplashScreen, QStatusBar, QTextEdit, QToolBar, QTreeWidget, QTreeWidgetItem, QVBoxLayout, \
+from PyQt6.QtWidgets import QAbstractItemView, QComboBox, QFileDialog, QFrame, QLabel, QListWidget, QListWidgetItem, QMainWindow, QSizePolicy, QSplashScreen, QStatusBar, QTextEdit, QToolBar, QVBoxLayout, \
     QWidget
-from pyqtgraph.dockarea import Dock, DockArea
+from pyqtgraph.dockarea import DockArea
 
 from .config import dumpExperiments, validateExperiments
-from .connection import Connection, SerialConnection, SocketConnection
+from .connectionManager import ConnectionManager
 from .experiments import ExperimentInteractor, ExperimentView
-from .registry import getRegisteredConnections, getRegisteredExperimentModules, getRegisteredVisualizers
-from .buffer import DataPointBuffer
-from .export import Exporter
+from .registry import getRegisteredExperimentModules, getRegisteredVisualizers
 from .measurement import Measurement
-from .min import CONTROL_FRAME_ID, Control, controlFrame
 from .utils import getResource, setupLogging
-from .widgets.common import PlainTextLogger, PinnedDock, TreeWidgetStyledItemDelegate
-from .widgets.dialogs import DataIntDialog, DataTcpIpDialog, RemoteWidgetEdit
-from .widgets.remote import REMOTE_WIDGETS, FreeLayout
+from .widgets.common import PlainTextLogger, PinnedDock
+from .widgets.dialogs import DataIntDialog
+from .widgets.remotepanel import RemotePanel
 
 from .visualization import MplVisualizer, VtkVisualizer
 from .gamepad import getAllGamepads, openGamepad
 from .settings import Settings
-from .widgets.plotchart import PlotChart
+from .widgets.plotmanager import PlotManager
 
 __all__ = ["MainGui"]
 
@@ -85,16 +79,6 @@ class MainGui(QMainWindow):
                        'HeartbeatTime': 0,
                        }
         self.configDefaults = self.config.copy()
-        # the selection of the plot tree is drawn by TreeWidgetStyledItemDelegate
-        treeStyleSheet = """
-            QTreeView {
-                selection-background-color: transparent;
-            }
-            QTreeView::item:selected { }
-            QTreeView::item:hover { }
-            QTreeView::item:hover:selected { }
-        """
-
         # Create and display the splash screen
         # without a display Qt waits in vain for the splash screen to become visible
         self.splashScreen = None
@@ -104,16 +88,16 @@ class MainGui(QMainWindow):
             self.splashScreen.setEnabled(False)
             self.splashScreen.show()
 
-        self.connections = {}
-        self.isConnected = False
-        # names of the connections that are still being established
-        self._pendingConnections = set()
+        # establishes the connections to the rig
+        self.connectionManager = ConnectionManager(self)
+        self.connectionManager.stateChanged.connect(self._onConnectionStateChanged)
+        self.connectionManager.connectionLost.connect(self.disconnectRig)
+        # looked up on every call, so it can be replaced, e.g. in tests
+        self.connectionManager.framesReceived.connect(lambda frames, name: self.updateData(frames, name))
         self.selectedExp = False
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.updateDataPlots)
-        self.heartbeatTimer = QTimer()
-        self.heartbeatTimer.timeout.connect(self.heartbeat)
 
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -178,7 +162,6 @@ class MainGui(QMainWindow):
         self.area.addDock(self.logDock, "bottom", self.dataDock)
         self.area.addDock(self.experimentDock, "left", self.lastMeasDock)
         self.area.addDock(self.remoteDock, "right", self.propertyDock)
-        self.nonPlottingDocks = list(self.area.findAll()[1].keys())
 
         # property dock
         self.targetView = ExperimentView(self)
@@ -240,80 +223,14 @@ class MainGui(QMainWindow):
         self.logDock.addWidget(self.logBox)
 
         # data dock
-        self.dataWidget = QWidget()
-        self.dataLayout = QHBoxLayout()
-
-        self.dataPointListWidget = QListWidget()
-        self.dataPointListLayout = QVBoxLayout()
-        self.dataPointListWidget.setLayout(self.dataPointListLayout)
-        self.dataPointListWidget.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-        self.dataLayout.addWidget(self.dataPointListWidget)
-
-        self.dataPointManipulationWidget = QWidget()
-        self.dataPointManipulationLayout = QVBoxLayout()
-        self.dataPointManipulationLayout.addStretch()
-        self.dataPointManipulationLayout.setSpacing(5)
-        self.dataPointRightButtonWidget = QWidget()
-        self.dataPointRightButtonLayout = QVBoxLayout()
-        self.dataPointRightButton = QPushButton(chr(0x226b), self)
-        self.dataPointRightButton.setToolTip(
-            "Add the selected data set from the left to the selected plot "
-            "on the right.")
-        self.dataPointRightButton.clicked.connect(self.addDataPointToTree)
-        self.dataPointLabel = QLabel('DataPoint', self)
-        self.dataPointLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.dataPointManipulationLayout.addWidget(self.dataPointLabel)
-        self.dataPointManipulationLayout.addWidget(self.dataPointRightButton)
-        self.dataPointLeftButtonWidget = QWidget()
-        self.dataPointLeftButtonLayout = QVBoxLayout()
-        self.dataPointLeftButton = QPushButton(chr(0x03A7), self)
-        self.dataPointLeftButton.setToolTip(
-            "Remove the selected data set from the plot on the right."
-        )
-        self.dataPointLeftButton.clicked.connect(self.removeDataPointFromTree)
-        self.dataPointManipulationLayout.addWidget(self.dataPointLeftButton)
-        self.dataPointExportButton = QPushButton(chr(0x25BC), self)
-        self.dataPointExportButton.setToolTip(
-            "Export the selected data set from the left to a csv or png file."
-        )
-        self.dataPointExportButton.clicked.connect(self.exportDataPointFromTree)
-        self.dataPointManipulationLayout.addWidget(self.dataPointExportButton)
-        self.dataPointPlotAddButtonWidget = QWidget()
-        self.dataPointPlotAddButtonLayout = QVBoxLayout()
-        self.dataPointPlotAddButton = QPushButton("+", self)
-        self.dataPointPlotAddButton.setToolTip(
-            "Create a new plot window."
-        )
-        self.dataPointPlotAddButton.clicked.connect(self.addPlotTreeItem)
-        self.plotLabel = QLabel('Plots', self)
-        self.plotLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.dataPointManipulationLayout.addWidget(self.plotLabel)
-        self.dataPointManipulationLayout.addWidget(self.dataPointPlotAddButton)
-        self.dataPointPlotRemoveButtonWidget = QWidget()
-        self.dataPointPlotRemoveButtonLayout = QVBoxLayout()
-        self.dataPointPlotRemoveButton = QPushButton("-", self)
-        self.dataPointPlotRemoveButton.setToolTip(
-            "Delete the selected plot window."
-        )
-        self.dataPointPlotRemoveButton.clicked.connect(self.removeSelectedPlotTreeItems)
-        self.dataPointManipulationLayout.addWidget(self.dataPointPlotRemoveButton)
-        self.dataPointManipulationWidget.setLayout(self.dataPointManipulationLayout)
-        self.dataLayout.addWidget(self.dataPointManipulationWidget)
-
-        self.dataPointTreeWidget = QTreeWidget()
-        custom_QStyledItemDelegate = TreeWidgetStyledItemDelegate()
-        self.dataPointTreeWidget.setItemDelegate(custom_QStyledItemDelegate)
-        self.dataPointTreeWidget.setStyleSheet(treeStyleSheet)
-        self.dataPointTreeWidget.setHeaderLabels(["PlotTitle", "DataPoint"])
-        self.dataPointTreeWidget.itemDoubleClicked.connect(self.plotVectorClicked)
-        self.dataPointTreeWidget.setExpandsOnDoubleClick(0)
-        self.dataPointTreeLayout = QVBoxLayout()
-
-        self.dataPointTreeWidget.setLayout(self.dataPointTreeLayout)
-        self.dataLayout.addWidget(self.dataPointTreeWidget)
-
-        self.dataWidget.setLayout(self.dataLayout)
-        self.dataDock.addWidget(self.dataWidget)
+        self.plotManager = PlotManager(self.area, self.animationDock, self._settings,
+                                       currentMeasurement=self._currentMeasurement,
+                                       dataPointNames=lambda: self.exp.getDataPoints(),
+                                       plotConfig=lambda: self.config)
+        self.plotManager.coords.connect(self.updateCoordInfo)
+        self.plotManager.allPlotsClosed.connect(self.disableCoord)
+        self.plotManager.exportDone.connect(self.exportDone)
+        self.dataDock.addWidget(self.plotManager)
 
         # init logger for logging box
         self.textLogger = PlainTextLogger(self._settings,
@@ -321,14 +238,6 @@ class MainGui(QMainWindow):
         self.textLogger.setTargetCb(self.logBox)
         logging.getLogger().addHandler(self.textLogger)
         self._logger.info('Laboratory visualization')
-
-        # remote dock
-        self.remoteWidget = QWidget()
-        self.remoteWidget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.remoteWidget.customContextMenuRequested.connect(self.remoteWidgetMenu)
-        self.remoteWidgetLayout = FreeLayout()
-        self.remoteWidget.setLayout(self.remoteWidgetLayout)
-        self.remoteDock.addWidget(self.remoteWidget)
 
         # menu bar
         fileMenu = self.menuBar().addMenu("&File")
@@ -372,30 +281,7 @@ class MainGui(QMainWindow):
         self.expMenu = self.menuBar().addMenu('&Experiment')
         self.connMenu = self.menuBar().addMenu('&Connections')
 
-        availableConns = getRegisteredConnections()
-        if availableConns:
-            for name, cls in availableConns.items():
-                self._logger.info(f"Found Connection: {name}")
-                self.connections[name] = {'cls':cls}
-        else:
-            self._logger.error("No Connections found, return!")
-            # return
-
-        serialCnt = 0
-        for name, conn in self.connections.items():
-            cls = conn['cls']
-            if issubclass(cls, SerialConnection):
-                serialMenu = self.connMenu.addMenu(name)
-                self._getSerialMenu(serialMenu, cls.settings)
-                if cls.settings['port'] == '':
-                    self.setDefaultComPort(cls.settings, serialCnt)
-                serialCnt += 1
-            elif issubclass(cls, SocketConnection):
-                actTcp = self.connMenu.addAction(name)
-                actTcp.triggered.connect(lambda _, settings=cls.settings: self._getTcpMenu(settings))
-            else:
-                self._logger.warning("Cannot handle the connection type!")
-            self.connMenu.addSeparator()
+        self.connectionManager.fillMenu(self.connMenu, self)
 
         self.expMenu.addSeparator()
         self.actConnect = QAction('&Connect', self)
@@ -446,7 +332,6 @@ class MainGui(QMainWindow):
         self._currentLastMeasItem = None
         self._currentDataPointBuffers = None
         self._dataWarnings = set()
-        self.plotCharts = {}
         # config file and all of its experiments, including those skipped by the validation
         self._configFile = None
         self._fileExperiments = []
@@ -457,7 +342,13 @@ class MainGui(QMainWindow):
         self.standardDockState = self.area.saveState()
 
         self.exp = ExperimentInteractor(self.targetView, self)
-        self.exp.sendData.connect(self.writeToConnection)
+
+        # remote dock
+        self.remotePanel = RemotePanel(self.exp)
+        self.remotePanel.parametersChanged.connect(self._sendRemoteParameters)
+        self.remotePanel.saveRequested.connect(lambda: self.saveExperiments())
+        self.remoteDock.addWidget(self.remotePanel)
+        self.exp.sendData.connect(self.connectionManager.write)
         self.runExp.connect(self.exp.runExperiment)
         self.stopExp.connect(self.exp.stopExperiment)
         self.exp.expFinished.connect(self.saveLastMeas)
@@ -473,7 +364,6 @@ class MainGui(QMainWindow):
             self._applyFirstExperiment()
             self.selectedExp = True
 
-        self.exporter = None
 
         # close splash screen
         if self.splashScreen is not None:
@@ -493,97 +383,6 @@ class MainGui(QMainWindow):
         except Exception:
             self._logger.exception(f"Cannot load visualizer '{visName}'")
             self.visualizer = None
-
-    def _getTcpMenu(self, settings):
-        # ip and port
-        ip, port, ok = DataTcpIpDialog.getData(parent=self,ip=settings['ip'], port=settings['port'])
-
-        if ok:
-            settings['ip'] = ip
-            settings['port'] = port
-
-    def _getSerialMenu(self, serialMenu, settings):
-        # port
-        portMenu = serialMenu.addMenu("Port")
-        portMenu.aboutToShow.connect(lambda: self.getComPorts(settings, portMenu))
-
-        # baud
-        baudMenu = serialMenu.addMenu("Baud")
-        baudMenu.aboutToShow.connect(lambda: self.getBauds(settings, baudMenu))
-
-        return serialMenu
-
-    def getBauds(self, settings, connMenu):
-        """
-        Sets the baud rate in serial connection menu
-        :param settings: serial connection settings
-        :param connMenu: serial connection menu
-        """
-
-        def setBaud(baud):
-            def fn():
-                settings['baud'] = baud
-
-            return fn
-
-        baud = int(settings['baud'])
-        connMenu.clear()
-        for _baud in SerialConnection.supportedBaudrates:
-            # owned by the menu, so clear() deletes it
-            baudAction = connMenu.addAction(str(_baud))
-            baudAction.setCheckable(True)
-            baudAction.setChecked(_baud == baud)
-            baudAction.triggered.connect(setBaud(_baud))
-
-    def setDefaultComPort(self, settings, cnt):
-        """
-        Sets the default port in given connection settings if an Arduino can found. If more than one Arduino can found,
-        the counter describes the connection number.
-        :param settings: serial connection settings
-        :param cnt: counter for serial connection
-        """
-        comPorts = serial.tools.list_ports.comports()
-        if comPorts:
-            arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
-
-            if len(arduinoPorts) > cnt:
-                settings['port'] = arduinoPorts[cnt]
-            else:
-                self._logger.warning("Can't set comport for Arduino automatically! Set the port manually!")
-        else:
-            self._logger.warning("No ComPorts for Arduino available, connect a device!")
-
-    def getComPorts(self, settings, connMenu):
-        """
-
-        :param settings:
-        :param connMenu:
-        """
-
-        def setPort(port):
-            def fn():
-                settings['port'] = port
-
-            return fn
-
-        port = settings['port']
-        connMenu.clear()
-        comPorts = serial.tools.list_ports.comports()
-        if comPorts:
-            if port == '':
-                arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
-                if len(arduinoPorts) != 0:
-                    port = arduinoPorts[0]
-                    settings['port'] = port
-            for p in comPorts:
-                # owned by the menu, so clear() deletes it
-                portAction = connMenu.addAction(p.device)
-                portAction.setCheckable(True)
-                portAction.setChecked(p.device == port)
-                portAction.triggered.connect(setPort(p.device))
-        else:
-            noAction = connMenu.addAction("(None)")
-            noAction.setEnabled(False)
 
     def _updateExperimentsList(self):
         self.experimentList.clear()
@@ -632,8 +431,7 @@ class MainGui(QMainWindow):
 
     def updateRemoteGamepad(self):
         """ (re-)connect all remote widgets to the current gamepad """
-        for wid in self.remoteWidgetLayout.list:
-            wid.updateGamepad(self.gamepad)
+        self.remotePanel.setGamepad(self.gamepad)
 
     def setTimerTime(self):
         """
@@ -656,205 +454,6 @@ class MainGui(QMainWindow):
         self.coordLabel.setText("")
         self.coordTimer.stop()
 
-    # event functions
-    def addPlotTreeItem(self, default=False):
-        existingNames = {self.dataPointTreeWidget.topLevelItem(index).text(0)
-                         for index in range(self.dataPointTreeWidget.topLevelItemCount())}
-        index = 0
-        while f"plot_{index:03d}" in existingNames:
-            index += 1
-        text = f"plot_{index:03d}"
-        if not default:
-            name, ok = QInputDialog.getText(self,
-                                            "Select a plot title",
-                                            "Name of the new plot:",
-                                            text=text)
-            if not (ok and name):
-                return
-        else:
-            name = text
-
-        similarItems = self.dataPointTreeWidget.findItems(name, Qt.MatchFlag.MatchExactly)
-        if similarItems:
-            self._logger.error(f"Name '{name}' exists.")
-            return
-
-        topLevelItem = QTreeWidgetItem()
-        topLevelItem.setText(0, name)
-        self.dataPointTreeWidget.addTopLevelItem(topLevelItem)
-        topLevelItem.setExpanded(1)
-
-        for index in range(self.dataPointTreeWidget.topLevelItemCount()):
-            self.dataPointTreeWidget.topLevelItem(index).setSelected(False)
-            for childIndex in range(self.dataPointTreeWidget.topLevelItem(index).childCount()):
-                self.dataPointTreeWidget.topLevelItem(index).child(childIndex).setSelected(False)
-        topLevelItem.setSelected(True)
-
-    def removeSelectedPlotTreeItems(self):
-        items = self.dataPointTreeWidget.selectedItems()
-        if not items:
-            self._logger.error("Cannot delete plot: No plot selected.")
-            return
-
-        for item in items:
-            self.removePlotTreeItem(item)
-
-    def removePlotTreeItem(self, item):
-        # get the  top item
-        while item.parent():
-            item = item.parent()
-
-        text = "The labeled plot '" + item.text(0) + "' will be deleted!"
-        buttonReply = QMessageBox.warning(self, "Plot delete", text, QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
-        if buttonReply == QMessageBox.StandardButton.Ok:
-            openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-            if item.text(0) in openDocks:
-                self.area.docks[item.text(0)].close()
-
-            self.dataPointTreeWidget.takeTopLevelItem(self.dataPointTreeWidget.indexOfTopLevelItem(item))
-
-    def addDataPointToTree(self):
-        if not self.dataPointListWidget.selectedIndexes():
-            self._logger.error("Cannot add datapoint: No datapoint selected.")
-            return
-
-        toplevelItems = self.dataPointTreeWidget.selectedItems()
-        if not toplevelItems:
-            if self.dataPointTreeWidget.topLevelItemCount() < 2:
-                if self.dataPointTreeWidget.topLevelItemCount() < 1:
-                    self.addPlotTreeItem(default=True)
-                toplevelItem = self.dataPointTreeWidget.topLevelItem(0)
-            else:
-                self._logger.error("Cannot add dataset: No dataset selected.")
-                return
-        else:
-            toplevelItem = toplevelItems[0]
-
-        while toplevelItem.parent():
-            toplevelItem = toplevelItem.parent()
-
-        topLevelItemList = []
-        for i in range(toplevelItem.childCount()):
-            topLevelItemList.append(toplevelItem.child(i).text(1))
-
-        for dataPoint in self.dataPointListWidget.selectedItems():
-            if dataPoint.text() not in topLevelItemList:
-                child = QTreeWidgetItem()
-                child.setText(1, dataPoint.text())
-                toplevelItem.addChild(child)
-
-        for i in range(toplevelItem.childCount()):
-            toplevelItem.child(i).setBackground(0, self._settings.color(i))
-
-        self.updatePlotChart(toplevelItem)
-
-    def exportDataPointFromTree(self):
-        if self.exporter is not None:
-            self._logger.error("There is already an export job running")
-            return
-
-        if not self.dataPointListWidget.selectedIndexes():
-            self._logger.error("Can't export data set: no data set selected.")
-            return
-
-        measurement = self._currentMeasurement()
-        if measurement is None:
-            self._logger.error("Nothing to export!")
-            return
-        dataPointBuffers = measurement.dataPointBuffers
-
-        expLabels = [item.text()
-                    for item in self.dataPointListWidget.selectedItems()]
-        self._logger.info(f"Measurements selected for export are: {expLabels}")
-        dataPoints = {lbl: dataPointBuffers[lbl] for lbl in expLabels}
-
-        # snapshots share the memory, but are not affected by data that is still being added
-        expData = {lbl: buf.snapshot() for lbl, buf in dataPoints.items()}
-        self.exporter = Exporter(dataPoints=expData)
-        self.exporter.done.connect(self.exportDone)
-        self.exporter.runExport()
-
-    def removeDataPointFromTree(self):
-        items = self.dataPointTreeWidget.selectedItems()
-        if not items:
-            self._logger.error("Cannot delete dataset: No dataset selected.")
-            return
-
-        toplevelItem = items[0]
-        while toplevelItem.parent():
-            toplevelItem = toplevelItem.parent()
-
-        toplevelItem.takeChild(toplevelItem.indexOfChild(self.dataPointTreeWidget.selectedItems()[0]))
-
-        for i in range(toplevelItem.childCount()):
-            toplevelItem.child(i).setBackground(0, self._settings.color(i))
-
-        self.updatePlotChart(toplevelItem)
-
-    def updatePlotChart(self, item):
-        title = item.text(0)
-
-        measurement = self._currentMeasurement()
-        if measurement is None:
-            self._logger.warning("No Measurement to plot!")
-            return
-        dataPointBuffers = measurement.dataPointBuffers
-
-        # check if a top level item has been clicked
-        if not item.parent():
-            if title in self.nonPlottingDocks:
-                self._logger.error(f"Title '{title}' not allowed for a plot window since"
-                                   "it would shadow on of the reserved "
-                                   "names")
-                return
-
-            # check if plot has already been opened
-            openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-            if title in openDocks:
-                chart = self.plotCharts[title]
-
-                # check if all items are present as curves
-                reqLabels = []
-                for idx in range(item.childCount()):
-                    curveLabel = item.child(idx).text(1)
-                    reqLabels.append(curveLabel)
-                    if curveLabel not in chart.plotCurves.keys():
-                        chart.addCurve(curveLabel, dataPointBuffers[curveLabel])
-
-                # clear all curves that are no longer required by items
-                ubLabels = [lbl for lbl in chart.plotCurves.keys()
-                    if lbl not in reqLabels]
-                [chart.removeCurve(lbl) for lbl in ubLabels]
-
-    def plotVectorClicked(self, item):
-        # ignore non-top level items
-        if item.parent():
-            return
-
-        title = item.text(0)
-        if title in self.nonPlottingDocks:
-            self._logger.error(f"Title '{title}' not allowed for a plot window since"
-                               "it would shadow on of the reserved "
-                               "names")
-            return
-
-        # check if plot has already been opened
-        openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-        if title in openDocks:
-            # dataPointBuffers = self.getCurrentDataPoints()
-            # self.updatePlot(item, dataPointBuffers)
-            dock = self.area.docks.get(title)
-            if dock is not None:
-                dock.raiseDock()
-        else:
-            self.plotDataVector(item)
-
-    def getCurrentDataPoints(self):
-        measurement = self._currentMeasurement()
-        if measurement is None:
-            return {name: DataPointBuffer() for name in self.exp.getDataPoints()}
-        return measurement.dataPointBuffers
-
     def _currentMeasurement(self):
         """ the measurement shown in the gui or `None` """
         if self._currentLastMeasItem is None:
@@ -869,57 +468,9 @@ class MainGui(QMainWindow):
                 return item
         return None
 
-    def updatePlot(self, item, dataPointBuffers):
-        title = item.text(0)
-        if title in self.plotCharts:
-            self.plotCharts[title].cache.clear()
-            self.plotCharts[title].updateCurves(dataPointBuffers)
-
-    def plotDataVector(self, item):
-        title = str(item.text(0))
-        if title in self.plotCharts.keys():
-            self._logger.error(f"Plot chart name '{title}' is already taken.")
-            return
-
-        # create chart
-        chart = PlotChart(title, self.config)
-        chart.coords.connect(self.updateCoordInfo)
-        self.plotCharts[title] = chart
-
-        # add curves
-        dataPointBuffers = self.getCurrentDataPoints()
-        for idx in range(item.childCount()):
-            for key, value in dataPointBuffers.items():
-                if key == item.child(idx).text(1):
-                    chart.addCurve(key, value)
-
-        # create dock container and add it to dock area
-        dock = Dock(title, closable=True)
-        dock.addWidget(chart)
-        dock.sigClosed.connect(self.closedDock)
-
-        plotWidgets = self.findAllPlotDocks()
-        if plotWidgets:
-            self.area.addDock(dock, "above", plotWidgets[0])
-        else:
-            self.area.addDock(dock, "bottom", self.animationDock)
-
-    def closedDock(self):
-        """
-        Gets called when a dock was closed, if it was a plot dock remove the corresponding PlotChart object
-        form the list
-        """
-        openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-        dLabels = [lbl for lbl in self.plotCharts.keys() if lbl not in openDocks]
-        [self.plotCharts.pop(lbl, None) for lbl in dLabels]
-
-        if len(openDocks) == 0:
-            self.disableCoord()
-
     def exportDone(self, success):
         if success:
             self.statusbarLabel.setText("Export successful.")
-        self.exporter = None
 
     @pyqtSlot(QModelIndex)
     def targetViewChanged(self, index=None):
@@ -974,8 +525,7 @@ class MainGui(QMainWindow):
         # cap the plot updates at 25 fps
         timeout = max(int(self.config['TimerTime']), 40)
         self.timer.start(timeout)
-        if self.config['HeartbeatTime']:
-            self.heartbeatTimer.start(int(self.config['HeartbeatTime']))
+        self.connectionManager.startHeartbeat(self.config['HeartbeatTime'])
         self.exp.runExperiment()
 
         if self.actStopExperiment.isEnabled():
@@ -998,7 +548,7 @@ class MainGui(QMainWindow):
         self.experimentList.repaint()
 
         self.timer.stop()
-        self.heartbeatTimer.stop()
+        self.connectionManager.stopHeartbeat()
         self.exp.stopExperiment()
 
         # show the complete data, then detach the buffers of the finished run, so
@@ -1122,18 +672,7 @@ class MainGui(QMainWindow):
         self.config.update(self._experiments[idx].get('Config', {}))
 
     def configureRemote(self, idx):
-        self.remoteWidgetLayout.clearAll()
-
-        remote = self._experiments[idx].get('Remote')
-        if remote is None:
-            return
-        if not isinstance(remote, dict):
-            self._logger.warning("Remote not correct configured in file!")
-            return
-        for name, config in remote.items():
-            config['name'] = name
-            self.remoteAddWidget(config)
-        self.updateRemoteGamepad()
+        self.remotePanel.setExperimentConfig(self._experiments[idx])
 
     def configureVisualizer(self, idx):
         availableVis = getRegisteredVisualizers()
@@ -1248,119 +787,53 @@ class MainGui(QMainWindow):
         """
         self._logger.info("Close Event received, shutting down.")
         self.disconnectRig()
-        # connections that are still being established end with their connect timeout
-        if not Connection.waitForAborted():
-            self._logger.warning("Aborted connections did not end in time")
+        self.connectionManager.shutdown()
         self.stopGamepad()
-        if self.exporter is not None:
-            self._logger.warning("Export in progress, waiting!")
-            self.exporter.wait()
+        self.plotManager.waitForExport()
         logging.getLogger().removeHandler(self.textLogger)
         super().closeEvent(QCloseEvent)
+
+    @property
+    def isConnected(self):
+        """ `True` if all connections to the rig are established """
+        return self.connectionManager.isConnected
 
     @pyqtSlot()
     def connectRig(self):
         """
         Establishes all connections in the background, the button states are set
-        once all of them are open, see :meth:`_onConnectionOpened`.
+        once all of them are open.
         """
-        if not self.connections:
-            self._logger.error("No connections registered!")
-            return
-        if self.isConnected or self._pendingConnections:
-            return
-
-        self.actConnect.setEnabled(False)
-        self.actDisconnect.setEnabled(True)
-        self.statusbarLabel.setText("Connecting ...")
-        self._pendingConnections = set(self.connections)
-        for name, conn in self.connections.items():
-            try:
-                connInstance = conn['cls']()
-            except Exception:
-                self.disconnectRig()
-                raise
-            # bind name as default argument, otherwise all lambdas would see the last name
-            connInstance.receivedFrames.connect(lambda frames, name=name: self.updateData(frames, name))
-            connInstance.finished.connect(self.disconnectRig)
-            connInstance.opened.connect(lambda ok, name=name: self._onConnectionOpened(name, ok))
-            conn['inst'] = connInstance
-            connInstance.openAsync()
-
-    def _onConnectionOpened(self, name, ok):
-        """ result of establishing the connection with the given name """
-        if name not in self._pendingConnections:
-            return
-        if not ok:
-            self._logger.warning(f"No connection for {name} established! Check your settings!")
-            # do not leave the other connections half open
-            self.disconnectRig()
-            return
-        self._logger.info(f"Connection for {name} established!")
-        self._pendingConnections.discard(name)
-        if self._pendingConnections:
-            return
-
-        self.actConnect.setEnabled(False)
-        self.actDisconnect.setEnabled(True)
-        if self._currentExpListItem is not None and self.selectedExp:
-            self.actStartExperiment.setEnabled(True)
-        self.actStopExperiment.setEnabled(False)
-        self.statusbarLabel.setText("Connected!")
-        self.isConnected = True
-
-    def writeToConnection(self, data):
-        """
-        PySignal function, that sends the given data to the connections
-        :param data: to send data
-        """
-        if data['id'] == CONTROL_FRAME_ID:
-            # control frames go to all rigs
-            targets = list(self.connections.values())
-        else:
-            conn = self.connections.get(data['connection'])
-            if conn is None:
-                self._logger.error(f"Unknown connection '{data['connection']}'!")
-                return
-            targets = [conn]
-
-        for conn in targets:
-            if 'inst' in conn:
-                conn['inst'].writeData(data)
+        self.connectionManager.connectAll()
 
     @pyqtSlot()
     def disconnectRig(self):
         """
-        Disconnects all connections and resets the button states.
+        Stops a running experiment and disconnects all connections.
         """
-        self._pendingConnections.clear()
         if self.actStopExperiment.isEnabled():
             self.stopExperiment()
+        self.connectionManager.disconnectAll()
 
-        for conn in self.connections.values():
-            inst = conn.pop('inst', None)
-            if inst is not None:
-                inst.close()
-        self.actConnect.setEnabled(True)
-        self.actDisconnect.setEnabled(False)
-        self.actStartExperiment.setEnabled(False)
-        self.actStopExperiment.setEnabled(False)
-        self.statusbarLabel.setText('Not Connected')
-        self.isConnected = False
-
-    def findAllPlotDocks(self):
-        """
-        Finds all docks with plots inside
-        :return: list of docks with plots
-        """
-        list = []
-        for title, dock in self.area.findAll()[1].items():
-            if title in self.nonPlottingDocks:
-                continue
-            else:
-                list.append(dock)
-
-        return list
+    def _onConnectionStateChanged(self, state):
+        """ sets the button states and the status bar """
+        if state == ConnectionManager.CONNECTING:
+            self.actConnect.setEnabled(False)
+            self.actDisconnect.setEnabled(True)
+            self.statusbarLabel.setText("Connecting ...")
+        elif state == ConnectionManager.CONNECTED:
+            self.actConnect.setEnabled(False)
+            self.actDisconnect.setEnabled(True)
+            if self._currentExpListItem is not None and self.selectedExp:
+                self.actStartExperiment.setEnabled(True)
+            self.actStopExperiment.setEnabled(False)
+            self.statusbarLabel.setText("Connected!")
+        else:
+            self.actConnect.setEnabled(True)
+            self.actDisconnect.setEnabled(False)
+            self.actStartExperiment.setEnabled(False)
+            self.actStopExperiment.setEnabled(False)
+            self.statusbarLabel.setText('Not Connected')
 
     def updateData(self, frames, connection):
         """
@@ -1412,20 +885,13 @@ class MainGui(QMainWindow):
                 self._logger.exception(f"Visualizer '{type(self.visualizer).__name__}' failed and has been disabled")
                 self.visualizer = None
 
-        for chart in self.plotCharts.values():
-            chart.updateCurves(self._currentDataPointBuffers)
-
-    def heartbeat(self):
-        self.writeToConnection(controlFrame(Control.HEARTBEAT))
+        self.plotManager.updateCharts(self._currentDataPointBuffers)
 
     def loadStandardDockState(self):
         """
         Loads the standard dock configuration of the GUI
         """
-        self.plotCharts.clear()
-
-        for dock in self.findAllPlotDocks():
-            dock.close()
+        self.plotManager.closeAllPlots()
         self.area.restoreState(self.standardDockState)
 
     def saveLastMeas(self):
@@ -1451,8 +917,7 @@ class MainGui(QMainWindow):
         if dataPointNames:
             self.updateDataPoints(dataPointNames)
 
-        for i in range(self.dataPointTreeWidget.topLevelItemCount()):
-            self.updatePlot(self.dataPointTreeWidget.topLevelItem(i), dataPointBuffers)
+        self.plotManager.showData(dataPointBuffers)
 
     def loadLastMeas(self, item):
         """
@@ -1464,7 +929,8 @@ class MainGui(QMainWindow):
             return
         self.actStartExperiment.setDisabled(True)
         self.selectedExp = False
-        self.remoteWidgetLayout.clearAll()
+        # the remote widgets belong to the experiments, not to past measurements
+        self.remotePanel.setExperimentConfig(None)
 
         measurement = item.data(Qt.ItemDataRole.UserRole)
         if measurement is None:
@@ -1483,8 +949,7 @@ class MainGui(QMainWindow):
         if dataPointNames:
             self.updateDataPoints(dataPointNames)
 
-        for i in range(self.dataPointTreeWidget.topLevelItemCount()):
-            self.updatePlot(self.dataPointTreeWidget.topLevelItem(i), dataPointBuffers)
+        self.plotManager.showData(dataPointBuffers)
 
         self._logger.info(f"Apply measurement '{measurement.name}'")
 
@@ -1493,9 +958,7 @@ class MainGui(QMainWindow):
         Clears and adds all given data point names to list widget
         :param dataPointNames: list of data point names
         """
-        if dataPointNames:
-            self.dataPointListWidget.clear()
-            self.dataPointListWidget.addItems(dataPointNames)
+        self.plotManager.updateDataPoints(dataPointNames)
 
     def setQListItemBold(self, qList=None, item=None, state=True):
         """
@@ -1513,109 +976,10 @@ class MainGui(QMainWindow):
             qList.item(i).setFont(newfont)
         qList.repaint()
 
-    def _remoteConfig(self, widgetName):
-        """ config of a widget of the current experiment or `None` """
-        idx = self.experimentList.row(self._currentExpListItem)
-        if idx < 0:
-            return None
-        remote = self._experiments[idx].get('Remote') or {}
-        return remote.get(widgetName)
-
-    def remoteWidgetMoved(self, widget):
-        """ store the position of a moved widget in the experiment """
-        config = self._remoteConfig(widget.widgetName)
-        if config is not None:
-            config['position'] = widget.position()
-
-    def remoteRemoveWidget(self, widget):
-        idx = self.experimentList.row(self._currentExpListItem)
-        self._experiments[idx].get('Remote', {}).pop(widget.widgetName, None)
-        self.remoteWidgetLayout.removeWidget(widget)
-
-    def remoteConfigWidget(self, widget, editWidget=True):
-        idx = self.experimentList.row(self._currentExpListItem)
-        exp = self.exp.getExperiment()
-        del exp['Name']
-        config, ok = RemoteWidgetEdit.getData(exp, editWidget, **(widget.getData()))
-        if not ok:
-            return
-        if not self._experiments[idx].get('Remote'):
-            self._experiments[idx]['Remote'] = {}
-        self._experiments[idx]['Remote'].pop(widget.widgetName, None)
-
-        widget.applyConfig(config)
-        config['position'] = widget.position()
-        self._experiments[idx]['Remote'][config['name']] = config
-        widget.updateData()
-
-    def remoteAddWidget(self, config=None, **kwargs):
-        """
-        Adds a new widget to the remoteDock
-        :param config: config of the widget, if `None` it is created with the widget editor
-        """
-        idx = self.experimentList.row(self._currentExpListItem)
-        exp = self.exp.getExperiment()
-        del exp['Name']
-        if not config:
-            config, ok = RemoteWidgetEdit.getData(exp=exp, **kwargs)
-            if not ok:
-                return
-            if not self._experiments[idx].get('Remote'):
-                self._experiments[idx]['Remote'] = {}
-            self._experiments[idx]['Remote'][config['name']] = config
-
-        cls = REMOTE_WIDGETS.get(config['widgetType'])
-        if cls is None:
-            self._logger.error(f"Unknown remote widget type '{config['widgetType']}'")
-            return
-        widget = cls.fromConfig(config, exp)
-        if widget is None:
-            return
-        widget.setFixedSize(*cls.size)
-        # looked up on every call, so it can be replaced, e.g. in tests
-        widget.connectActivation(lambda wid: self.remoteWidgetActivated(wid))
-        widget.editAction.triggered.connect(lambda _, widget=widget: self.remoteConfigWidget(widget))
-        widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
-        if widget.label:
-            self.remoteWidgetLayout.addWidget(widget.label)
-
-        position = config.get('position')
-        if position is None:
-            # place new widgets in two columns
-            cnt = self.remoteWidgetLayout.count()
-            position = ((cnt % 2) * 200, (cnt // 2) * 40)
-        widget.placeAt(*position)
-        widget.onMoved = self.remoteWidgetMoved
-        self.remoteWidgetLayout.addWidget(widget)
-
-    def remoteWidgetActivated(self, widget):
-        """
-        Gets called when the user activates a remote widget. Sets the parameters of the widget and
-        sends all of them to the rig at once.
-        :param widget: the widget the user interacted with
-        """
-        for module, parameter, value in widget.updates():
-            self.remoteSetParameter(module, parameter, value)
-            self.remoteSyncWidgets(module, parameter, value, source=widget)
+    def _sendRemoteParameters(self):
+        """ sends the parameters set by the remote widgets, if the experiment runs """
         if self.actSendParameter.isEnabled():
             self.sendChangedParameter()
-
-        # e.g. the reset value of a push button, it is not sent and not detected as change
-        for module, parameter, value in widget.resets():
-            self.remoteSetParameter(module, parameter, value)
-            self.exp.updateSendParameter(module, parameter, value)
-
-    def remoteSyncWidgets(self, module, parameter, value, source=None):
-        """
-        Shows the value on all other widgets of the given parameter, without sending it
-        """
-        for wid in self.remoteWidgetLayout.list:
-            if wid is not source:
-                wid.showValue(module, parameter, value)
-
-    def remoteSetParameter(self, module, parameter, value):
-        """ sets a parameter of the shown experiment, it is sent with the next parameter update """
-        self.exp.setParameter(module, parameter, value)
 
     def saveExperiments(self, fileName=None):
         """
@@ -1630,8 +994,7 @@ class MainGui(QMainWindow):
         fileName = os.path.abspath(fileName)
 
         # positions of widgets that have not been moved yet
-        for widget in self.remoteWidgetLayout.list:
-            self.remoteWidgetMoved(widget)
+        self.remotePanel.storePositions()
 
         try:
             text = dumpExperiments(self._fileExperiments or self._experiments)
@@ -1676,35 +1039,7 @@ class MainGui(QMainWindow):
         return self.saveExperiments(fileName)
 
     def copyRemoteSource(self):
-        if self._currentExperimentIndex is None:
-            self._logger.error("No experiment selected!")
-            return
-        for widget in self.remoteWidgetLayout.list:
-            self.remoteWidgetMoved(widget)
-        remote = self._experiments[self._currentExperimentIndex].get('Remote') or {}
-        text = dumpExperiments([{'Remote': remote}])
-        # indented like an entry of an experiment, without the list marker
-        text = "  " + text[2:]
-        clipboard = QApplication.clipboard()
-        clipboard.setText(text)
-
-    def remoteWidgetMenu(self, position):
-        """
-        Gets called when a user opens the context menu from the remoteDock
-        :param position: the position where the user opened the context menu
-        """
-        menu = QMenu(self)
-        addAction = menu.addAction("Add widget")
-        menu.addSeparator()
-        saveAction = menu.addAction("Save experiments")
-        copyAction = menu.addAction("Copy remote source")
-        action = menu.exec(self.remoteWidget.mapToGlobal(position))
-        if action == addAction:
-            self.remoteAddWidget()
-        elif action == saveAction:
-            self.saveExperiments()
-        elif action == copyAction:
-            self.copyRemoteSource()
+        self.remotePanel.copySource()
 
 def logUncaughtException(excType, excValue, excTraceback):
     """

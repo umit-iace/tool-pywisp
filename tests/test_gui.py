@@ -85,17 +85,17 @@ def gui(qtbot, cleanRegistry, tmp_path):
 
 def test_experiments_are_loaded(gui):
     assert [gui.experimentList.item(i).text() for i in range(gui.experimentList.count())] == ["First", "Second"]
-    assert {type(w) for w in gui.remoteWidgetLayout.list} == {MovableSlider, MovablePushButton}
+    assert {type(w) for w in gui.remotePanel.widgets} == {MovableSlider, MovablePushButton}
 
 
 def test_empty_remote_section(gui):
     gui.experimentDoubleClicked(gui.experimentList.item(1))
-    assert gui.remoteWidgetLayout.list == []
+    assert gui.remotePanel.widgets == []
 
 
 def test_baud_menu(gui):
     menu = QMenu()
-    gui.getBauds(DummySerial.settings, menu)
+    gui.connectionManager.getBauds(DummySerial.settings, menu)
     checked = [a.text() for a in menu.actions() if a.isChecked()]
     assert checked == ["115200"]
 
@@ -106,8 +106,8 @@ def test_menu_refresh_does_not_leak_actions(gui, monkeypatch):
     baudMenu, portMenu = QMenu(gui), QMenu(gui)
 
     def refresh():
-        gui.getBauds(DummySerial.settings, baudMenu)
-        gui.getComPorts(DummySerial.settings, portMenu)
+        gui.connectionManager.getBauds(DummySerial.settings, baudMenu)
+        gui.connectionManager.getComPorts(DummySerial.settings, portMenu)
         gui.detectGamepads()
         return len(gui.findChildren(QAction))
 
@@ -140,23 +140,23 @@ def test_movable_widgets_use_mixin_handlers():
 def connectRig(gui, qtbot):
     """ connect like the user does and wait for the result of the background connection """
     gui.connectRig()
-    qtbot.waitUntil(lambda: not gui._pendingConnections, timeout=5000)
+    qtbot.waitUntil(lambda: not gui.connectionManager._pendingConnections, timeout=5000)
 
 
 def test_connection_names_are_bound_correctly(gui, qtbot):
-    gui.connections = {"DummyConnection": {"cls": DummyConnection}}
+    gui.connectionManager.connections = {"DummyConnection": {"cls": DummyConnection}}
     with mock.patch.object(DummyConnection, "_connect", return_value=True):
         connectRig(gui, qtbot)
     try:
         assert gui.isConnected
         with mock.patch.object(gui, "updateData") as updateData:
-            gui.connections["DummyConnection"]["inst"].receivedFrames.emit([pw.Frame(15, b"")])
+            gui.connectionManager.connections["DummyConnection"]["inst"].receivedFrames.emit([pw.Frame(15, b"")])
         updateData.assert_called_once()
         assert updateData.call_args.args[1] == "DummyConnection"
     finally:
         gui.disconnectRig()
     assert not gui.isConnected
-    assert "inst" not in gui.connections["DummyConnection"]
+    assert "inst" not in gui.connectionManager.connections["DummyConnection"]
 
 
 def test_failed_connection_closes_others(gui, qtbot):
@@ -166,7 +166,7 @@ def test_failed_connection_closes_others(gui, qtbot):
         qtbot.waitUntil(lambda: not pw.Connection._aborting, timeout=5000)
     assert not gui.isConnected
     assert gui.actConnect.isEnabled()
-    assert all("inst" not in c for c in gui.connections.values())
+    assert all("inst" not in c for c in gui.connectionManager.connections.values())
 
 
 def test_connecting_does_not_block_the_gui(gui, qtbot):
@@ -178,7 +178,7 @@ def test_connecting_does_not_block_the_gui(gui, qtbot):
         release.wait(5)
         return True
 
-    gui.connections = {"DummyConnection": {"cls": DummyConnection}}
+    gui.connectionManager.connections = {"DummyConnection": {"cls": DummyConnection}}
     with mock.patch.object(DummyConnection, "_connect", slowConnect):
         gui.connectRig()
         assert gui.statusbarLabel.text() == "Connecting ..."
@@ -201,7 +201,7 @@ def test_close_waits_for_aborted_connections(gui, qtbot):
         release.wait(5)
         return True
 
-    gui.connections = {"DummyConnection": {"cls": DummyConnection}}
+    gui.connectionManager.connections = {"DummyConnection": {"cls": DummyConnection}}
     with mock.patch.object(DummyConnection, "_connect", slowConnect):
         gui.connectRig()
         threading.Timer(0.2, release.set).start()
@@ -211,7 +211,7 @@ def test_close_waits_for_aborted_connections(gui, qtbot):
 
 
 def test_gamepad_slider_mapping(gui):
-    slider = next(w for w in gui.remoteWidgetLayout.list if isinstance(w, MovableSlider))
+    slider = next(w for w in gui.remotePanel.widgets if isinstance(w, MovableSlider))
     slider._onGamepad(-0.5)
     assert slider.value == 0
     slider._onGamepad(0.0)
@@ -236,7 +236,7 @@ def test_gamepad_drives_remote_widgets(gui, qtbot, sdl, virtualPad):
     gui.detectGamepads()
     assert next(a for a in gui.gamepadMenu.actions() if a.text() == 'Virtual Controller').isChecked()
 
-    button = next(w for w in gui.remoteWidgetLayout.list if isinstance(w, MovablePushButton))
+    button = next(w for w in gui.remotePanel.widgets if isinstance(w, MovablePushButton))
     with qtbot.waitSignal(button.clicked, timeout=2000):
         virtualPad.press(sdl.SDL_CONTROLLER_BUTTON_A)
 
@@ -253,7 +253,7 @@ def test_gamepad_ignores_widgets_of_other_experiments(gui, qtbot, sdl, virtualPa
     assert button._gamepadConnection is not None
 
     # the patched slot is used, otherwise the check below would prove nothing
-    with mock.patch.object(gui, 'remoteWidgetActivated') as send:
+    with mock.patch.object(gui.remotePanel, 'widgetActivated') as send:
         virtualPad.press(sdl.SDL_CONTROLLER_BUTTON_A)
         qtbot.waitUntil(lambda: send.called, timeout=2000)
     virtualPad.press(sdl.SDL_CONTROLLER_BUTTON_A, 0)
@@ -261,8 +261,8 @@ def test_gamepad_ignores_widgets_of_other_experiments(gui, qtbot, sdl, virtualPa
 
     # the second experiment has no remote widgets
     gui.experimentDoubleClicked(gui.experimentList.item(1))
-    assert gui.remoteWidgetLayout.list == []
-    with mock.patch.object(gui, 'remoteWidgetActivated') as send:
+    assert gui.remotePanel.widgets == []
+    with mock.patch.object(gui.remotePanel, 'widgetActivated') as send:
         virtualPad.press(sdl.SDL_CONTROLLER_BUTTON_A)
         qtbot.wait(200)
     send.assert_not_called()
@@ -334,7 +334,7 @@ def test_plot_color_order(gui):
 
 
 def remoteWidget(gui, cls):
-    return next(w for w in gui.remoteWidgetLayout.list if isinstance(w, cls))
+    return next(w for w in gui.remotePanel.widgets if isinstance(w, cls))
 
 
 def rightDrag(widget, delta):
@@ -372,8 +372,8 @@ def test_moving_a_widget_updates_the_experiment(gui):
 
     # editing the widget keeps its position
     config = dict(button.getData(), valueOn='2')
-    with mock.patch.object(pw.gui.RemoteWidgetEdit, 'getData', return_value=(config, True)):
-        gui.remoteConfigWidget(button)
+    with mock.patch.object(pw.widgets.remotepanel.RemoteWidgetEdit, 'getData', return_value=(config, True)):
+        gui.remotePanel.configWidget(button)
     assert gui._experiments[0]['Remote']['Go']['position'] == [180, 80]
 
 
@@ -383,7 +383,7 @@ def test_save_experiments(gui, tmp_path):
     os.chmod(configFile, 0o640)
 
     rightDrag(remoteWidget(gui, MovablePushButton), QPoint(10, 0))
-    gui.remoteRemoveWidget(remoteWidget(gui, MovableSlider))
+    gui.remotePanel.removeWidget(remoteWidget(gui, MovableSlider))
     assert gui.saveExperiments()
 
     saved = savedExperiments(configFile)
@@ -402,8 +402,8 @@ def test_save_experiments(gui, tmp_path):
     # the saved file loads with the same widgets
     form = pw.MainGui()
     try:
-        assert [w.widgetName for w in form.remoteWidgetLayout.list] == ['Go']
-        assert form.remoteWidgetLayout.list[0].position() == [160, 60]
+        assert [w.widgetName for w in form.remotePanel.widgets] == ['Go']
+        assert form.remotePanel.widgets[0].position() == [160, 60]
     finally:
         form.close()
 
@@ -469,12 +469,12 @@ def test_copy_remote_source(gui):
 
 def test_heartbeat_goes_to_all_connections(gui):
     sent = {}
-    for name in gui.connections:
+    for name in gui.connectionManager.connections:
         inst = mock.Mock()
         inst.writeData.side_effect = lambda data, name=name: sent.setdefault(name, []).append(data)
-        gui.connections[name]['inst'] = inst
-    gui.heartbeat()
-    assert sent == {name: [{'id': 1, 'msg': b'\x02'}] for name in gui.connections}
+        gui.connectionManager.connections[name]['inst'] = inst
+    gui.connectionManager.heartbeat()
+    assert sent == {name: [{'id': 1, 'msg': b'\x02'}] for name in gui.connectionManager.connections}
 
 
 def test_measurement_list(gui):
@@ -534,13 +534,13 @@ def test_load_last_measurement(gui):
     gui.loadLastMeas(gui.lastMeasList.item(0))
     assert gui.exp.getExperiment()['Name'] == 'First'
     assert gui._currentMeasurement() is gui.measurements[0]
-    assert list(gui.getCurrentDataPoints()['x'].values) == [1.0]
+    assert list(gui.plotManager.currentBuffers()['x'].values) == [1.0]
 
 
 def test_multi_button_sets_all_targets(gui):
     config = {'name': 'Stop', 'widgetType': 'MultiButton', 'shortcut': '',
               'targets': [{'Module': 'Dummy', 'Parameter': 'gain', 'value': '0'}]}
-    gui.remoteAddWidget(config)
+    gui.remotePanel.addWidget(config)
     button = remoteWidget(gui, MovableMultiButton)
     slider = remoteWidget(gui, MovableSlider)
     assert slider.value == 2.0
@@ -591,14 +591,14 @@ def test_custom_widget_type(gui, customWidget):
     valid = pw.config.validateExperiments([exp], {'Dummy': Dummy}, {})
     assert valid and 'Twice' in valid[0]['Remote']
 
-    gui.remoteAddWidget(dict(valid[0]['Remote']['Twice'], name='Twice'))
+    gui.remotePanel.addWidget(dict(valid[0]['Remote']['Twice'], name='Twice'))
     widget = remoteWidget(gui, customWidget)
     widget.click()
     assert gui.exp.getExperiment()['Dummy']['gain'] == 6.0
 
 
 def test_switch_sends_both_values(gui):
-    gui.remoteAddWidget({'name': 'Sw', 'widgetType': 'Switch', 'Module': 'Dummy', 'Parameter': 'gain',
+    gui.remotePanel.addWidget({'name': 'Sw', 'widgetType': 'Switch', 'Module': 'Dummy', 'Parameter': 'gain',
                          'valueOn': '5', 'valueOff': '0', 'shortcut': ''})
     switch = remoteWidget(gui, MovableSwitch)
     slider = remoteWidget(gui, MovableSlider)
@@ -619,3 +619,67 @@ def test_push_button_reset_value(gui):
     # the value is sent, afterwards the reset value is set without sending it
     assert gui.exp.getExperiment()['Dummy']['gain'] == '0.5'
     updateSend.assert_called_once_with('Dummy', 'gain', '0.5')
+
+
+def test_plot_manager_shows_measurement(gui, qtbot):
+    pm = gui.plotManager
+    startExperiment(gui)
+    gui.updateData([frame(1000, 1.0), frame(2000, 2.0)], "DummyConnection")
+    assert [pm.dataPointListWidget.item(i).text() for i in range(pm.dataPointListWidget.count())] == ['x']
+
+    # without a plot, a default plot is created for the selected data point
+    pm.dataPointListWidget.item(0).setSelected(True)
+    pm.addDataPointToTree()
+    plot = pm.dataPointTreeWidget.topLevelItem(0)
+    assert plot.text(0) == 'plot_000' and plot.child(0).text(1) == 'x'
+
+    pm.plotVectorClicked(plot)
+    assert [d.title() for d in pm.findAllPlotDocks()] == ['plot_000']
+    gui.updateDataPlots()
+    x, y = pm.plotCharts['plot_000'].plotCurves['x'].getData()
+    assert list(x) == [1.0, 2.0] and list(y) == [1.0, 2.0]
+    gui.stopExperiment()
+
+    # reserved names of the gui docks cannot be used for plots
+    pm.addPlotTreeItem(default=True)
+    pm.dataPointTreeWidget.topLevelItem(1).setText(0, 'Log')
+    pm.plotVectorClicked(pm.dataPointTreeWidget.topLevelItem(1))
+    assert [d.title() for d in pm.findAllPlotDocks()] == ['plot_000']
+
+    with qtbot.waitSignal(pm.allPlotsClosed, timeout=2000):
+        pm.closeAllPlots()
+    assert pm.plotCharts == {} and pm.findAllPlotDocks() == []
+
+
+def test_plot_manager_export_ends(gui, qtbot, tmp_path, monkeypatch):
+    from pywisp.widgets.fileselector import FileSelector
+    pm = gui.plotManager
+    startExperiment(gui)
+    gui.updateData([frame(1000, 1.0)], "DummyConnection")
+    gui.stopExperiment()
+    monkeypatch.setattr(FileSelector, 'getSaveFileName', lambda self: str(tmp_path / "x.csv"))
+    pm.dataPointListWidget.item(0).setSelected(True)
+    with qtbot.waitSignal(pm.exportDone, timeout=60000) as blocker:
+        pm.exportDataPointFromTree()
+    assert blocker.args == [True]
+    assert pm.exporter is None
+    assert gui.statusbarLabel.text() == "Export successful."
+    assert (tmp_path / "x.csv").exists()
+
+
+def test_connection_manager_reports_lost_connections(gui, qtbot):
+    manager = gui.connectionManager
+    manager.connections = {"DummyConnection": {"cls": DummyConnection}}
+    with mock.patch.object(DummyConnection, "_connect", return_value=True):
+        connectRig(gui, qtbot)
+    assert manager.state == manager.CONNECTED and gui.actDisconnect.isEnabled()
+
+    startExperiment(gui)
+    inst = manager.connections["DummyConnection"]["inst"]
+    with qtbot.waitSignal(manager.connectionLost, timeout=2000):
+        # e.g. the rig has closed the connection
+        inst.close()
+    assert manager.state == manager.DISCONNECTED
+    assert not gui.actStopExperiment.isEnabled() and gui.actConnect.isEnabled()
+    assert gui.statusbarLabel.text() == "Not Connected"
+    assert "inst" not in manager.connections["DummyConnection"]
