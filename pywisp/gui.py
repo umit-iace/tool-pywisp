@@ -1187,7 +1187,11 @@ class MainGui(QMainWindow):
         self._logger.info(f"loading visualizer '{vis.__name__}'")
 
         self.visualizer.checkSaveAnimation(self.actSaveAnimation.isChecked())
-        self.actSaveAnimation.disconnect()
+        try:
+            self.actSaveAnimation.toggled.disconnect()
+        except TypeError:
+            # no visualizer connected yet
+            pass
         self.actSaveAnimation.toggled.connect(self.visualizer.checkSaveAnimation)
 
     @pyqtSlot(QListWidgetItem)
