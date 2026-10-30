@@ -537,11 +537,11 @@ class MainGui(QMainWindow):
         baud = int(settings['baud'])
         connMenu.clear()
         for _baud in SerialConnection.supportedBaudrates:
-            baudAction = QAction(str(_baud), self)
+            # owned by the menu, so clear() deletes it
+            baudAction = connMenu.addAction(str(_baud))
             baudAction.setCheckable(True)
             baudAction.setChecked(_baud == baud)
             baudAction.triggered.connect(setBaud(_baud))
-            connMenu.addAction(baudAction)
 
     def setDefaultComPort(self, settings, cnt):
         """
@@ -584,15 +584,14 @@ class MainGui(QMainWindow):
                     port = arduinoPorts[0]
                     settings['port'] = port
             for p in comPorts:
-                portAction = QAction(p.device, self)
+                # owned by the menu, so clear() deletes it
+                portAction = connMenu.addAction(p.device)
                 portAction.setCheckable(True)
                 portAction.setChecked(p.device == port)
                 portAction.triggered.connect(setPort(p.device))
-                connMenu.addAction(portAction)
         else:
-            noAction = QAction("(None)", self)
+            noAction = connMenu.addAction("(None)")
             noAction.setEnabled(False)
-            connMenu.addAction(noAction)
 
     def _updateExperimentsList(self):
         self.experimentList.clear()
@@ -611,11 +610,11 @@ class MainGui(QMainWindow):
             return
 
         for info in gamepads:
-            action = QAction(info.name, self)
+            # owned by the menu, so clear() deletes it
+            action = self.gamepadMenu.addAction(info.name)
             action.setCheckable(True)
             action.setChecked(self.selectedGamepadId == info.id)
             action.triggered.connect(lambda checked, info=info: self.selectGamepad(info))
-            self.gamepadMenu.addAction(action)
 
     def selectGamepad(self, info):
         self.stopGamepad()

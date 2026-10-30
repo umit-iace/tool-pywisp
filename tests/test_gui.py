@@ -100,6 +100,22 @@ def test_baud_menu(gui):
     assert checked == ["115200"]
 
 
+def test_menu_refresh_does_not_leak_actions(gui, monkeypatch):
+    from PyQt6.QtGui import QAction
+    monkeypatch.setattr(pw.gui, 'getAllGamepads', lambda: [])
+    baudMenu, portMenu = QMenu(gui), QMenu(gui)
+
+    def refresh():
+        gui.getBauds(DummySerial.settings, baudMenu)
+        gui.getComPorts(DummySerial.settings, portMenu)
+        gui.detectGamepads()
+        return len(gui.findChildren(QAction))
+
+    first = refresh()
+    assert refresh() == refresh() == first
+    assert len(baudMenu.actions()) == len(pw.SerialConnection.supportedBaudrates)
+
+
 def test_missing_config(qtbot, cleanRegistry):
     form = pw.MainGui()
     qtbot.addWidget(form)
