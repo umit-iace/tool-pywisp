@@ -5,7 +5,6 @@ import shutil
 import sys
 import tempfile
 import time
-from copy import deepcopy
 
 import serial.tools.list_ports
 import yaml
@@ -1615,19 +1614,8 @@ class MainGui(QMainWindow):
                 wid.showValue(module, parameter, value)
 
     def remoteSetParameter(self, module, parameter, value):
-        exp = deepcopy(self.exp.getExperiment())
-        del exp['Name']
-
-        for key, val in exp.items():
-            if key != module:
-                continue
-            for k in val:
-                if k != parameter:
-                    continue
-                exp[key][k] = value
-                self.exp.editExperiment(exp)
-
-                return
+        """ sets a parameter of the shown experiment, it is sent with the next parameter update """
+        self.exp.setParameter(module, parameter, value)
 
     def saveExperiments(self, fileName=None):
         """

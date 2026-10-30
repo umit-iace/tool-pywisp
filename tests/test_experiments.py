@@ -272,3 +272,29 @@ def test_invalid_frames_are_dropped_while_running(interactor, monkeypatch, caplo
     assert frames(interactor) == [(7, b'ok')]
     assert caplog.text.count("dropping it") == 2
     assert interactor.runningExperiment
+
+
+def test_settings_are_the_data_object(interactor):
+    """ the model only displays the settings, edits in the view and set parameters reach them """
+    from PyQt6.QtCore import Qt
+    interactor.setExperiment({'Name': 'a', 'Echo': {'gain': 2.0}})
+    model = interactor.targetModel
+    moduleIndex = model.index(0, 0)
+    offsetIndex = model.index(1, 1, moduleIndex)
+
+    # editing like the delegate does
+    model.setData(offsetIndex, "0.25", Qt.ItemDataRole.EditRole)
+    assert interactor.getExperiment()['Echo'] == {'gain': 2.0, 'offset': 0.25}
+    # text that cannot be parsed keeps the old value
+    model.setData(offsetIndex, "nonsense(", Qt.ItemDataRole.EditRole)
+    assert interactor.getExperiment()['Echo']['offset'] == 0.25
+
+    assert interactor.setParameter('Echo', 'gain', 3.0)
+    assert model.data(model.index(0, 1, moduleIndex)) == '3.0'
+    assert interactor.getExperiment()['Echo']['gain'] == 3.0
+    assert not interactor.setParameter('Echo', 'missing', 1)
+    assert not interactor.setParameter('Missing', 'gain', 1)
+
+    # the experiment returned is a copy
+    interactor.getExperiment()['Echo']['gain'] = 99
+    assert interactor.getExperiment()['Echo']['gain'] == 3.0

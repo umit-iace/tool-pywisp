@@ -20,12 +20,26 @@ class ExperimentException(Exception):
 
 class ExperimentModel(QStandardItemModel):
     """
-    Model to provide item model that includes an additional name attribute
+    Model to provide item model that includes an additional name attribute.
+
+    It only displays the settings of the :class:`ExperimentInteractor`, values edited
+    by the user are reported with :attr:`settingEdited`.
     """
+    #: module, setting and new value of a setting edited in the view
+    settingEdited = pyqtSignal(str, str, object)
 
     def __init__(self, parent=None):
         QStandardItemModel.__init__(self, parent)
         self._name = None
+
+    def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
+        ok = super().setData(index, value, role)
+        if role == Qt.ItemDataRole.EditRole and index.column() == 1 and index.parent().isValid():
+            module = self.itemFromIndex(index.parent()).data(PropertyItem.RawDataRole)
+            key = self.itemFromIndex(index.siblingAtColumn(0)).data(PropertyItem.RawDataRole)
+            # the item keeps its old value if the text cannot be parsed
+            self.settingEdited.emit(module, key, self.itemFromIndex(index).data(PropertyItem.RawDataRole))
+        return ok
 
     def setName(self, name):
         self._name = name
@@ -141,6 +155,11 @@ class ExperimentInteractor(QObject):
         # create model
         self.targetModel = ExperimentModel(self)
         self.targetModel.itemChanged.connect(self.itemChanged)
+        self.targetModel.settingEdited.connect(self._onSettingEdited)
+        # settings of the modules of the applied experiment, the model only displays them
+        self._settings = OrderedDict()
+        # value items of the model by (module, setting)
+        self._settingItems = {}
         # parameter change settings
         self.modSets = {}
         # instances of the modules of the applied experiment
@@ -277,6 +296,8 @@ class ExperimentInteractor(QObject):
         self.dataPoints = []
         self._instances = {}
         self._frameHandlerCache = {}
+        self._settings = OrderedDict()
+        self._settingItems = {}
         self.targetModel.clear()
         # insert header
         self.targetModel.setHorizontalHeaderLabels(['Property', 'Value'])
@@ -321,12 +342,40 @@ class ExperimentInteractor(QObject):
                     self._logger.warning(f"_applyExperiment(): Setting: '{valKey}' not "
                                          f"available for Module: '{moduleName}'")
 
+        for row in range(self.targetModel.rowCount()):
+            moduleItem = self.targetModel.item(row, 0)
+            moduleName = moduleItem.data(role=PropertyItem.RawDataRole)
+            self._settings[moduleName] = self.getSettings(moduleItem)
+            for child in range(moduleItem.rowCount()):
+                key = moduleItem.child(child, 0).data(role=PropertyItem.RawDataRole)
+                self._settingItems[(moduleName, key)] = moduleItem.child(child, 1)
+
         for mod, _, settings in self.activeModules():
             mod.settings = OrderedDict(settings)
 
         self.targetView.setModel(self.targetModel)
 
         return True
+
+    def setParameter(self, module, parameter, value):
+        """
+        Sets a setting of a module of the applied experiment, it is sent with the next parameter update.
+        :return: `True` if the module has the setting
+        """
+        settings = self._settings.get(module)
+        if settings is None or parameter not in settings:
+            self._logger.warning(f"Setting '{parameter}' not available for Module '{module}'")
+            return False
+        settings[parameter] = value
+        item = self._settingItems[(module, parameter)]
+        item.setData(value, role=PropertyItem.RawDataRole)
+        self.targetModel.dataChanged.emit(item.index(), item.index())
+        return True
+
+    def _onSettingEdited(self, module, parameter, value):
+        """ takes over a value the user has edited in the view """
+        if module in self._settings:
+            self._settings[module][parameter] = value
 
     def _editExperiment(self, exp):
         """
@@ -337,19 +386,8 @@ class ExperimentInteractor(QObject):
         for moduleName, moduleValue in exp.items():
             if moduleName in NON_MODULE_KEYS or not moduleValue:
                 continue
-
             for valKey, valVal in moduleValue.items():
-                modules = self.targetModel.findItems(moduleName)[0]
-
-                for row in range(modules.rowCount()):
-                    if self.targetModel.data(modules.child(row, 0).index()) == valKey:
-                        valueIdx = self.targetModel.index(row, 1, self.targetModel.indexFromItem(modules))
-                        self.targetModel.setData(valueIdx, valVal, role=PropertyItem.RawDataRole)
-                        self.targetModel.dataChanged.emit(valueIdx, valueIdx)
-                        break
-                else:
-                    self._logger.warning(f"_editExperiment(): Setting: '{valKey}' not "
-                                         f"available for Module: '{moduleName}'")
+                self.setParameter(moduleName, valKey, valVal)
 
         return True
 
@@ -540,13 +578,9 @@ class ExperimentInteractor(QObject):
             yield self._getInstance(name), name
 
     def activeModules(self):
-        for row in range(self.targetModel.rowCount()):
-            index = self.targetModel.index(row, 0)
-            parent = index.model().itemFromIndex(index)
-            settings = self.getSettings(parent)
-            name = parent.data(role=PropertyItem.RawDataRole)
-            mod = self._getInstance(name)
-            yield mod, name, settings
+        """ yields instance, name and a copy of the settings of every module of the applied experiment """
+        for name, settings in self._settings.items():
+            yield self._getInstance(name), name, OrderedDict(settings)
 
     def paramsToConnData(self, params, conn):
         if not params:
