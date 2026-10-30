@@ -47,7 +47,7 @@ from .min import CONTROL_FRAME_ID, Control, controlFrame
 from .utils import getResource, setupLogging
 from .widgets.common import PlainTextLogger, PinnedDock, TreeWidgetStyledItemDelegate
 from .widgets.dialogs import DataIntDialog, DataTcpIpDialog, RemoteWidgetEdit
-from .widgets.remote import FreeLayout, MovableMultiButton, MovablePushButton, MovableSwitch, MovableSlider
+from .widgets.remote import REMOTE_WIDGETS, FreeLayout
 
 from .visualization import MplVisualizer, VtkVisualizer
 from .gamepad import getAllGamepads, openGamepad
@@ -1544,27 +1544,7 @@ class MainGui(QMainWindow):
             self._experiments[idx]['Remote'] = {}
         self._experiments[idx]['Remote'].pop(widget.widgetName, None)
 
-        widget.widgetName = config['name']
-        widget.widgetType = config['widgetType']
-        widget.module = config.get('Module')
-        widget.parameter = config.get('Parameter')
-        if config['widgetType'] == "MultiButton":
-            widget.targets = config['targets']
-            widget.shortcut.setKey(config['shortcut'])
-        elif config['widgetType'] == "PushButton":
-            widget.valueOn = config['valueOn']
-            widget.valueReset = config['valueReset']
-            widget.shortcut.setKey(config['shortcut'])
-        elif config['widgetType'] == "Switch":
-            widget.valueOn = config['valueOn']
-            widget.valueOff = config['valueOff']
-            widget.shortcut.setKey(config['shortcut'])
-        elif config['widgetType'] == "Slider":
-            widget.minSlider = config['minSlider']
-            widget.maxSlider = config['maxSlider']
-            widget.stepSlider = config['stepSlider']
-            widget.shortcutPlus.setKey(config['shortcutPlus'])
-            widget.shortcutMinus.setKey(config['shortcutMinus'])
+        widget.applyConfig(config)
         config['position'] = widget.position()
         self._experiments[idx]['Remote'][config['name']] = config
         widget.updateData()
@@ -1572,7 +1552,7 @@ class MainGui(QMainWindow):
     def remoteAddWidget(self, config=None, **kwargs):
         """
         Adds a new widget to the remoteDock
-        :param config: RemoteWidgetEdit object containing widget parameters and information
+        :param config: config of the widget, if `None` it is created with the widget editor
         """
         idx = self.experimentList.row(self._currentExpListItem)
         exp = self.exp.getExperiment()
@@ -1584,74 +1564,22 @@ class MainGui(QMainWindow):
             if not self._experiments[idx].get('Remote'):
                 self._experiments[idx]['Remote'] = {}
             self._experiments[idx]['Remote'][config['name']] = config
-        sliderLabel = None
-        if config['widgetType'] == "PushButton":
-            if 'valueReset' not in config:
-                config['valueReset'] = ''
-            if 'shortcut-Gp' not in config:
-                config['shortcut-Gp'] = None
-            widget = MovablePushButton(config['name'], config['valueOn'], config['valueReset'],
-                                       config['shortcut'], config['shortcut-Gp'],
-                                       module=config['Module'], parameter=config['Parameter'])
-            widget.setFixedHeight(40)
-            widget.setFixedWidth(100)
-            widget.clicked.connect(lambda: self.remotePushButtonSendParameter(widget))
-            widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
-                widget, editWidget=True))
-            widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
-        elif config['widgetType'] == "Switch":
-            if 'shortcut-Gp' not in config:
-                config['shortcut-Gp'] = None
-            widget = MovableSwitch(config['name'], config['valueOn'], config['valueOff'],
-                                   config['shortcut'], config['shortcut-Gp'],
-                                   module=config['Module'], parameter=config['Parameter'])
-            widget.setFixedHeight(40)
-            widget.setFixedWidth(100)
-            widget.clicked.connect(lambda: self.remoteSwitchSendParameter(widget))
-            widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
-                widget, editWidget=True))
-            widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
-        elif config['widgetType'] == "Slider":
-            if 'shortcut-Gp' not in config:
-                config['shortcut-Gp'] = None
-            if 'invertSlider' not in config:
-                config['invertSlider'] = False
-            startValue = exp.get(config['Module'], {}).get(config['Parameter'])
-            if startValue is None:
-                self._logger.error(f"Cannot create slider '{config['name']}': parameter '{config['Parameter']}' "
-                                   f"of module '{config['Module']}' not found!")
-                return
-            sliderLabel = QLabel()
-            sliderLabel.setFixedHeight(15)
-            labelFont = sliderLabel.font()
-            labelFont.setPointSize(8)
-            sliderLabel.setFont(labelFont)
-            self.remoteWidgetLayout.addWidget(sliderLabel)
-            widget = MovableSlider(config['name'], config['minSlider'], config['maxSlider'], config['invertSlider'], config['stepSlider'],
-                                   sliderLabel,
-                                   config['shortcutPlus'], config['shortcutMinus'], config['shortcut-Gp'],
-                                   startValue, module=config['Module'],
-                                   parameter=config['Parameter'])
-            widget.setFixedHeight(30)
-            widget.setFixedWidth(200)
-            widget.valueChanged.connect(lambda value, _wid=widget: self.remoteSliderSendParameter(_wid, value))
-            widget.sliderMoved.connect(lambda value, _wid=widget: self.remoteSliderUpdate(_wid, value))
-            widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
-                widget, editWidget=True))
-            widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
-        elif config['widgetType'] == "MultiButton":
-            if 'shortcut-Gp' not in config:
-                config['shortcut-Gp'] = None
-            widget = MovableMultiButton(config['name'], config['targets'], config.get('shortcut', ''),
-                                        config['shortcut-Gp'])
-            widget.setFixedHeight(40)
-            widget.setFixedWidth(100)
-            widget.clicked.connect(lambda: self.remoteMultiButtonSendParameter(widget))
-            widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
-                widget, editWidget=True))
-            widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
-        else:
+
+        cls = REMOTE_WIDGETS.get(config['widgetType'])
+        if cls is None:
+            self._logger.error(f"Unknown remote widget type '{config['widgetType']}'")
             return
+        widget = cls.fromConfig(config, exp)
+        if widget is None:
+            return
+        widget.setFixedSize(*cls.size)
+        # looked up on every call, so it can be replaced, e.g. in tests
+        widget.connectActivation(lambda wid: self.remoteWidgetActivated(wid))
+        widget.editAction.triggered.connect(lambda _, widget=widget: self.remoteConfigWidget(widget))
+        widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
+        if widget.label:
+            self.remoteWidgetLayout.addWidget(widget.label)
+
         position = config.get('position')
         if position is None:
             # place new widgets in two columns
@@ -1661,89 +1589,30 @@ class MainGui(QMainWindow):
         widget.onMoved = self.remoteWidgetMoved
         self.remoteWidgetLayout.addWidget(widget)
 
-    def remotePushButtonSendParameter(self, widget):
+    def remoteWidgetActivated(self, widget):
         """
-        Gets called when a user interacts with the pushbutton and sends the specified parameter to the bench
+        Gets called when the user activates a remote widget. Sets the parameters of the widget and
+        sends all of them to the rig at once.
         :param widget: the widget the user interacted with
         """
-        value = widget.valueOn
-        self.remoteSendParameter(widget.module, widget.parameter, value)
-        self.remoteSliderUpdate(widget, value, sliderMoved=False)
-
-        if widget.valueReset != '':
-            self.remoteSetParameter(widget.module, widget.parameter, widget.valueReset)
-            self.exp.updateSendParameter(widget.module, widget.parameter, widget.valueReset)
-
-    def remoteMultiButtonSendParameter(self, widget):
-        """
-        Gets called when a user interacts with the multi button, sets all its targets and sends them
-        to the bench at once
-        :param widget: the widget the user interacted with
-        """
-        for target in widget.targets:
-            self.remoteSetParameter(target['Module'], target['Parameter'], target['value'])
-            self.remoteSyncSliders(target['Module'], target['Parameter'], target['value'])
+        for module, parameter, value in widget.updates():
+            self.remoteSetParameter(module, parameter, value)
+            self.remoteSyncWidgets(module, parameter, value, source=widget)
         if self.actSendParameter.isEnabled():
             self.sendChangedParameter()
 
-    def remoteSwitchSendParameter(self, widget):
-        """
-        Gets called when a user interacts with the switch and sends the specified parameter to the bench
-        :param widget: the widget the user interacted with
-        """
-        if widget.isChecked():
-            value = widget.valueOn
-            widget.setText(widget.widgetName + '\n' + widget.valueOff)
-        else:
-            value = widget.valueOff
-            widget.setText(widget.widgetName + '\n' + widget.valueOn)
+        # e.g. the reset value of a push button, it is not sent and not detected as change
+        for module, parameter, value in widget.resets():
+            self.remoteSetParameter(module, parameter, value)
+            self.exp.updateSendParameter(module, parameter, value)
 
-        self.remoteSendParameter(widget.module, widget.parameter, value)
-        self.remoteSliderUpdate(widget, value, sliderMoved=False)
-
-    def remoteSliderSendParameter(self, widget, value):
+    def remoteSyncWidgets(self, module, parameter, value, source=None):
         """
-        Gets called when a user interacts with the slider and sends the specified parameter to the bench
-        :param widget: the widget the user interacted with
-        :param value: the actual value of the widget
-        """
-        self.remoteSliderUpdate(widget, value)
-        self.remoteSendParameter(widget.module, widget.parameter, widget.value)
-
-    def remoteSliderUpdate(self, widget, value, sliderMoved=True):
-        """
-        Gets called when a user interacts with the slider
-        :param widget: the widget the user interacted with
-        :param value: the actual value of the widget
-        :param sliderMoved: False if gets called from another widget
-        """
-        if not sliderMoved:
-            self.remoteSyncSliders(widget.module, widget.parameter, value)
-        else:
-            widget.valueOn = value
-
-            if isinstance(widget, MovableSlider):
-                value = widget.calcValue(value)
-
-            widget.label.setText(widget.widgetName + f": {value:.3f}")
-
-    def remoteSyncSliders(self, module, parameter, value):
-        """
-        Moves all sliders connected to the given parameter to the value, without sending it
+        Shows the value on all other widgets of the given parameter, without sending it
         """
         for wid in self.remoteWidgetLayout.list:
-            if isinstance(wid, MovableSlider):
-                if wid.module == module and wid.parameter == parameter:
-                    wid.blockSignals(True)
-                    wid.setValue(float(value))
-                    wid.blockSignals(False)
-                    wid.valueOn = value
-                    wid.label.setText(wid.widgetName + f": {wid.value:.3f}")
-
-    def remoteSendParameter(self, module, parameter, value):
-        self.remoteSetParameter(module, parameter, value)
-        if self.actSendParameter.isEnabled():
-            self.sendChangedParameter()
+            if wid is not source:
+                wid.showValue(module, parameter, value)
 
     def remoteSetParameter(self, module, parameter, value):
         exp = deepcopy(self.exp.getExperiment())

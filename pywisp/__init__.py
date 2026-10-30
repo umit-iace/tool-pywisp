@@ -15,3 +15,4 @@ from .gui import *
 from .registry import *
 from .utils import *
 from .visualization import *
+from .widgets.remote import MovableWidget as MovableWidget, registerRemoteWidget as registerRemoteWidget

@@ -252,10 +252,17 @@ def test_gamepad_ignores_widgets_of_other_experiments(gui, qtbot, sdl, virtualPa
     button = remoteWidget(gui, MovablePushButton)
     assert button._gamepadConnection is not None
 
+    # the patched slot is used, otherwise the check below would prove nothing
+    with mock.patch.object(gui, 'remoteWidgetActivated') as send:
+        virtualPad.press(sdl.SDL_CONTROLLER_BUTTON_A)
+        qtbot.waitUntil(lambda: send.called, timeout=2000)
+    virtualPad.press(sdl.SDL_CONTROLLER_BUTTON_A, 0)
+    qtbot.wait(50)
+
     # the second experiment has no remote widgets
     gui.experimentDoubleClicked(gui.experimentList.item(1))
     assert gui.remoteWidgetLayout.list == []
-    with mock.patch.object(gui, 'remotePushButtonSendParameter') as send:
+    with mock.patch.object(gui, 'remoteWidgetActivated') as send:
         virtualPad.press(sdl.SDL_CONTROLLER_BUTTON_A)
         qtbot.wait(200)
     send.assert_not_called()
@@ -560,3 +567,55 @@ def test_log_from_worker_thread(gui, qtbot):
     worker.join()
     qtbot.waitUntil(lambda: "from the worker" in gui.logBox.toPlainText(), timeout=2000)
     assert appended == [threading.main_thread()]
+
+
+@pytest.fixture
+def customWidget():
+    """ a widget type registered by an application, it sends twice the configured value """
+    from pywisp.widgets.remote import REMOTE_WIDGETS
+
+    class Doubler(MovablePushButton):
+        widgetType = 'Doubler'
+
+        def updates(self):
+            return [(self.module, self.parameter, 2 * float(self.valueOn))]
+
+    pw.registerRemoteWidget(Doubler)
+    yield Doubler
+    del REMOTE_WIDGETS['Doubler']
+
+
+def test_custom_widget_type(gui, customWidget):
+    exp = {'Name': 'Custom', 'Dummy': {'gain': 1.0},
+           'Remote': {'Twice': {'widgetType': 'Doubler', 'Module': 'Dummy', 'Parameter': 'gain', 'valueOn': '3'}}}
+    valid = pw.config.validateExperiments([exp], {'Dummy': Dummy}, {})
+    assert valid and 'Twice' in valid[0]['Remote']
+
+    gui.remoteAddWidget(dict(valid[0]['Remote']['Twice'], name='Twice'))
+    widget = remoteWidget(gui, customWidget)
+    widget.click()
+    assert gui.exp.getExperiment()['Dummy']['gain'] == 6.0
+
+
+def test_switch_sends_both_values(gui):
+    gui.remoteAddWidget({'name': 'Sw', 'widgetType': 'Switch', 'Module': 'Dummy', 'Parameter': 'gain',
+                         'valueOn': '5', 'valueOff': '0', 'shortcut': ''})
+    switch = remoteWidget(gui, MovableSwitch)
+    slider = remoteWidget(gui, MovableSlider)
+    switch.click()
+    assert gui.exp.getExperiment()['Dummy']['gain'] == '5'
+    assert switch.text() == 'Sw\n0'
+    assert slider.value == 5
+    switch.click()
+    assert gui.exp.getExperiment()['Dummy']['gain'] == '0'
+    assert switch.text() == 'Sw\n5'
+
+
+def test_push_button_reset_value(gui):
+    button = remoteWidget(gui, MovablePushButton)
+    button.valueReset = '0.5'
+    with mock.patch.object(gui.exp, 'updateSendParameter') as updateSend:
+        button.click()
+    # the value is sent, afterwards the reset value is set without sending it
+    assert gui.exp.getExperiment()['Dummy']['gain'] == '0.5'
+    updateSend.assert_called_once_with('Dummy', 'gain', '0.5')

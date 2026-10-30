@@ -4,11 +4,12 @@ from PyQt6.QtGui import QValidator
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QDialog, QFileDialog
 
-from pywisp.config import REMOTE_KEYS, REMOTE_MULTI_TYPES, validateExperiments
+from pywisp.config import validateExperiments
 from pywisp.experimentModules import ExperimentModule
 from pywisp.settings import Settings
 from pywisp.widgets.dialogs import DataIntDialog, DataTcpIpDialog, RemoteWidgetEdit, ShortcutCreator
 from pywisp.widgets.fileselector import FileSelector
+from pywisp.widgets.remote import REMOTE_WIDGETS
 
 EXP = {
     'Model': {'gain': 2.5, 'offset': 0.0},
@@ -88,7 +89,7 @@ def test_remote_edit_without_experiment(qtbot):
     assert dialog._getData()['Module'] == ''
 
 
-@pytest.mark.parametrize("widgetType", [t for t in REMOTE_KEYS if t not in REMOTE_MULTI_TYPES])
+@pytest.mark.parametrize("widgetType", [t for t, cls in REMOTE_WIDGETS.items() if not cls.hasTargets])
 def test_remote_edit_creates_valid_widgets(qtbot, monkeypatch, widgetType):
     """ the dialog output must pass the validation of the config files """
     acceptDialogs(monkeypatch)
@@ -97,7 +98,7 @@ def test_remote_edit_creates_valid_widgets(qtbot, monkeypatch, widgetType):
     assert ok
     assert msg['widgetType'] == widgetType
     assert (msg['Module'], msg['Parameter']) == ('Model', 'gain')
-    for key in REMOTE_KEYS[widgetType]['required']:
+    for key in REMOTE_WIDGETS[widgetType].requiredKeys:
         assert key in msg
 
     exp = dict(EXP, Name='exp', Remote={'w': msg})

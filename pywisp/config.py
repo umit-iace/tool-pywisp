@@ -12,6 +12,8 @@ import logging
 
 import yaml
 
+from .widgets.remote import REMOTE_WIDGETS
+
 __all__ = ["validateExperiments", "dumpExperiments"]
 
 # top level keys of an experiment that do not denote an experiment module
@@ -39,30 +41,9 @@ CONFIG_ALIASES = {
     'MovingWindowWidth': 'MovingWindowSize',
 }
 
-# required and optional keys (with defaults) of the remote widgets
+# keys of all remote widgets, the keys of a type are defined by its class in REMOTE_WIDGETS
 # startValue is written by the widget editor, position is the place of the widget in the remote dock
 REMOTE_COMMON_KEYS = ('widgetType', 'Module', 'Parameter', 'name', 'startValue', 'position')
-REMOTE_KEYS = {
-    'PushButton': {
-        'required': ('valueOn',),
-        'optional': {'valueReset': '', 'shortcut': '', 'shortcut-Gp': None},
-    },
-    'Switch': {
-        'required': ('valueOn', 'valueOff'),
-        'optional': {'shortcut': '', 'shortcut-Gp': None},
-    },
-    'Slider': {
-        'required': ('minSlider', 'maxSlider', 'stepSlider'),
-        'optional': {'shortcutPlus': '', 'shortcutMinus': '', 'shortcut-Gp': None, 'invertSlider': False},
-    },
-    # sets several parameters at once, e.g. an emergency stop for multiple motors
-    'MultiButton': {
-        'required': ('targets',),
-        'optional': {'shortcut': '', 'shortcut-Gp': None},
-    },
-}
-# widget types that set a list of targets instead of a single Module and Parameter
-REMOTE_MULTI_TYPES = ('MultiButton',)
 REMOTE_TARGET_KEYS = ('Module', 'Parameter', 'value')
 
 
@@ -211,22 +192,22 @@ def _checkWidget(report, widgetName, widget, exp, modules):
         return "its config must be a mapping"
 
     widgetType = widget.get('widgetType')
-    if widgetType not in REMOTE_KEYS:
-        return f"'widgetType' must be one of {list(REMOTE_KEYS)}, got {widgetType!r}"
-    spec = REMOTE_KEYS[widgetType]
+    cls = REMOTE_WIDGETS.get(widgetType)
+    if cls is None:
+        return f"'widgetType' must be one of {list(REMOTE_WIDGETS)}, got {widgetType!r}"
 
-    if widgetType in REMOTE_MULTI_TYPES:
+    if cls.hasTargets:
         problem = _checkTargets(widget.get('targets'), exp, modules)
     else:
         problem = _checkTarget(widget.get('Module'), widget.get('Parameter'), exp, modules)
     if problem:
         return problem
 
-    missing = [key for key in spec['required'] if key not in widget]
+    missing = [key for key in cls.requiredKeys if key not in widget]
     if missing:
         return f"missing the key(s) {missing}"
 
-    allowed = set(REMOTE_COMMON_KEYS) | set(spec['required']) | set(spec['optional'])
+    allowed = set(REMOTE_COMMON_KEYS) | set(cls.requiredKeys) | set(cls.optionalKeys)
     unknown = [key for key in widget if key not in allowed]
     if unknown:
         report.warning(f"Remote: widget '{widgetName}' has unknown key(s) {unknown}")
@@ -238,7 +219,7 @@ def _checkWidget(report, widgetName, widget, exp, modules):
                        f"expected [x, y] with non-negative numbers")
         del widget['position']
 
-    for key, default in spec['optional'].items():
+    for key, default in cls.optionalKeys.items():
         if widget.get(key) is None:
             widget[key] = default
     return None
@@ -283,8 +264,9 @@ def dumpExperiments(experiments):
             if not isinstance(widget, dict):
                 continue
             widget.pop('name', None)
-            spec = REMOTE_KEYS.get(widget.get('widgetType'), {'optional': {}})
-            for key, default in spec['optional'].items():
+            cls = REMOTE_WIDGETS.get(widget.get('widgetType'))
+            optional = cls.optionalKeys if cls is not None else {}
+            for key, default in optional.items():
                 if key in widget and widget[key] in (None, default):
                     del widget[key]
             if 'position' in widget:
