@@ -4,6 +4,8 @@ name: test
 on:
   push:
   pull_request:
+  # start it manually in the Actions tab or with `gh workflow run test.yml --ref <branch>`
+  workflow_dispatch:
 
 jobs:
   test:
