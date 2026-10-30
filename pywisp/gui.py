@@ -37,7 +37,7 @@ from PyQt6.QtWidgets import QAbstractItemView, QApplication, QComboBox, QFileDia
 from pyqtgraph.dockarea import Dock, DockArea
 
 from .config import dumpExperiments, validateExperiments
-from .connection import SerialConnection, SocketConnection
+from .connection import Connection, SerialConnection, SocketConnection
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import getRegisteredConnections, getRegisteredExperimentModules, getRegisteredVisualizers
 from .buffer import DataPointBuffer
@@ -1249,6 +1249,9 @@ class MainGui(QMainWindow):
         """
         self._logger.info("Close Event received, shutting down.")
         self.disconnectRig()
+        # connections that are still being established end with their connect timeout
+        if not Connection.waitForAborted():
+            self._logger.warning("Aborted connections did not end in time")
         self.stopGamepad()
         if self.exporter is not None:
             self._logger.warning("Export in progress, waiting!")

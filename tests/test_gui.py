@@ -192,6 +192,24 @@ def test_connecting_does_not_block_the_gui(gui, qtbot):
     assert gui.statusbarLabel.text() == "Not Connected"
 
 
+def test_close_waits_for_aborted_connections(gui, qtbot):
+    """ closing the window while connecting must not destroy the running reader thread """
+    import threading
+    release = threading.Event()
+
+    def slowConnect(self):
+        release.wait(5)
+        return True
+
+    gui.connections = {"DummyConnection": {"cls": DummyConnection}}
+    with mock.patch.object(DummyConnection, "_connect", slowConnect):
+        gui.connectRig()
+        threading.Timer(0.2, release.set).start()
+        gui.close()
+    assert not pw.Connection._aborting
+    assert not gui.isConnected
+
+
 def test_gamepad_slider_mapping(gui):
     slider = next(w for w in gui.remoteWidgetLayout.list if isinstance(w, MovableSlider))
     slider._onGamepad(-0.5)

@@ -179,10 +179,8 @@ class Connection(QObject, metaclass=ConnectionMeta):
         self.connecting = False
         if self._aborted:
             # closed while connecting, the worker has already been asked to stop
-            if ok:
-                self._disconnect()
             self._stopThread()
-            Connection._aborting.discard(self)
+            self._finishAborted()
             return
         self.connected = ok
         if not ok:
@@ -205,11 +203,43 @@ class Connection(QObject, metaclass=ConnectionMeta):
         self._stopThread()
         self.finished.emit()
 
+    @classmethod
+    def waitForAborted(cls, timeout=5000):
+        """
+        wait until the connections closed while connecting have ended, e.g. before the application quits
+
+        :param timeout: [ms] maximum time to wait for every connection
+        :return: `True` if all of them have ended
+        """
+        for conn in list(cls._aborting):
+            try:
+                # the event loop of the thread keeps running after the worker has returned
+                conn.readerThread.quit()
+                if not conn.readerThread.wait(timeout):
+                    continue
+            except RuntimeError:
+                # the thread has already been deleted on the C++ side
+                pass
+            conn._finishAborted()
+        return not cls._aborting
+
+    def _finishAborted(self):
+        """ close a connection that has been closed while connecting, once its thread has ended """
+        if self not in Connection._aborting:
+            return
+        # closing a socket or port that has not been opened is fine
+        self._disconnect()
+        Connection._aborting.discard(self)
+
     def _stopThread(self):
-        self.readerThread.quit()
-        # the receive loop polls with a short timeout, so the thread ends quickly
-        if not self.readerThread.wait(self.closeTimeout):
-            self._logger.warning("the reader thread did not stop in time")
+        try:
+            self.readerThread.quit()
+            # the receive loop polls with a short timeout, so the thread ends quickly
+            if not self.readerThread.wait(self.closeTimeout):
+                self._logger.warning("the reader thread did not stop in time")
+        except RuntimeError:
+            # the thread has already ended and been deleted on the C++ side
+            pass
 
     @abstractmethod
     def _connect(self):
