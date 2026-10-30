@@ -171,3 +171,53 @@ Running an experiment
     end
 
 Note, that again no messages from the rig to the pc are sent within this action and no failure modes are present.
+
+Status of the rig and start confirmation
+----------------------------------------
+
+A rig that calls ``e.enableStatus(out)`` of the tool-libs ``Experiment`` sends a status frame with the reserved
+id 63 every 250 ms and at every start, also while IDLE. Its payload (little endian):
+
+====== =====================================================
+bytes  content
+====== =====================================================
+0      version, 1
+1      state, 0 IDLE, 1 RUN
+2      status bits of the project, e.g. "motor driver ready"
+3      start counter, incremented by every start command
+4-5    number of frames received before that start
+6-9    CRC32 over id, length and payload of these frames
+10-13  uptime of the rig [ms]
+14     id of the last sync command
+15-16  number of frames received before that sync
+17-20  their CRC32
+====== =====================================================
+
+PyWisp takes these frames out before the experiment modules see them. The status bar shows whether the rig responds,
+its state and the missing status bits, named by the list ``statusFlags`` of the connection class.
+For a start, PyWisp computes the same CRC32 over the frames it sent (:func:`pywisp.min.frameCrc`) and waits up to
+1 s for the confirmation. The experiment turns yellow until then and green once confirmed. If the confirmation is
+missing or the rig received other frames, PyWisp stops and starts once more, after a second failure the experiment
+is stopped. Rigs without status frames are not checked and behave as before.
+
+Parameters sent during the run (remote widgets, *Send parameters*) are followed by a sync command
+(:func:`pywisp.min.syncFrame`, control frame with the bits ``0b110`` and a sync id). The rig answers it at once with
+a status frame that carries the number and CRC32 of the frames received since the last control frame. If the
+confirmation is missing for 1 s or the rig received other frames, PyWisp sends all parameters of the experiment
+again, which is correct even if further changes were sent meanwhile. If these are not confirmed either, the experiment
+is stopped. Rigs without sync support take the sync command for a heartbeat and are not checked.
+
+.. uml::
+    :caption: Confirmed start
+
+    participant PyWisp
+    participant Experiment
+
+    loop every 250 ms
+    Experiment -> PyWisp: status (IDLE, start counter n)
+    end
+    PyWisp -> Experiment: parameter frames
+    note over Experiment: CRC32 and count\nof the received frames
+    PyWisp -> Experiment: start (frame ID 1)
+    Experiment -> PyWisp: status (RUN, start counter n+1, count, CRC32)
+    note over PyWisp: compare with the sent frames

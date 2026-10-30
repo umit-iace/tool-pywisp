@@ -92,6 +92,16 @@ class MainGui(QMainWindow):
         self.connectionManager = ConnectionManager(self)
         self.connectionManager.stateChanged.connect(self._onConnectionStateChanged)
         self.connectionManager.connectionLost.connect(self.disconnectRig)
+        self.connectionManager.rigStatusChanged.connect(self._onRigStatusChanged)
+        self.connectionManager.startConfirmed.connect(self._onStartConfirmed)
+        self.connectionManager.startFailed.connect(self._onStartFailed)
+        self.connectionManager.syncConfirmed.connect(self._onSyncConfirmed)
+        self.connectionManager.syncFailed.connect(self._onSyncFailed)
+        # start of the running experiment confirmed by the rig, a second start attempted
+        self._startConfirmed = False
+        self._startRetried = False
+        # sync id of all parameters sent again after a failed sync, None if none is pending
+        self._recoverySyncId = None
         # looked up on every call, so it can be replaced, e.g. in tests
         self.connectionManager.framesReceived.connect(lambda frames, name: self.updateData(frames, name))
         self.selectedExp = False
@@ -526,7 +536,12 @@ class MainGui(QMainWindow):
         timeout = max(int(self.config['TimerTime']), 40)
         self.timer.start(timeout)
         self.connectionManager.startHeartbeat(self.config['HeartbeatTime'])
-        self.exp.runExperiment()
+        for name in self.connectionManager.connections:
+            if self.connectionManager.isResponding(name) is False:
+                self._logger.warning(f"{name}: the rig does not respond")
+        self._startConfirmed = False
+        self._startRetried = False
+        self._startRig()
 
         if self.actStopExperiment.isEnabled():
             self.guiStartTime = time.time()
@@ -549,6 +564,10 @@ class MainGui(QMainWindow):
 
         self.timer.stop()
         self.connectionManager.stopHeartbeat()
+        self.connectionManager.cancelStartCheck()
+        self.connectionManager.cancelSyncChecks()
+        self._startConfirmed = False
+        self._recoverySyncId = None
         self.exp.stopExperiment()
 
         # show the complete data, then detach the buffers of the finished run, so
@@ -582,7 +601,7 @@ class MainGui(QMainWindow):
         Sends all parameters of the current experiment with `ExperimentInteractor` function `sendParameterExperiment`
         """
         if self._showsRunningExperiment():
-            self.exp.sendParameterExperiment()
+            self._syncParameters(self.exp.sendParameterExperiment())
 
     def sendChangedParameter(self):
         """
@@ -590,7 +609,33 @@ class MainGui(QMainWindow):
         function `sendChangedParameterExperiment`
         """
         if self._showsRunningExperiment():
-            self.exp.sendChangedParameterExperiment()
+            self._syncParameters(self.exp.sendChangedParameterExperiment())
+
+    def _syncParameters(self, expected):
+        """ lets the rigs confirm the parameters sent during the run """
+        if expected is not None:
+            self.connectionManager.sync(expected)
+
+    def _onSyncConfirmed(self, syncId):
+        if syncId == self._recoverySyncId:
+            self._recoverySyncId = None
+            self._logger.info("Parameters confirmed by the rig after sending them again")
+
+    def _onSyncFailed(self, syncId, reason):
+        """ sends all parameters once more, stops the experiment if they are not confirmed either """
+        if not self.actStopExperiment.isEnabled():
+            return
+        if self._recoverySyncId is not None:
+            if syncId == self._recoverySyncId:
+                self._logger.error(f"Parameters not confirmed, experiment stopped: {reason}")
+                self.stopExperiment()
+            # older changes are covered by sending all parameters again
+            return
+        self._logger.warning(f"Parameters not confirmed, sending all of them again: {reason}")
+        self.connectionManager.cancelSyncChecks()
+        expected = self.exp.sendParameterExperiment()
+        if expected is not None:
+            self._recoverySyncId = self.connectionManager.sync(expected)
 
     def loadExpFromFile(self, fileName):
         """
@@ -815,6 +860,71 @@ class MainGui(QMainWindow):
             self.stopExperiment()
         self.connectionManager.disconnectAll()
 
+    def _startRig(self):
+        """
+        Sends the parameters and the start command, the experiment turns green once the rigs
+        that send status frames confirmed it, all others are not checked.
+        """
+        expected = self.exp.runExperiment()
+        if expected is None:
+            return
+        item = self.experimentList.item(self._currentExperimentIndex)
+        if self.connectionManager.expectStart(expected):
+            item.setBackground(QBrush(Qt.GlobalColor.darkYellow))
+        else:
+            item.setBackground(QBrush(Qt.GlobalColor.darkGreen))
+        self.experimentList.repaint()
+
+    def _onStartConfirmed(self):
+        if not self.actStopExperiment.isEnabled():
+            return
+        self._startConfirmed = True
+        self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.GlobalColor.darkGreen))
+        self.experimentList.repaint()
+        self._logger.info("Start confirmed by the rig")
+
+    def _onStartFailed(self, reason):
+        """ sends the parameters once more, stops the experiment if that fails as well """
+        if not self.actStopExperiment.isEnabled():
+            return
+        if not self._startRetried:
+            self._startRetried = True
+            self._logger.warning(f"Start not confirmed, trying again: {reason}")
+            self.exp.stopExperiment()
+            self._startRig()
+            return
+        self._logger.error(f"Start not confirmed, experiment stopped: {reason}")
+        self.stopExperiment()
+
+    def _onRigStatusChanged(self, name):
+        """ shows the status of the rigs, stops the experiment if a rig ended it by itself """
+        if self.connectionManager.isConnected:
+            self.statusbarLabel.setText(self._rigStatusText())
+        status = self.connectionManager.rigStatus.get(name)
+        if (status is not None and self._startConfirmed and not status[0].running
+                and self.actStopExperiment.isEnabled()):
+            self._logger.error(f"{name}: the rig ended the experiment, e.g. by a restart")
+            self.stopExperiment()
+
+    def _rigStatusText(self):
+        """ text of the status bar: connected, and for every rig with status frames how it is doing """
+        parts = []
+        for name in self.connectionManager.connections:
+            responding = self.connectionManager.isResponding(name)
+            if responding is None:
+                continue
+            if not responding:
+                parts.append(f"{name}: no response")
+                continue
+            status = self.connectionManager.rigStatus[name][0]
+            text = f"{name}: {'RUN' if status.running else 'IDLE'}"
+            missing = [flag for bit, flag in enumerate(self.connectionManager.statusFlagNames(name))
+                       if not status.flags & (1 << bit)]
+            if missing:
+                text += f", missing: {', '.join(missing)}"
+            parts.append(text)
+        return "Connected!" + (" " + " | ".join(parts) if parts else "")
+
     def _onConnectionStateChanged(self, state):
         """ sets the button states and the status bar """
         if state == ConnectionManager.CONNECTING:
@@ -827,7 +937,7 @@ class MainGui(QMainWindow):
             if self._currentExpListItem is not None and self.selectedExp:
                 self.actStartExperiment.setEnabled(True)
             self.actStopExperiment.setEnabled(False)
-            self.statusbarLabel.setText("Connected!")
+            self.statusbarLabel.setText(self._rigStatusText())
         else:
             self.actConnect.setEnabled(True)
             self.actDisconnect.setEnabled(False)

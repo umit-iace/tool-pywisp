@@ -4,12 +4,13 @@ Management of the connections to the rig: establishing and closing them, sending
 the heartbeat and the menu with the connection settings.
 """
 import logging
+import time
 
 import serial.tools.list_ports
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
 from .connection import Connection, SerialConnection, SocketConnection
-from .min import CONTROL_FRAME_ID, Control, controlFrame
+from .min import CONTROL_FRAME_ID, STATUS_FRAME_ID, Control, RigStatus, controlFrame, syncFrame
 from .registry import getRegisteredConnections
 from .widgets.dialogs import DataTcpIpDialog
 
@@ -22,6 +23,10 @@ class ConnectionManager(QObject):
 
     All connections are established in the background, the manager is connected once all of
     them are open. If one of them fails or drops, all of them are closed.
+
+    Rigs that send status frames (tool-libs `Experiment::enableStatus`) are watched: the manager
+    reports whether they respond and checks that they received all parameters of a start.
+    Rigs without status frames are not checked.
     """
     DISCONNECTED = 'disconnected'
     CONNECTING = 'connecting'
@@ -33,6 +38,21 @@ class ConnectionManager(QObject):
     framesReceived = pyqtSignal(object, str)
     #: an established connection has been closed by itself, e.g. by the rig
     connectionLost = pyqtSignal()
+    #: the status of the rig of the given connection changed or it stopped responding
+    rigStatusChanged = pyqtSignal(str)
+    #: all rigs confirmed the start with the parameters that were sent
+    startConfirmed = pyqtSignal()
+    #: a rig did not confirm the start or received other parameters, with the reason
+    startFailed = pyqtSignal(str)
+    #: all rigs confirmed the parameters sent during the run with the given sync id
+    syncConfirmed = pyqtSignal(int)
+    #: a rig did not confirm the parameters of the given sync id or received others, with the reason
+    syncFailed = pyqtSignal(int, str)
+
+    #: [s] a rig that sent status frames before and then none for this long does not respond
+    statusTimeout = 1.0
+    #: [ms] time a rig has to confirm a start
+    startTimeout = 1000
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -49,6 +69,22 @@ class ConnectionManager(QObject):
 
         self.heartbeatTimer = QTimer(self)
         self.heartbeatTimer.timeout.connect(self.heartbeat)
+
+        # last status of the rigs that send one, by connection name: (RigStatus, receive time)
+        self.rigStatus = {}
+        # rigs reported as not responding
+        self._staleReported = set()
+        self._statusTimer = QTimer(self)
+        self._statusTimer.timeout.connect(self._checkStatusAge)
+        self._statusTimer.start(250)
+        # pending start check, by connection name: (startSeq before, expected count, crc)
+        self._expectedStart = {}
+        self._startTimer = QTimer(self)
+        self._startTimer.setSingleShot(True)
+        self._startTimer.timeout.connect(self._onStartTimeout)
+        # pending sync checks by sync id: ({connection name: (expected count, crc)}, deadline)
+        self._pendingSyncs = {}
+        self._syncId = 0
 
     @property
     def isConnected(self):
@@ -78,7 +114,7 @@ class ConnectionManager(QObject):
                 self.disconnectAll()
                 raise
             # bind name as default argument, otherwise all lambdas would see the last name
-            connInstance.receivedFrames.connect(lambda frames, name=name: self.framesReceived.emit(frames, name))
+            connInstance.receivedFrames.connect(lambda frames, name=name: self._onFrames(frames, name))
             connInstance.finished.connect(self._onFinished)
             connInstance.opened.connect(lambda ok, name=name: self._onOpened(name, ok))
             conn['inst'] = connInstance
@@ -108,6 +144,10 @@ class ConnectionManager(QObject):
         """ closes all connections, also those that are still being established """
         self._pendingConnections.clear()
         self.heartbeatTimer.stop()
+        self.cancelStartCheck()
+        self.cancelSyncChecks()
+        self.rigStatus.clear()
+        self._staleReported.clear()
         # the state is changed first, so connections closing themselves are not reported as lost
         self._setState(self.DISCONNECTED)
         for conn in self.connections.values():
@@ -150,6 +190,155 @@ class ConnectionManager(QObject):
 
     def heartbeat(self):
         self.write(controlFrame(Control.HEARTBEAT))
+
+    # status of the rigs
+
+    def _onFrames(self, frames, name):
+        """ takes the status frames out, passes the others on """
+        data = []
+        for frame in frames:
+            if frame.id != STATUS_FRAME_ID:
+                data.append(frame)
+                continue
+            status = RigStatus.fromPayload(frame.payload)
+            if status is None:
+                self._logger.warning(f"{name}: unknown status frame {bytes(frame.payload).hex()}")
+                continue
+            self._onStatus(name, status)
+        if data:
+            self.framesReceived.emit(data, name)
+
+    def _onStatus(self, name, status):
+        last = self.rigStatus.get(name)
+        if last is not None and status.uptime < last[0].uptime:
+            self._logger.warning(f"{name}: the rig has been restarted")
+        self.rigStatus[name] = (status, time.monotonic())
+        # the uptime changes with every frame, only report what is shown
+        if (last is None or name in self._staleReported
+                or (last[0].running, last[0].flags) != (status.running, status.flags)):
+            self._staleReported.discard(name)
+            self.rigStatusChanged.emit(name)
+        self._checkStart(name, status)
+        self._checkSync(name, status)
+
+    def _isStale(self, received):
+        return time.monotonic() - received > self.statusTimeout
+
+    def _checkStatusAge(self):
+        for name, (_, received) in self.rigStatus.items():
+            if self._isStale(received) and name not in self._staleReported:
+                self._staleReported.add(name)
+                self.rigStatusChanged.emit(name)
+        now = time.monotonic()
+        for syncId, (names, deadline) in list(self._pendingSyncs.items()):
+            if now > deadline:
+                del self._pendingSyncs[syncId]
+                self.syncFailed.emit(syncId, f"{', '.join(names)}: no confirmation of the parameters "
+                                             f"within {self.startTimeout} ms")
+
+    def isResponding(self, name):
+        """
+        :return: `True` if the rig sends status frames, `False` if it stopped,
+            `None` if it never sent one (no status support)
+        """
+        entry = self.rigStatus.get(name)
+        if entry is None:
+            return None
+        return not self._isStale(entry[1])
+
+    def statusFlagNames(self, name):
+        """ names of the status bits of the rig, from the `statusFlags` list of the connection class """
+        return list(getattr(self.connections[name]['cls'], 'statusFlags', []))
+
+    # check of the start
+
+    def expectStart(self, expected):
+        """
+        Checks the next start of the rigs that send status frames.
+
+        :param expected: (number, CRC32) of the frames sent before the start command by
+            connection name, see :func:`pywisp.min.frameCrc`
+        :return: `True` if a rig is checked, :attr:`startConfirmed` or :attr:`startFailed` follow
+        """
+        self.cancelStartCheck()
+        for name, (status, received) in self.rigStatus.items():
+            if self._isStale(received):
+                continue
+            # the start command goes to all rigs, also to those without parameters
+            count, crc = expected.get(name, (0, 0))
+            self._expectedStart[name] = (status.startSeq, count, crc)
+        if not self._expectedStart:
+            return False
+        self._startTimer.start(self.startTimeout)
+        return True
+
+    def cancelStartCheck(self):
+        self._expectedStart.clear()
+        self._startTimer.stop()
+
+    def _checkStart(self, name, status):
+        if name not in self._expectedStart:
+            return
+        seqBefore, count, crc = self._expectedStart[name]
+        if status.startSeq == seqBefore or not status.running:
+            return
+        del self._expectedStart[name]
+        if (status.startCount, status.startCrc) != (count, crc):
+            self.cancelStartCheck()
+            self.startFailed.emit(f"{name}: the rig received {status.startCount} frames with "
+                                  f"CRC {status.startCrc:08x} instead of {count} frames with CRC {crc:08x}")
+            return
+        if not self._expectedStart:
+            self._startTimer.stop()
+            self.startConfirmed.emit()
+
+    # check of parameters sent during the run
+
+    def sync(self, expected):
+        """
+        Sends a sync command after parameters sent during the run, the rigs that support it confirm
+        what they received since the last control frame.
+
+        :param expected: (number, CRC32) of the frames sent since the last control frame by
+            connection name, see :func:`pywisp.min.frameCrc`
+        :return: the sync id, :attr:`syncConfirmed` or :attr:`syncFailed` follow with it,
+            `None` if no rig supports sync commands (nothing is sent then)
+        """
+        names = {}
+        for name, (status, received) in self.rigStatus.items():
+            if status.syncId is None or self._isStale(received):
+                continue
+            # the sync command goes to all rigs, also to those without parameters
+            names[name] = expected.get(name, (0, 0))
+        if not names:
+            return None
+        # ids 1..255, the rig reports 0 before the first sync
+        self._syncId = self._syncId % 255 + 1
+        self._pendingSyncs[self._syncId] = (names, time.monotonic() + self.startTimeout / 1000)
+        self.write(syncFrame(self._syncId))
+        return self._syncId
+
+    def cancelSyncChecks(self):
+        self._pendingSyncs.clear()
+
+    def _checkSync(self, name, status):
+        entry = self._pendingSyncs.get(status.syncId)
+        if entry is None or name not in entry[0]:
+            return
+        count, crc = entry[0].pop(name)
+        if (status.syncCount, status.syncCrc) != (count, crc):
+            del self._pendingSyncs[status.syncId]
+            self.syncFailed.emit(status.syncId, f"{name}: the rig received {status.syncCount} frames with CRC "
+                                                f"{status.syncCrc:08x} instead of {count} frames with CRC {crc:08x}")
+            return
+        if not entry[0]:
+            del self._pendingSyncs[status.syncId]
+            self.syncConfirmed.emit(status.syncId)
+
+    def _onStartTimeout(self):
+        names = ', '.join(self._expectedStart)
+        self._expectedStart.clear()
+        self.startFailed.emit(f"{names}: no confirmation of the start within {self.startTimeout} ms")
 
     def startHeartbeat(self, interval):
         """ sends a heartbeat every `interval` ms, 0 disables it """

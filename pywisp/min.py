@@ -2,7 +2,8 @@
 import logging
 from binascii import crc32
 from enum import IntEnum
-from struct import pack as spack
+from dataclasses import dataclass
+from struct import pack as spack, unpack as sunpack
 
 from .utils import coroutine
 
@@ -31,6 +32,69 @@ class Control(IntEnum):
 def controlFrame(command):
     """ returns the frame for the given :class:`Control` command """
     return {'id': CONTROL_FRAME_ID, 'msg': bytes([Control(command)])}
+
+
+def syncFrame(syncId):
+    """
+    Returns the sync command, sent after parameters changed during a run: the rig confirms the
+    frames received since the last control frame with a status frame carrying `syncId`.
+    Bits 0b110: rigs without sync support take it for a heartbeat.
+    """
+    return {'id': CONTROL_FRAME_ID, 'msg': bytes([0b110, syncId & 0xff])}
+
+
+#: frame id reserved for the status the rig sends (tool-libs `Experiment::enableStatus`)
+STATUS_FRAME_ID = 63
+
+
+@dataclass
+class RigStatus:
+    """ content of a status frame (id :data:`STATUS_FRAME_ID`) of the rig """
+    version: int
+    #: experiment of the rig running
+    running: bool
+    #: bits defined by the project, named by the connection's `statusFlags`
+    flags: int
+    #: counts the start commands the rig received
+    startSeq: int
+    #: number and CRC32 of the frames the rig received before that start
+    startCount: int
+    startCrc: int
+    #: uptime of the rig [ms]
+    uptime: int
+    #: id of the last sync command and number and CRC32 of the frames received before it,
+    #: `None` if the rig does not support sync commands
+    syncId: int = None
+    syncCount: int = None
+    syncCrc: int = None
+
+    @classmethod
+    def fromPayload(cls, payload):
+        """ :return: the status or `None` if the payload is not a known status """
+        if len(payload) < 14 or payload[0] != 1:
+            return None
+        version, state, flags, seq, count, crc, uptime = sunpack('<BBBBHII', payload[:14])
+        status = cls(version, state == 1, flags, seq, count, crc, uptime)
+        if len(payload) >= 21:
+            status.syncId, status.syncCount, status.syncCrc = sunpack('<BHI', payload[14:21])
+        return status
+
+
+def frameCrc(frames, crc=0):
+    """
+    CRC32 over id, length and payload of each frame, as the rig computes it for the frames it
+    received before a start command, control frames are not counted.
+
+    :param frames: dicts with the keys 'id' and 'msg'
+    :return: number of frames and CRC32
+    """
+    count = 0
+    for frame in frames:
+        if frame['id'] == CONTROL_FRAME_ID:
+            continue
+        crc = crc32(bytes([frame['id'], len(frame['msg'])]) + bytes(frame['msg']), crc)
+        count += 1
+    return count, crc
 
 class Frame:
     def __init__(self, id, data):
