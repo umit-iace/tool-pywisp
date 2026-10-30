@@ -4,7 +4,7 @@ Small widgets and helpers used by the main window.
 """
 import logging
 
-from PyQt6.QtCore import Qt, QRect, pyqtSignal
+from PyQt6.QtCore import QObject, Qt, QRect, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QIntValidator, QPainter, QPen, QTextCursor
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QStyle, QStyledItemDelegate, QWidget, QWidgetAction
 from pyqtgraph.dockarea import Dock
@@ -12,9 +12,17 @@ from pyqtgraph.dockarea import Dock
 __all__ = ["PlainTextLogger", "PinnedDock", "ContextLineEditAction", "TreeWidgetStyledItemDelegate"]
 
 
+class _LogBridge(QObject):
+    """ carries log messages into the thread the logger has been created in """
+    message = pyqtSignal(str, QColor)
+
+
 class PlainTextLogger(logging.Handler):
     """
     Logging handler, that formats log data for line display.
+
+    Records may be emitted from any thread, the target widget is only accessed in the
+    thread the handler has been created in (the gui thread).
     """
 
     def __init__(self, settings, level=logging.NOTSET):
@@ -28,24 +36,34 @@ class PlainTextLogger(logging.Handler):
         self.setFormatter(formatter)
 
         self.cb = None
+        # direct connection in the gui thread, queued from all other threads
+        self._bridge = _LogBridge()
+        self._bridge.message.connect(self._append)
 
     def setTargetCb(self, cb):
         self.cb = cb
 
     def emit(self, record):
-        msg = self.format(record)
-        if self.cb:
+        try:
+            msg = self.format(record)
             clr = self.settings.color(record.levelname, 'log')
-            try:
-                self.cb.setTextColor(clr)
-                self.cb.append(msg)
-                self.cb.moveCursor(QTextCursor.MoveOperation.End)
-            except RuntimeError:
-                # the target widget has already been deleted on the C++ side
-                self.cb = None
-                logging.getLogger().removeHandler(self)
-        else:
-            logging.getLogger().error("No callback configured!")
+            self._bridge.message.emit(msg, clr)
+        except RuntimeError:
+            # the bridge has already been deleted on the C++ side
+            logging.getLogger().removeHandler(self)
+
+    def _append(self, msg, clr):
+        if self.cb is None:
+            # logging an error here would end up in this handler again
+            return
+        try:
+            self.cb.setTextColor(clr)
+            self.cb.append(msg)
+            self.cb.moveCursor(QTextCursor.MoveOperation.End)
+        except RuntimeError:
+            # the target widget has already been deleted on the C++ side
+            self.cb = None
+            logging.getLogger().removeHandler(self)
 
 
 class PinnedDock(Dock):

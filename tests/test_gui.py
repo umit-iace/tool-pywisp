@@ -3,6 +3,7 @@ import struct
 from collections import OrderedDict
 from unittest import mock
 
+import logging
 import os
 import stat
 import textwrap
@@ -480,3 +481,17 @@ def test_multi_button_sets_all_targets(gui):
     assert slider.value == 0
     send.assert_called_once()
     assert button.getData()['targets'] == config['targets']
+
+
+def test_log_from_worker_thread(gui, qtbot):
+    """ records of other threads are appended to the log box in the gui thread """
+    import threading
+    appended = []
+    origAppend = gui.logBox.append
+    gui.logBox.append = lambda msg: (appended.append(threading.current_thread()), origAppend(msg))
+
+    worker = threading.Thread(target=lambda: logging.getLogger("Worker").warning("from the worker"))
+    worker.start()
+    worker.join()
+    qtbot.waitUntil(lambda: "from the worker" in gui.logBox.toPlainText(), timeout=2000)
+    assert appended == [threading.main_thread()]
