@@ -180,6 +180,21 @@ def test_gamepad_drives_remote_widgets(gui, qtbot, sdl, virtualPad):
     assert button._gamepadConnection is None
 
 
+def test_gamepad_ignores_widgets_of_other_experiments(gui, qtbot, sdl, virtualPad):
+    gui.detectGamepads()
+    next(a for a in gui.gamepadMenu.actions() if a.text() == 'Virtual Controller').trigger()
+    button = remoteWidget(gui, MovablePushButton)
+    assert button._gamepadConnection is not None
+
+    # the second experiment has no remote widgets
+    gui.experimentDoubleClicked(gui.experimentList.item(1))
+    assert gui.remoteWidgetLayout.list == []
+    with mock.patch.object(gui, 'remotePushButtonSendParameter') as send:
+        virtualPad.press(sdl.SDL_CONTROLLER_BUTTON_A)
+        qtbot.wait(200)
+    send.assert_not_called()
+
+
 def frame(t, x):
     return pw.Frame(15, struct.pack('<Ld', t, x))
 

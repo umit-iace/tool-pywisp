@@ -1515,7 +1515,6 @@ class MainGui(QMainWindow):
     def remoteRemoveWidget(self, widget):
         idx = self.experimentList.row(self._currentExpListItem)
         self._experiments[idx].get('Remote', {}).pop(widget.widgetName, None)
-        widget.updateGamepad(None)
         self.remoteWidgetLayout.removeWidget(widget)
 
     def remoteConfigWidget(self, widget, editWidget=True):

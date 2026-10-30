@@ -40,17 +40,28 @@ class FreeLayout(QLayout):
 
     def removeWidget(self, widget):
         if widget in self.list:
-            if widget.label:
-                widget.label.setParent(None)
             self.list.remove(widget)
-        widget.setParent(None)
+            self._dispose(widget)
+        else:
+            widget.setParent(None)
 
     def clearAll(self):
-        for i in self.list:
-            if i.label:
-                i.label.setParent(None)
-            i.setParent(None)
+        for widget in self.list:
+            self._dispose(widget)
         self.list = []
+
+    @staticmethod
+    def _dispose(widget):
+        """
+        Deletes a remote widget. It is disconnected from the gamepad first, otherwise
+        the hidden widget would still react to it until it is garbage collected.
+        """
+        widget.updateGamepad(None)
+        widget.hide()
+        if widget.label:
+            widget.label.hide()
+            widget.label.deleteLater()
+        widget.deleteLater()
 
 
 class MovableWidget:
@@ -73,7 +84,8 @@ class MovableWidget:
         # called with the widget after it has been moved by the user
         self.onMoved = None
 
-        self.contextMenu = QMenu()
+        # owned by the widget, so it is deleted together with it
+        self.contextMenu = QMenu(self)
         self.removeAction = self.contextMenu.addAction("Remove")
         self.editAction = self.contextMenu.addAction("Edit")
 
