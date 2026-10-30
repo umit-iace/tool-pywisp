@@ -180,6 +180,22 @@ def test_shortcut_creator(qtbot):
     # modifiers alone are no shortcut
     QTest.keyClick(field, Qt.Key.Key_Shift)
     assert field.text() == ''
+    # e.g. for an emergency stop
+    QTest.keyClick(field, Qt.Key.Key_Escape)
+    assert field.getKeySequence() == 'Esc'
+    QTest.keyClick(field, Qt.Key.Key_Space)
+    assert field.getKeySequence() == 'Space'
+    QTest.keyClick(field, Qt.Key.Key_Backspace)
+    assert field.text() == ''
+
+
+def test_escape_in_shortcut_field_keeps_dialog_open(qtbot):
+    dialog = RemoteWidgetEdit(exp=EXP)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    QTest.keyClick(dialog.shortcutField, Qt.Key.Key_Escape)
+    assert dialog.isVisible()
+    assert dialog._getData()['shortcut'] == 'Esc'
 
 
 class TestFileSelector:

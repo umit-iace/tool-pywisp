@@ -420,22 +420,28 @@ class RemoteWidgetEdit(QDialog):
 
 
 class ShortcutCreator(QLineEdit):
+    """
+    Line edit that records the key pressed in it as shortcut. Backspace and Delete clear the shortcut.
+
+    Escape and Space are recorded as well, e.g. Escape for an emergency stop, so Escape does not
+    close the dialog while this field has the focus.
+    """
+    # keys that are no shortcut on their own
+    modifierKeys = (Qt.Key.Key_Control, Qt.Key.Key_Alt, Qt.Key.Key_AltGr, Qt.Key.Key_Shift, Qt.Key.Key_Meta,
+                    Qt.Key.Key_CapsLock)
+    clearKeys = (Qt.Key.Key_Backspace, Qt.Key.Key_Delete)
+
     def __init__(self, parent=None):
         super(ShortcutCreator, self).__init__(parent)
         self.keySequence = None
+        self.setPlaceholderText("press a key, Backspace clears")
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_Control or \
-                event.key() == Qt.Key.Key_Alt or \
-                event.key() == Qt.Key.Key_AltGr or \
-                event.key() == Qt.Key.Key_Escape or \
-                event.key() == Qt.Key.Key_Shift or \
-                event.key() == Qt.Key.Key_CapsLock or \
-                event.key() == Qt.Key.Key_Space or \
-                event.key() == Qt.Key.Key_Tab:
+        key = event.key()
+        if key in self.modifierKeys or key in self.clearKeys:
             self.setText('')
         else:
-            self.keySequence = QKeySequence(event.key()).toString()
+            self.keySequence = QKeySequence(key).toString()
             self.setText(self.keySequence)
 
     def getKeySequence(self):
