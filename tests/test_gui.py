@@ -131,6 +131,59 @@ def test_show_coordinates_setting(gui):
     assert gui._settings.value("view/show_coordinates", type=bool) is True
 
 
+@pytest.fixture
+def themeGui(gui):
+    """ the theme is global for the application, the other tests expect the system theme """
+    yield gui
+    gui.setTheme('System')
+
+
+def test_theme_toggle_is_right_of_visualizers(gui):
+    actions = gui.toolbarExp.actions()
+    assert actions[-1] is gui.actToggleTheme
+    assert actions[-2].isSeparator()
+    assert gui.toolbarExp.widgetForAction(actions[-3]) is gui.visComboBox
+
+
+def test_theme_toggle(themeGui):
+    from PyQt6.QtGui import QPalette
+    gui = themeGui
+    style = QApplication.style().name()
+
+    def window():
+        return QApplication.palette().color(QPalette.ColorRole.Window).lightness()
+
+    assert gui._settings.value("theme/name") == 'System'
+    gui.actToggleTheme.trigger()
+    assert gui._settings.value("theme/name") == 'Dark'
+    assert window() < 100
+    assert gui.actToggleTheme.toolTip() == "Switch to light mode"
+    # also the content of the docks, it is below a style sheet
+    assert gui.logBox.palette().color(QPalette.ColorRole.Base) == QApplication.palette().color(QPalette.ColorRole.Base)
+
+    # the toggle returns to the last theme of the other kind
+    gui.setTheme('Solarized Light')
+    gui.actToggleTheme.trigger()
+    assert gui._settings.value("theme/name") == 'Dark'
+    gui.actToggleTheme.trigger()
+    assert gui._settings.value("theme/name") == 'Solarized Light'
+    assert [a.text() for a in gui._themeActions.actions() if a.isChecked()] == ['Solarized Light']
+
+    gui.setTheme('System')
+    assert QApplication.style().name() == style
+
+
+def test_unknown_theme_falls_back_to_system(themeGui):
+    themeGui.setTheme('removed theme')
+    assert themeGui._settings.value("theme/name") == 'System'
+
+
+def test_log_colors_of_older_settings_are_ignored(gui):
+    gui._settings.setValue("log_colors/INFO", "#101010")
+    assert not gui._settings.color('INFO', 'log').isValid()
+    assert gui._settings.color('ERROR', 'log').isValid()
+
+
 def test_movable_widgets_use_mixin_handlers():
     for cls in (MovablePushButton, MovableSwitch, MovableSlider):
         assert cls.mousePressEvent is MovableWidget.mousePressEvent

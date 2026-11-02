@@ -8,9 +8,7 @@ _default = {
         ("CRITICAL", "#DC143C"),
         ("ERROR", "#B22222"),
         ("WARNING", "#DAA520"),
-        ("INFO", "#101010"),
         ("DEBUG", "#4682B4"),
-        ("NOTSET", "#000000"),
     ],
     "path": [
         ("export_dir", os.path.curdir),
@@ -27,6 +25,11 @@ _default = {
         ("gray", "#7f7f7f"),
         ("olive", "#bcbd22"),
         ("cyan", "#17becf"),
+    ],
+    "theme": [
+        ("name", "System"),
+        ("light", "System"),
+        ("dark", "Dark"),
     ],
     "view": [
         ("show_coordinates", "True"),
@@ -47,6 +50,9 @@ class Settings(QSettings):
         """ kind: one of ['plot', 'log'] """
         group = f'{kind}_colors'
         if kind == 'log':
+            # INFO and NOTSET of older versions are ignored, they take the text color of the theme
+            if ix not in dict(_default[group]):
+                return QColor()
             key = ix
         else:
             # QSettings returns its keys sorted alphabetically, so take the

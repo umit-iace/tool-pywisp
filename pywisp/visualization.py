@@ -3,6 +3,9 @@ import os
 import time
 from abc import ABCMeta, abstractmethod
 
+from PyQt6.QtGui import QPalette
+from PyQt6.QtWidgets import QApplication
+
 from .utils import createDir
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -69,6 +72,13 @@ class Visualizer(metaclass=ABCMeta):
 
     @abstractmethod
     def saveIfChecked(self) -> bool:
+        pass
+
+    def updateTheme(self):  # noqa: B027, an optional hook
+        """
+        Hook to adapt the visualization to the colors of the current theme,
+        called after loading the visualizer and after every theme switch.
+        """
         pass
 
     @abstractmethod
@@ -158,6 +168,20 @@ class MplVisualizer(Visualizer):
 
         self.qLayout.addWidget(self.canvas)
         self.qWidget.setLayout(self.qLayout)
+
+    def updateTheme(self):
+        """ draws the axes in the colors of the theme, the figure itself is transparent """
+        palette = QApplication.palette()
+        fg = palette.color(QPalette.ColorRole.WindowText).name()
+        bg = palette.color(QPalette.ColorRole.Window).name()
+        self.axes.set_facecolor(bg)
+        for spine in self.axes.spines.values():
+            spine.set_color(fg)
+        self.axes.tick_params(color=fg, labelcolor=fg, which="both")
+        self.axes.xaxis.label.set_color(fg)
+        self.axes.yaxis.label.set_color(fg)
+        self.axes.title.set_color(fg)
+        self.canvas.draw_idle()
 
     def saveIfChecked(self):
         """

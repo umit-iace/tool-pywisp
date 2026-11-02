@@ -5,7 +5,7 @@ Small widgets and helpers used by the main window.
 import logging
 
 from PyQt6.QtCore import QObject, Qt, QRect, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QIntValidator, QPainter, QPen, QTextCursor
+from PyQt6.QtGui import QColor, QFont, QIntValidator, QPainter, QPen, QTextCharFormat, QTextCursor
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QStyle, QStyledItemDelegate, QWidget, QWidgetAction
 from pyqtgraph.dockarea import Dock
 
@@ -57,7 +57,11 @@ class PlainTextLogger(logging.Handler):
             # logging an error here would end up in this handler again
             return
         try:
-            self.cb.setTextColor(clr)
+            if clr.isValid():
+                self.cb.setTextColor(clr)
+            else:
+                # levels without own color use the text color of the theme, also after a switch
+                self.cb.setCurrentCharFormat(QTextCharFormat())
             self.cb.append(msg)
             self.cb.moveCursor(QTextCursor.MoveOperation.End)
         except RuntimeError:

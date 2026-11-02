@@ -107,6 +107,11 @@ To update the canvas, it is recommended to use
 
     self.canvas.draw_idle()
 
+The GUI offers light and dark themes (``View`` → ``Theme``), the button right of the visualizer
+selection switches between the last used light and dark theme. The axes of a
+:class:`~pywisp.visualization.MplVisualizer` follow the theme, visualizers drawing further elements in theme
+colors override :func:`~pywisp.visualization.Visualizer.updateTheme`, it is called after loading the
+visualizer and after every switch.
 
 For detailed information see the :ref:`chapter_examples` section.
 

@@ -27,8 +27,8 @@ try:
 except ImportError:
     from yaml import SafeLoader
 from PyQt6.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QCoreApplication
-from PyQt6.QtGui import QAction, QBrush, QGuiApplication, QIcon, QKeySequence, QPixmap
-from PyQt6.QtWidgets import QAbstractItemView, QComboBox, QFileDialog, QFrame, QLabel, QListWidget, QListWidgetItem, QMainWindow, QSizePolicy, QSplashScreen, QStatusBar, QTextEdit, QToolBar, QVBoxLayout, \
+from PyQt6.QtGui import QAction, QActionGroup, QBrush, QFontDatabase, QGuiApplication, QIcon, QKeySequence, QPalette, QPixmap
+from PyQt6.QtWidgets import QAbstractItemView, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QSizePolicy, QSplashScreen, QStatusBar, QTextEdit, QToolBar, QVBoxLayout, \
     QWidget
 from pyqtgraph.dockarea import DockArea
 
@@ -45,6 +45,7 @@ from .widgets.remotepanel import RemotePanel
 from .visualization import MplVisualizer, VtkVisualizer
 from .gamepad import getAllGamepads, openGamepad
 from .settings import Settings
+from .themes import THEMES, applyTheme, isDark, themedIcon
 from .widgets.plotmanager import PlotManager
 
 __all__ = ["MainGui"]
@@ -139,25 +140,21 @@ class MainGui(QMainWindow):
         self._setConnectionLed('red', "Not connected")
         self.statusbarLabel = QLabel("")
         self.statusBar.addPermanentWidget(self.statusbarLabel, 1)
-        self.guiStartTime = 0.0
-        self.guiTimer = QTimer()
-        self.guiTimer.setTimerType(Qt.TimerType.PreciseTimer)
-        self.guiTimer.timeout.connect(
-            lambda: self.guiTimeLabel.setText(
-                f"GUI time={timeString(time.time()-self.guiStartTime)}"
-            )
-        )
-        self.guiTimeLabel = QLabel("GUI time=00:00:00")
-        self.statusBar.addPermanentWidget(self.guiTimeLabel, 1)
-        self.expTimeLabel = QLabel("Exp time=00:00:00")
-        self.statusBar.addPermanentWidget(self.expTimeLabel, 1)
-        statusBarDummyLabel = QLabel("")
-        self.statusBar.addPermanentWidget(statusBarDummyLabel, 4)
         self.coordTimer = QTimer()
         self.coordTimer.timeout.connect(self.disableCoord)
         self.coordLabel = QLabel("x=0.0 y=0.0")
         self.coordLabel.setVisible(False)
-        self.statusBar.addPermanentWidget(self.coordLabel, 2)
+        self.statusBar.addPermanentWidget(self.coordLabel, 0)
+        # the times on the right, a caption in the color of disabled text and the value in a
+        # fixed width font, so it does not jump while counting
+        self.guiTimeLabel = self._addStatusTime("GUI", "time since the start of the experiment in the gui")
+        self.expTimeLabel = self._addStatusTime("Exp", "time of the experiment on the rig")
+        self.guiStartTime = 0.0
+        self.guiTimer = QTimer()
+        self.guiTimer.setTimerType(Qt.TimerType.PreciseTimer)
+        self.guiTimer.timeout.connect(
+            lambda: self.guiTimeLabel.setText(timeString(time.time() - self.guiStartTime))
+        )
 
         # the docking area allows to rearrange the user interface at runtime
         self.area = DockArea()
@@ -209,14 +206,12 @@ class MainGui(QMainWindow):
         self.actStartExperiment = QAction(self)
         self.actStartExperiment.setDisabled(True)
         self.actStartExperiment.setText("&Start experiment")
-        self.actStartExperiment.setIcon(QIcon(getResource("play.png")))
         self.actStartExperiment.setShortcut(QKeySequence("F5"))
         self.actStartExperiment.triggered.connect(self.startExperiment)
 
         self.actStopExperiment = QAction(self)
         self.actStopExperiment.setText("&Stop experiment")
         self.actStopExperiment.setDisabled(True)
-        self.actStopExperiment.setIcon(QIcon(getResource("stop.png")))
         self.actStopExperiment.setShortcut(QKeySequence("F6"))
         self.actStopExperiment.triggered.connect(self.stopExperiment)
 
@@ -278,6 +273,15 @@ class MainGui(QMainWindow):
         )
         self.viewMenu.addAction(self.actShowCoords)
         self.actShowCoords.changed.connect(self.updateShowCoordsSetting)
+        self.themeMenu = self.viewMenu.addMenu("&Theme")
+        self._themeActions = QActionGroup(self)
+        for name in THEMES:
+            act = self.themeMenu.addAction(name, lambda name=name: self.setTheme(name))
+            act.setCheckable(True)
+            self._themeActions.addAction(act)
+        self.actToggleTheme = QAction("Toggle &dark mode", self)
+        self.actToggleTheme.triggered.connect(self.toggleTheme)
+        self.viewMenu.addAction(self.actToggleTheme)
 
         self.gamepad = None
         self.selectedGamepadId = None
@@ -303,14 +307,12 @@ class MainGui(QMainWindow):
 
         self.expMenu.addSeparator()
         self.actConnect = QAction('&Connect', self)
-        self.actConnect.setIcon(QIcon(getResource("connected.png")))
         self.actConnect.setShortcut(QKeySequence("F9"))
         self.expMenu.addAction(self.actConnect)
         self.actConnect.triggered.connect(self.connectRig)
 
         self.actDisconnect = QAction('&Disconnect', self)
         self.actDisconnect.setEnabled(False)
-        self.actDisconnect.setIcon(QIcon(getResource("disconnected.png")))
         self.actDisconnect.setShortcut(QKeySequence("F10"))
         self.actSendParameter = QAction('&Send all parameter', self)
         self.actSendParameter.setEnabled(False)
@@ -345,6 +347,13 @@ class MainGui(QMainWindow):
         self.toolbarExp.addWidget(vSpacer)
         self.toolbarExp.addSeparator()
         self.toolbarExp.addWidget(self.visComboBox)
+        self.toolbarExp.addSeparator()
+        self.toolbarExp.addAction(self.actToggleTheme)
+
+        # the icons are drawn in the text color of the theme
+        self._themedIcons = {self.actStartExperiment: "play.png", self.actStopExperiment: "stop.png",
+                             self.actConnect: "connected.png", self.actDisconnect: "disconnected.png",
+                             self.actToggleTheme: "theme.svg"}
 
         self._currentExpListItem = None
         self._currentLastMeasItem = None
@@ -375,6 +384,7 @@ class MainGui(QMainWindow):
 
         self.visualizer = None
         self.vtkWidget = None
+        self.setTheme(self._settings.value("theme/name"))
 
         self._updateExperimentsList()
 
@@ -780,6 +790,7 @@ class MainGui(QMainWindow):
             # no visualizer connected yet
             pass
         self.actSaveAnimation.toggled.connect(self.visualizer.checkSaveAnimation)
+        self.visualizer.updateTheme()
 
     @pyqtSlot(QListWidgetItem)
     def experimentDoubleClicked(self, item):
@@ -1015,7 +1026,7 @@ class MainGui(QMainWindow):
             lastTime = time
 
         if lastTime is not None:
-            self.expTimeLabel.setText(f"Exp time={timeString(lastTime)}")
+            self.expTimeLabel.setText(timeString(lastTime))
 
     def _warnOnce(self, key, msg):
         """ log a warning only once per experiment run, the data path is called at the frame rate """
@@ -1190,6 +1201,52 @@ class MainGui(QMainWindow):
     def copyRemoteSource(self):
         self.remotePanel.copySource()
 
+    def _addStatusTime(self, caption, tooltip):
+        """ adds a time with its caption on the right of the status bar, returns the label of the value """
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
+        self.statusBar.addPermanentWidget(sep)
+
+        widget = QWidget()
+        widget.setToolTip(tooltip)
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(6, 0, 6, 0)
+        layout.setSpacing(6)
+        captionLabel = QLabel(caption)
+        captionLabel.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        valueLabel = QLabel(timeString(0))
+        font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        font.setBold(True)
+        valueLabel.setFont(font)
+        layout.addWidget(captionLabel)
+        layout.addWidget(valueLabel)
+        self.statusBar.addPermanentWidget(widget)
+        return valueLabel
+
+    def setTheme(self, name):
+        """ applies the theme with the given name, unknown names fall back to the system theme """
+        if name not in THEMES:
+            name = 'System'
+        applyTheme(name)
+        self._settings.setValue("theme/name", name)
+        # the toggle returns to the last theme of the other kind
+        self._settings.setValue("theme/dark" if isDark(name) else "theme/light", name)
+
+        for act in self._themeActions.actions():
+            act.setChecked(act.text() == name)
+        self.actToggleTheme.setToolTip("Switch to light mode" if isDark(name) else "Switch to dark mode")
+        for act, icon in self._themedIcons.items():
+            act.setIcon(themedIcon(getResource(icon)))
+        if self.visualizer is not None:
+            self.visualizer.updateTheme()
+
+    def toggleTheme(self):
+        """ switches between the last used light and dark theme """
+        dark = isDark(self._settings.value("theme/name"))
+        self.setTheme(self._settings.value("theme/light" if dark else "theme/dark"))
+
+
 def logUncaughtException(excType, excValue, excTraceback):
     """
     Exception hook that logs uncaught exceptions. Since PyQt 5.5 an unhandled exception
@@ -1221,4 +1278,3 @@ def findDefaultConfig(name='default.sreg'):
 
 def timeString(seconds):
     return f"{int(seconds // 3600):02d}:{int(seconds % 3600 // 60):02d}:{int(seconds % 60):02d}"
-

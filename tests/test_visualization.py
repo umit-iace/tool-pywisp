@@ -133,3 +133,13 @@ class TestVtk:
     def test_reset_camera_without_pose(self, visu, renderer):
         assert not visu.canResetView
         visu.resetCamera()
+
+
+def test_update_theme(visu):
+    from PyQt6.QtGui import QPalette
+    from PyQt6.QtWidgets import QApplication
+    visu.updateTheme()
+    fg = QApplication.palette().color(QPalette.ColorRole.WindowText).name()
+    assert visu.axes.xaxis.label.get_color() == fg
+    assert visu.axes.spines['left'].get_edgecolor()[:3] == pytest.approx(
+        tuple(int(fg[i:i + 2], 16) / 255 for i in (1, 3, 5)))
