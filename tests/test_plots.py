@@ -1,12 +1,12 @@
 import time
 
 import numpy as np
-import pandas as pd
 import pytest
 
 from pywisp.buffer import DataPointBuffer
-from pywisp.export import Exporter
+from pywisp.export import plotDataPoints
 from pywisp.settings import Settings
+import pywisp.widgets.plotchart as plotchart
 from pywisp.widgets.plotchart import PlotChart
 
 METHODS = ['peak', 'subsample', 'mean', 'off']
@@ -178,19 +178,29 @@ def test_moving_window_width(makeChart, caplog):
     assert "Invalid moving window width" in caplog.text
 
 
-def test_chart_export(makeChart, qtbot, tmp_path, monkeypatch):
-    chart = makeChart(MovingWindowEnable=False)
-    monkeypatch.setattr(chart, '_sampleStep', lambda x: 1)
-    chart.addCurve('a', DataPointBuffer([0.0, 1.0], [1.0, 2.0]))
+@pytest.mark.parametrize("ext, magic", [('png', b'\x89PNG'), ('jpg', b'\xff\xd8'), ('pdf', b'%PDF')])
+def test_chart_save_image(makeChart, tmp_path, monkeypatch, ext, magic):
+    chart = makeChart(MovingWindowEnable=True, MovingWindowSize=1)
+    buf = DataPointBuffer([0.5, 1.0, 5.0], [1.0, 2.0, 3.0])
+    chart.addCurve('a', buf)
     chart.addCurve('empty', DataPointBuffer())
 
-    fileName = tmp_path / "chart.csv"
-    chart.export(str(fileName))
-    qtbot.waitUntil(lambda: not Exporter._running, timeout=60000)
+    # the image contains the complete data, not only the moving window
+    plotted = {}
+    def plot(dataPoints):
+        plotted.update(dataPoints)
+        return plotDataPoints(dataPoints)
+    monkeypatch.setattr(plotchart, 'plotDataPoints', plot)
 
-    df = pd.read_csv(fileName, index_col='time')
-    assert list(df.columns) == ['a']
-    np.testing.assert_array_equal(df['a'], [1.0, 2.0])
+    fileName = tmp_path / f"chart.{ext}"
+    chart.saveImage(str(fileName))
+    assert fileName.read_bytes().startswith(magic)
+    np.testing.assert_array_equal(plotted['a'].time, [0.5, 1.0, 5.0])
+
+
+def test_plot_data_points_starts_at_zero():
+    fig = plotDataPoints({'a': DataPointBuffer([2.0, 3.0], [1.0, 2.0])})
+    assert fig.axes[0].get_xlim()[0] == 0
 
 
 @pytest.mark.slow

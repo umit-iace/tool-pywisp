@@ -133,6 +133,8 @@ class ConnectionManager(QObject):
         self._pendingConnections.discard(name)
         if not self._pendingConnections:
             self._setState(self.CONNECTED)
+            # udp rigs only know where to send their status after they received something
+            self.heartbeat()
 
     def _onFinished(self):
         """ a connection has been closed, by the manager or by itself """

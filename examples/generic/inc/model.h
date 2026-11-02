@@ -33,6 +33,9 @@ struct Model {
     }
 
     void init() {
+        // status frames, pywisp shows whether the rig responds and checks the start
+        e.enableStatus(out);
+
         // reset
         e.onEvent(e.INIT).call(*this, &Model::reset);
 

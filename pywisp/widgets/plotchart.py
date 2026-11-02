@@ -1,13 +1,14 @@
+import io
 import logging
 import math
 import numpy as np
 from PyQt6.QtCore import QTimer, pyqtSignal
-from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import QMenu
+from PyQt6.QtGui import QAction, QPixmap
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QMenu, QVBoxLayout
 from pyqtgraph import PlotWidget, TextItem, mkPen
-from ..buffer import DataPointBuffer
-from ..export import Exporter
+from ..export import plotDataPoints
 from .common import ContextLineEditAction
+from .fileselector import FileSelector
 from ..settings import Settings
 
 class PlotChart(PlotWidget):
@@ -21,6 +22,8 @@ class PlotChart(PlotWidget):
         self._logger = logging.getLogger(self.__class__.__name__)
         self.title = title
         self.plotCurves = {}
+        # complete data of the curves, the curves itself only show the moving window
+        self.buffers = {}
 
         # plot settings
         self.settings = Settings()
@@ -83,13 +86,13 @@ class PlotChart(PlotWidget):
         self.scene().contextMenu = [qActionSep1,
                                       QAction("Auto Range All", self),
                                       qActionSep2,
-                                      QAction("Export as ...", self),
+                                      QAction("Save Image", self),
                                       qActionSep3,
                                       qMenuMovingWindow,
                                       ]
 
         self.scene().contextMenu[1].triggered.connect(self.setAutoRange)
-        self.scene().contextMenu[3].triggered.connect(self.export)
+        self.scene().contextMenu[3].triggered.connect(lambda: self.saveImage())
 
     def addCurve(self, name, data):
         """
@@ -98,6 +101,7 @@ class PlotChart(PlotWidget):
             dataPoint(DataPointBuffer): Data point which contains the data be added
         """
         color = self.settings.color(len(self.plotCurves))
+        self.buffers[name] = data
         # add the actual curve
         self.plotCurves[name] = self.plot(name=name,
                                           pen=mkPen(color),
@@ -107,6 +111,7 @@ class PlotChart(PlotWidget):
 
     def removeCurve(self, name):
         self.cache.pop(name, None)
+        self.buffers.pop(name, None)
         curve = self.plotCurves.pop(name, None)
         if curve is None:
             return
@@ -151,6 +156,7 @@ class PlotChart(PlotWidget):
             return time[start:], values[start:]
 
         for name in keys:
+            self.buffers[name] = dataPoints[name]
             datax = dataPoints[name].time
             datay = dataPoints[name].values
             if self.movingWindowEnable:
@@ -162,17 +168,46 @@ class PlotChart(PlotWidget):
             self.plotCurves[name].setData(x, y)
 
 
-    def export(self, filename=None):
-        dataPoints = dict()
-        for c in self.getPlotItem().curves:
-            (x, y), name = c.getData(), c.name()
-            if x is None or y is None:
-                self._logger.warning(f"Curve '{name}' contains no data, skipping it.")
-                continue
-            dataPoints[name] = DataPointBuffer(time=x, values=y)
+    def saveImage(self, fileName=None):
+        """
+        Plots the complete data from time 0 on and saves it as image.
+        Without a file name, a preview is shown and the file is selected afterwards.
+        """
+        dataPoints = {name: buf.snapshot() for name, buf in self.buffers.items()}
+        fig = plotDataPoints(dataPoints)
+        if fileName is None:
+            if not self._previewImage(fig):
+                return
+            fileName = FileSelector(["PNG Image (*.png)", "JPEG Image (*.jpg)",
+                                     "PDF Document (*.pdf)"]).getSaveFileName("Save Image")
+            if fileName is None:
+                return
+        try:
+            fig.savefig(fileName, dpi=300)
+        except Exception as e:
+            self._logger.error(f"Saving image to {fileName} failed: {e!r}")
+            return
+        self._logger.info(f"Image saved to {fileName}.")
 
-        self.exporter = Exporter(dataPoints=dataPoints, fileName=filename)
-        self.exporter.runExport()
+    def _previewImage(self, fig):
+        """ shows the figure, returns `True` if it should be saved """
+        png = io.BytesIO()
+        fig.savefig(png, format='png', dpi=80)
+        pixmap = QPixmap()
+        pixmap.loadFromData(png.getvalue())
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Save Image - {self.title}")
+        label = QLabel(dialog)
+        label.setPixmap(pixmap)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save
+                                   | QDialogButtonBox.StandardButton.Cancel, dialog)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(label)
+        layout.addWidget(buttons)
+        return dialog.exec() == QDialog.DialogCode.Accepted
 
     def _sampleStep(self, X):
         ds = 1

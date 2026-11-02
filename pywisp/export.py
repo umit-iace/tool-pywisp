@@ -12,7 +12,30 @@ from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from .widgets.fileselector import FileSelector
 
-__all__ = ["Exporter"]
+__all__ = ["Exporter", "plotDataPoints"]
+
+
+def plotDataPoints(dataPoints):
+    """
+    Plots the complete data points with matplotlib, starting at time 0.
+    :param dataPoints: dict of data point names and buffers
+    :return: matplotlib figure
+    """
+    # use the object oriented api, pyplot is not thread safe and
+    # switching the global backend would break the gui
+    fig = Figure(figsize=(10, 6))
+    FigureCanvasAgg(fig)
+    axes = fig.add_subplot(1, 1, 1)
+
+    for name, buf in dataPoints.items():
+        axes.plot(buf.time, buf.values, label=name)
+
+    axes.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=4,
+                ncol=4, mode="expand", borderaxespad=0., framealpha=0.5)
+    axes.grid(True)
+    axes.set_xlabel(r"Time (s)")
+    axes.set_xlim(left=0)
+    return fig
 
 
 class Exporter(QObject):
@@ -103,28 +126,9 @@ class Exporter(QObject):
 
         def exportPng(self):
             """
-            Exports the data point dataframe as png with matplotlib.
-            :param fileName: name of file with extension
+            Exports the data points as png with matplotlib.
             """
-
-            # use the object oriented api, pyplot is not thread safe and
-            # switching the global backend would break the gui
-            fig = Figure(figsize=(10, 6))
-            FigureCanvasAgg(fig)
-            axes = fig.add_subplot(1, 1, 1)
-
-            for col in self.df.columns:
-                series = self.df[col].dropna()
-                axes.plot(series.index, series.values, label=col)
-
-            axes.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=4,
-                        ncol=4, mode="expand", borderaxespad=0., framealpha=0.5)
-
-            axes.grid(True)
-            if self.df.index.name == 'time':
-                axes.set_xlabel(r"Time (s)")
-
-            fig.savefig(self.fileName, dpi=300)
+            plotDataPoints(self.dataPoints).savefig(self.fileName, dpi=300)
 
         def exportCsv(self, sep=','):
             """

@@ -7,6 +7,10 @@ This is an example of how a testing rig can be implemented using the tool-libs
 framework. The system equations are generated using a sympy c-printer, after
 solving the system equations there.
 
+The tool-libs version is the one pywisp requires, ``TOOL_LIBS_VERSION`` in
+``pywisp/__init__.py``. ``tests/test_example_generic.py`` builds the simulation with it
+and runs an experiment.
+
 Requirements
 ------------
 
