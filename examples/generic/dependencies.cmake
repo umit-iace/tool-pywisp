@@ -20,4 +20,8 @@ FetchContent_Declare(tool-libs
 	GIT_PROGRESS TRUE
 )
 FetchContent_MakeAvailable(tool-libs)
-find_package(Eigen3 3.3...5 REQUIRED NO_MODULE)
+# no version in find_package: the config of eigen 3.x only accepts 3.x, eigen 5 only 5.x
+find_package(Eigen3 REQUIRED NO_MODULE)
+if(Eigen3_VERSION VERSION_LESS 3.3)
+	message(FATAL_ERROR "Eigen ${Eigen3_VERSION} found, at least 3.3 is required")
+endif()
