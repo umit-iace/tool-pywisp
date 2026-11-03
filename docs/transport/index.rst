@@ -64,6 +64,30 @@ It is up to the user to guarantee that:
     * Every ID used to send data has a corresponding handler
 
 
+Frames on connect
+-----------------
+
+A connection can send frames right after it has been established, before any other frame, e.g. to
+tell a rig which role the client takes when the rig serves more than one kind of client. Set
+:attr:`pywisp.connection.Connection.connectFrames` in the connection class, as a list of frames in the
+format of the experiment modules:
+
+.. code-block:: python
+
+    from pywisp import connection
+
+    class Connection(connection.UdpConnection):
+        # tell the rig to run the experiments itself
+        connectFrames = [{'id': 62, 'msg': bytes([1, 1])}]
+
+        def __init__(self):
+            super().__init__(ip="192.168.0.10", port=45670)
+
+The frames are sent every time the connection is (re)established, also over UDP, where they let
+the rig know where to send its data. Frames without an ``int`` id in 0 - 255 or with a ``msg`` that
+is not ``bytes`` are logged and skipped. pywisp does not wait for an answer, the rig has to answer
+or ignore them.
+
 Packing a frame
 ---------------
 

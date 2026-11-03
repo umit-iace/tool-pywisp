@@ -69,6 +69,8 @@ class ConnectionManager(QObject):
 
         self.heartbeatTimer = QTimer(self)
         self.heartbeatTimer.timeout.connect(self.heartbeat)
+        # time of the last heartbeat, finds stalls of the gui that look like a lost connection
+        self._lastHeartbeat = None
 
         # last status of the rigs that send one, by connection name: (RigStatus, receive time)
         self.rigStatus = {}
@@ -191,6 +193,12 @@ class ConnectionManager(QObject):
                 conn['inst'].writeData(data)
 
     def heartbeat(self):
+        now = time.monotonic()
+        if self.heartbeatTimer.isActive() and self._lastHeartbeat is not None:
+            gap = now - self._lastHeartbeat
+            if gap > max(0.3, 3e-3 * self.heartbeatTimer.interval()):
+                self._logger.warning(f"heartbeat delayed by {gap * 1e3:.0f} ms, the gui was blocked")
+        self._lastHeartbeat = now
         self.write(controlFrame(Control.HEARTBEAT))
 
     # status of the rigs
@@ -351,6 +359,7 @@ class ConnectionManager(QObject):
     def startHeartbeat(self, interval):
         """ sends a heartbeat every `interval` ms, 0 disables it """
         if interval:
+            self._lastHeartbeat = None
             self.heartbeatTimer.start(int(interval))
 
     def stopHeartbeat(self):

@@ -106,6 +106,11 @@ class Connection(QObject, metaclass=ConnectionMeta):
     # connections closed while connecting keep themselves alive until their thread has ended,
     # destroying a running QThread aborts the process
     _aborting = set()
+    #: frames sent right after the connection has been established, before anything else,
+    #: e.g. to tell the rig which role this client takes. A list of dicts with the keys 'id' and
+    #: 'msg' (bytes), as returned by the experiment modules. Set it in the subclass:
+    #: ``connectFrames = [{'id': 62, 'msg': bytes([1, 1])}]``
+    connectFrames = ()
 
     def __init__(self, rx, tx, *args, **kwargs):
         super().__init__()
@@ -172,6 +177,7 @@ class Connection(QObject, metaclass=ConnectionMeta):
         if self._connect():
             self.readerThread.start()
             self.connected = True
+            self._sendConnectFrames()
             return True
         return False
 
@@ -195,7 +201,18 @@ class Connection(QObject, metaclass=ConnectionMeta):
         self.connected = ok
         if not ok:
             self._stopThread()
+        else:
+            self._sendConnectFrames()
         self.opened.emit(ok)
+
+    def _sendConnectFrames(self):
+        """ send :attr:`connectFrames`, invalid ones are logged and skipped """
+        for frame in self.connectFrames:
+            id, msg = frame.get('id'), frame.get('msg')
+            if not isinstance(id, int) or not 0 <= id <= 255 or not isinstance(msg, bytes):
+                self._logger.error(f"invalid connect frame {frame}, needs an int 'id' and bytes 'msg'")
+                continue
+            self.writeData(frame)
 
     def close(self):
         """ close the connection, stop worker and thread """

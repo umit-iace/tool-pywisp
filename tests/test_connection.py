@@ -111,3 +111,30 @@ def test_tcp_connect_async_failure(qtbot):
         conn.openAsync()
     assert blocker.args == [False]
     assert not conn.connected
+
+
+def test_connect_frames_are_sent_first(tcp):
+    conn, remote, _ = tcp
+    conn.connectFrames = [{'id': 62, 'msg': bytes([1, 1])}, {'id': 5, 'msg': b"x"}]
+    conn.connecting = True
+    conn._onOpened(True)
+    assert remote.recv(100) == bytes([62, 1, 1]) + bytes(6) + bytes([5]) + b"x" + bytes(7)
+
+
+def test_invalid_connect_frame_is_skipped(tcp):
+    conn, remote, _ = tcp
+    conn.connectFrames = [{'id': 62, 'msg': [1]}, {'id': 7, 'msg': b"ok"}]
+    conn.connecting = True
+    conn._onOpened(True)
+    assert remote.recv(100) == bytes([7]) + b"ok" + bytes(6)
+    assert conn.connected
+
+
+def test_no_connect_frames_on_failure(tcp):
+    conn, remote, _ = tcp
+    conn.connectFrames = [{'id': 62, 'msg': bytes([1])}]
+    conn.connecting = True
+    remote.setblocking(False)
+    conn._onOpened(False)
+    with pytest.raises(BlockingIOError):
+        remote.recv(100)
