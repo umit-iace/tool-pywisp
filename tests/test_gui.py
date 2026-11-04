@@ -178,6 +178,24 @@ def test_unknown_theme_falls_back_to_system(themeGui):
     assert themeGui._settings.value("theme/name") == 'System'
 
 
+def test_theme_is_restored_after_restart(themeGui, qtbot):
+    from PyQt6.QtGui import QPalette
+    themeGui.setTheme('Solarized Light')
+    themeGui.actToggleTheme.trigger()
+    themeGui.close()
+    themeGui._settings.sync()
+
+    gui = pw.MainGui()
+    qtbot.addWidget(gui)
+    assert gui._settings.value("theme/name") == 'Dark'
+    assert [a.text() for a in gui._themeActions.actions() if a.isChecked()] == ['Dark']
+    assert QApplication.palette().color(QPalette.ColorRole.Window).lightness() < 100
+    assert gui.actToggleTheme.toolTip() == "Switch to light mode"
+    # the toggle still knows the last light theme
+    gui.actToggleTheme.trigger()
+    assert gui._settings.value("theme/name") == 'Solarized Light'
+
+
 def test_log_colors_of_older_settings_are_ignored(gui):
     gui._settings.setValue("log_colors/INFO", "#101010")
     assert not gui._settings.color('INFO', 'log').isValid()
