@@ -8,6 +8,7 @@ import os
 import stat
 import textwrap
 
+import numpy as np
 import pytest
 import yaml
 from PyQt6.QtCore import QEvent, QPoint, QPointF, Qt
@@ -730,10 +731,11 @@ def test_plot_manager_shows_measurement(gui, qtbot):
     pm = gui.plotManager
     startExperiment(gui)
     gui.updateData([frame(1000, 1.0), frame(2000, 2.0)], "DummyConnection")
-    assert [pm.dataPointListWidget.item(i).text() for i in range(pm.dataPointListWidget.count())] == ['x']
+    tree = pm.dataPointNameTree
+    assert [tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())] == ['x']
 
     # without a plot, a default plot is created for the selected data point
-    pm.dataPointListWidget.item(0).setSelected(True)
+    tree.topLevelItem(0).setSelected(True)
     pm.addDataPointToTree()
     plot = pm.dataPointTreeWidget.topLevelItem(0)
     assert plot.text(0) == 'plot_000' and plot.child(0).text(1) == 'x'
@@ -756,6 +758,57 @@ def test_plot_manager_shows_measurement(gui, qtbot):
     assert pm.plotCharts == {} and pm.findAllPlotDocks() == []
 
 
+def test_array_data_points(gui, monkeypatch):
+    pm = gui.plotManager
+    monkeypatch.setattr(gui.exp, 'getDataPoints', lambda: ['x', 'state'])
+    monkeypatch.setattr(gui.exp, 'handleFrame',
+                        lambda f, connection: {'Time': f[0], 'DataPoints': {'state': np.array(f[1:])}})
+    startExperiment(gui)
+    gui.updateData([(1000, 1.0, 10.0), (2000, 2.0, 20.0)], "DummyConnection")
+    tree = pm.dataPointNameTree
+
+    def children(item):
+        return [item.child(i).text(0) for i in range(item.childCount())]
+
+    assert [tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())] == ['x', 'state']
+    assert children(tree.topLevelItem(0)) == []
+    assert children(tree.topLevelItem(1)) == ['state.1', 'state.2']
+
+    # a longer array adds elements, expansion and selection are kept
+    tree.topLevelItem(1).setExpanded(True)
+    tree.topLevelItem(1).child(1).setSelected(True)
+    gui.updateData([(3000, 3.0, 30.0, 300.0)], "DummyConnection")
+    state = tree.topLevelItem(1)
+    assert children(state) == ['state.1', 'state.2', 'state.3']
+    assert state.isExpanded() and [item.text(0) for item in tree.selectedItems()] == ['state.2']
+
+    # a single element is plotted over time
+    pm.addDataPointToTree()
+    plot = pm.dataPointTreeWidget.topLevelItem(0)
+    assert plot.childCount() == 1 and plot.child(0).text(1) == 'state.2'
+    pm.plotVectorClicked(plot)
+    gui.updateDataPlots()
+    x, y = pm.plotCharts['plot_000'].plotCurves['state.2'].getData()
+    assert list(x) == [1.0, 2.0, 3.0] and list(y) == [10.0, 20.0, 30.0]
+
+    # the parent stands for all of its elements
+    tree.clearSelection()
+    state.setSelected(True)
+    pm.addDataPointToTree()
+    assert set(pm.plotCharts['plot_000'].plotCurves) == {'state.1', 'state.2', 'state.3'}
+    x, y = pm.plotCharts['plot_000'].plotCurves['state.3'].getData()
+    # earlier frames did not contain this element
+    assert list(x) == [1.0, 2.0, 3.0] and np.isnan(y[:2]).all() and y[2] == 300.0
+    gui.stopExperiment()
+
+    # a new run shows the elements once they arrive, the old measurement keeps its elements
+    startExperiment(gui)
+    assert children(tree.topLevelItem(1)) == []
+    gui.stopExperiment()
+    gui.loadLastMeas(gui.lastMeasList.item(0))
+    assert children(tree.topLevelItem(1)) == ['state.1', 'state.2', 'state.3']
+
+
 def test_plot_manager_export_ends(gui, qtbot, tmp_path, monkeypatch):
     from pywisp.widgets.fileselector import FileSelector
     pm = gui.plotManager
@@ -763,7 +816,7 @@ def test_plot_manager_export_ends(gui, qtbot, tmp_path, monkeypatch):
     gui.updateData([frame(1000, 1.0)], "DummyConnection")
     gui.stopExperiment()
     monkeypatch.setattr(FileSelector, 'getSaveFileName', lambda self: str(tmp_path / "x.csv"))
-    pm.dataPointListWidget.item(0).setSelected(True)
+    pm.dataPointNameTree.topLevelItem(0).setSelected(True)
     with qtbot.waitSignal(pm.exportDone, timeout=60000) as blocker:
         pm.exportDataPointFromTree()
     assert blocker.args == [True]

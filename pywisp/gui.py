@@ -36,7 +36,7 @@ from .config import dumpExperiments, validateExperiments
 from .connectionManager import ConnectionManager
 from .experiments import ExperimentInteractor, ExperimentView
 from .registry import getRegisteredExperimentModules, getRegisteredVisualizers
-from .measurement import Measurement
+from .measurement import Measurement, addDataPointValue
 from .utils import getResource, setupLogging
 from .widgets.common import PlainTextLogger, PinnedDock
 from .widgets.dialogs import DataIntDialog
@@ -1002,6 +1002,7 @@ class MainGui(QMainWindow):
         :param connection: name of the connection
         """
         lastTime = None
+        newBuffers = False
         for frame in frames:
             data = self.exp.handleFrame(frame, connection)
             if data is None or self._currentDataPointBuffers is None:
@@ -1015,16 +1016,18 @@ class MainGui(QMainWindow):
                 continue
 
             for key, value in dataPoints.items():
-                buf = self._currentDataPointBuffers.get(key)
-                if buf is None:
-                    self._warnOnce(('key', key), f"Received unknown data point '{key}'")
-                    continue
                 try:
-                    buf.addValue(time, value)
+                    newBuffers |= addDataPointValue(self._currentDataPointBuffers, key, time, value)
+                except KeyError:
+                    self._warnOnce(('key', key), f"Received unknown data point '{key}'")
                 except (TypeError, ValueError):
-                    self._warnOnce(('value', key), f"Data point '{key}' must be a number, got {value!r}")
+                    self._warnOnce(('value', key),
+                                   f"Data point '{key}' must be a number or a 1d array of numbers, got {value!r}")
             lastTime = time
 
+        if newBuffers:
+            # the elements of an array data point are shown once their buffers exist
+            self.updateDataPoints(self.exp.getDataPoints())
         if lastTime is not None:
             self.expTimeLabel.setText(timeString(lastTime))
 

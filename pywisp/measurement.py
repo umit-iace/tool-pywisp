@@ -7,7 +7,29 @@ import time
 
 from .buffer import DataPointBuffer
 
-__all__ = ["Measurement"]
+__all__ = ["Measurement", "addDataPointValue"]
+
+
+def addDataPointValue(buffers, name, time, value):
+    """
+    Adds the value of the data point `name` to its buffer in `buffers`.
+
+    A buffer receiving 1d arrays (e.g. numpy arrays or lists) stores them as rows, its
+    elements are added to `buffers` as :class:`pywisp.buffer.ElementBuffer` `name.1` ... `name.n`.
+
+    :return: `True` if new element buffers have been added
+    :raises KeyError: if `name` has no buffer
+    :raises TypeError, ValueError: if the value is neither a number nor a 1d array of numbers
+    """
+    buf = buffers[name]
+    buf.addValue(time, value)
+    created = False
+    for idx in range(buf.columns or 0):
+        key = f"{name}.{idx + 1}"
+        if key not in buffers:
+            buffers[key] = buf.column(idx)
+            created = True
+    return created
 
 
 class Measurement:

@@ -95,7 +95,7 @@ def test_generic_example(sim, example, qtbot):
         assert data[-1]['DataPoints']['T: y'] == pytest.approx(0.15)
 
         model = [pendulum.handleFrame(f) for f in received if f.id == 15]
-        assert model and model[-1]['DataPoints']['pos'] != 0
+        assert model and model[-1]['DataPoints']['state'][0] != 0
 
         manager.write(controlFrame(Control.STOP))
         qtbot.waitUntil(lambda: not manager.rigStatus[name][0].running, timeout=5000)

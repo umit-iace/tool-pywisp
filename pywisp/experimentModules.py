@@ -85,7 +85,9 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
 
         * Time (float): Timestamp of the measurement.
         * DataPoints (dict): Dictionary of measurements where the keys are the labels and the values hold the
-          actual data.
+          actual data. A value is a number or a 1d array (e.g. ``{'state': np.array(data[1:])}``), whose
+          elements are shown and plotted as the data points ``state.1`` ... ``state.n``, the buffer
+          ``state`` holds the arrays as rows.
 
         Return `None` if the frame is not meant for this module, which is also what the
         default implementation does.

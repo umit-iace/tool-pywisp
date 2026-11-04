@@ -6,7 +6,7 @@ their docks, and the export of data points.
 import logging
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QAbstractItemView, QHBoxLayout, QInputDialog, QLabel, QListWidget, QMessageBox, \
+from PyQt6.QtWidgets import QAbstractItemView, QHBoxLayout, QInputDialog, QLabel, QMessageBox, \
     QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 from pyqtgraph.dockarea import Dock
 
@@ -61,12 +61,18 @@ class PlotManager(QWidget):
         self.nonPlottingDocks = list(self.area.findAll()[1].keys())
         self.plotCharts = {}
         self.exporter = None
+        # names shown in the data point tree: [(name, [element names])]
+        self._shownDataPoints = None
 
         layout = QHBoxLayout()
 
-        self.dataPointListWidget = QListWidget()
-        self.dataPointListWidget.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-        layout.addWidget(self.dataPointListWidget)
+        # data points, array data points have a child item per element
+        self.dataPointNameTree = QTreeWidget()
+        self.dataPointNameTree.setItemDelegate(TreeWidgetStyledItemDelegate(self.dataPointNameTree))
+        self.dataPointNameTree.setStyleSheet(TREE_STYLE_SHEET)
+        self.dataPointNameTree.setHeaderLabels(["DataPoint"])
+        self.dataPointNameTree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        layout.addWidget(self.dataPointNameTree)
 
         buttonsWidget = QWidget()
         buttonsLayout = QVBoxLayout()
@@ -123,12 +129,44 @@ class PlotManager(QWidget):
 
     def updateDataPoints(self, dataPointNames):
         """
-        Clears and adds all given data point names to list widget
+        Shows the given data point names in the data point tree. The elements of array data
+        points (buffers `name.1` ... `name.n` of the shown measurement) are added as children.
+        The tree is only rebuilt if the names have changed.
         :param dataPointNames: list of data point names
         """
-        if dataPointNames:
-            self.dataPointListWidget.clear()
-            self.dataPointListWidget.addItems(dataPointNames)
+        if not dataPointNames:
+            return
+        buffers = self.currentBuffers()
+        shown = [(name, [key for key in buffers if key.startswith(name + '.') and key[len(name) + 1:].isdigit()])
+                 for name in dataPointNames]
+        if shown == self._shownDataPoints:
+            return
+        self._shownDataPoints = shown
+
+        tree = self.dataPointNameTree
+        selected = {item.text(0) for item in tree.selectedItems()}
+        expanded = {tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())
+                    if tree.topLevelItem(i).isExpanded()}
+        tree.clear()
+        for name, elements in shown:
+            item = QTreeWidgetItem([name])
+            tree.addTopLevelItem(item)
+            item.addChildren([QTreeWidgetItem([element]) for element in elements])
+            item.setExpanded(name in expanded)
+            for it in [item] + [item.child(i) for i in range(item.childCount())]:
+                it.setSelected(it.text(0) in selected)
+
+    def selectedDataPoints(self):
+        """
+        Names of the buffers selected in the data point tree, an array data point stands
+        for all of its elements.
+        """
+        names = []
+        for item in self.dataPointNameTree.selectedItems():
+            for name in [item.child(i).text(0) for i in range(item.childCount())] or [item.text(0)]:
+                if name not in names:
+                    names.append(name)
+        return names
 
     def showData(self, dataPointBuffers):
         """ shows the given data in all plots, e.g. of another measurement """
@@ -216,7 +254,8 @@ class PlotManager(QWidget):
             self.dataPointTreeWidget.takeTopLevelItem(self.dataPointTreeWidget.indexOfTopLevelItem(item))
 
     def addDataPointToTree(self):
-        if not self.dataPointListWidget.selectedIndexes():
+        selectedDataPoints = self.selectedDataPoints()
+        if not selectedDataPoints:
             self._logger.error("Cannot add datapoint: No datapoint selected.")
             return
 
@@ -239,10 +278,10 @@ class PlotManager(QWidget):
         for i in range(toplevelItem.childCount()):
             topLevelItemList.append(toplevelItem.child(i).text(1))
 
-        for dataPoint in self.dataPointListWidget.selectedItems():
-            if dataPoint.text() not in topLevelItemList:
+        for dataPoint in selectedDataPoints:
+            if dataPoint not in topLevelItemList:
                 child = QTreeWidgetItem()
-                child.setText(1, dataPoint.text())
+                child.setText(1, dataPoint)
                 toplevelItem.addChild(child)
 
         for i in range(toplevelItem.childCount()):
@@ -255,7 +294,8 @@ class PlotManager(QWidget):
             self._logger.error("There is already an export job running")
             return
 
-        if not self.dataPointListWidget.selectedIndexes():
+        expLabels = self.selectedDataPoints()
+        if not expLabels:
             self._logger.error("Can't export data set: no data set selected.")
             return
 
@@ -265,10 +305,8 @@ class PlotManager(QWidget):
             return
         dataPointBuffers = measurement.dataPointBuffers
 
-        expLabels = [item.text()
-                     for item in self.dataPointListWidget.selectedItems()]
         self._logger.info(f"Measurements selected for export are: {expLabels}")
-        dataPoints = {lbl: dataPointBuffers[lbl] for lbl in expLabels}
+        dataPoints = {lbl: dataPointBuffers[lbl] for lbl in expLabels if lbl in dataPointBuffers}
 
         # snapshots share the memory, but are not affected by data that is still being added
         expData = {lbl: buf.snapshot() for lbl, buf in dataPoints.items()}
@@ -328,7 +366,8 @@ class PlotManager(QWidget):
                 for idx in range(item.childCount()):
                     curveLabel = item.child(idx).text(1)
                     reqLabels.append(curveLabel)
-                    if curveLabel not in chart.plotCurves.keys():
+                    # elements of an array data point may not have arrived yet
+                    if curveLabel not in chart.plotCurves.keys() and curveLabel in dataPointBuffers:
                         chart.addCurve(curveLabel, dataPointBuffers[curveLabel])
 
                 # clear all curves that are no longer required by items

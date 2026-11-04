@@ -78,7 +78,10 @@ could look like
 
 Finally, the measurement data from the rig must be processed, to do so implement :meth:`handleFrame`
 to handle frames from test rig such that it can be shown in the GUI. It returns ``None`` for frames that are not
-meant for the module.
+meant for the module. A data point may also hold a 1d array, e.g.
+``{'Time': t, 'DataPoints': {'state': np.array(data[1:])}}``. Its elements are shown as ``state.1`` ... ``state.n``
+below ``state`` in the data point list and can be plotted and exported like any other data point. Visualizers
+get the whole arrays, ``buffers['state'].values[-1]`` is the latest one.
 
 All four methods are optional, the default implementations send nothing and ignore all frames.
 

@@ -2,16 +2,17 @@
 import struct
 from collections import OrderedDict
 
+import numpy as np
+
 from pywisp.experimentModules import ExperimentModule
 
 from connection import Connection
 
 
 class DoublePendulum(ExperimentModule):
+    # state: pos, phi1, phi2
     dataPoints = [
-        'pos',
-        'phi1',
-        'phi2',
+        'state',
         'u',
     ]
 
@@ -38,9 +39,9 @@ class DoublePendulum(ExperimentModule):
         dataPoints = {}
         fid = frame.id
         if fid == 15:
-            data = struct.unpack(f'<L{len(DoublePendulum.dataPoints)}d', frame.payload)
+            data = struct.unpack('<L4d', frame.payload)
             dataPoints['Time'] = data[0]
-            dataPoints['DataPoints'] = dict(zip(DoublePendulum.dataPoints, data[1:]))
+            dataPoints['DataPoints'] = {'state': np.array(data[1:4]), 'u': data[4]}
         else:
             dataPoints = None
 

@@ -70,14 +70,9 @@ class MplDoublePendulumVisualizer(MplVisualizer):
 
     def update(self, dataPoints):
         x = phi1 = phi2 = 0
-        for name, buffer in dataPoints.items():
-            if buffer.values:
-                if name == 'pos':
-                    x = buffer.values[-1]
-                elif name == 'phi1':
-                    phi1 = -buffer.values[-1]
-                elif name == 'phi2':
-                    phi2 = -buffer.values[-1]
+        state = dataPoints.get('state')
+        if state is not None and state.values:
+            x, phi1, phi2 = state.values[-1] * [1, -1, -1]
 
         x0 = np.array([x, 0])
         x1 = x0 + np.array([-np.sin(phi1), np.cos(phi1)]) * st.pendulum1Height

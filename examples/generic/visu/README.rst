@@ -35,7 +35,7 @@ For the communication the following frames are used:
       - DoublePendulum (TestBench)
     * - 15
       - unsigned long + 1x double + 1x double + 1x double + 1x double
-      - time + pos + phi1 + phi2 + u
+      - time + state (pos, phi1, phi2) + u
       - from Server
       - DoublePendulum (TestBench)
     * - 20
