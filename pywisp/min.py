@@ -12,8 +12,9 @@ STF = 0x55
 
 #: largest frame id the MIN protocol can transmit
 MAX_MIN_ID = 63
-#: largest payload of a MIN frame in bytes
-MAX_MIN_PAYLOAD = 255
+#: largest payload of a MIN frame in bytes: the rigs (tool-libs `Frame`) receive at most 128,
+#: longer frames are dropped there without notice
+MAX_MIN_PAYLOAD = 128
 
 #: frame id reserved for the control of the experiment, modules must not use it
 CONTROL_FRAME_ID = 1

@@ -57,8 +57,8 @@ def test_corrupted_frame_is_dropped():
 
 def test_packer_drops_invalid_frames(caplog):
     """ invalid frames are dropped without terminating the coroutine """
-    out = roundtrip([(64, b"x"), (2, bytes(256)), (63, b"ok")])
-    assert out == [(63, b"ok")]
+    out = roundtrip([(64, b"x"), (2, bytes(129)), (3, bytes(128)), (63, b"ok")])
+    assert out == [(3, bytes(128)), (63, b"ok")]
     assert caplog.text.count("dropping frame") == 2
 
 

@@ -55,8 +55,8 @@ Frame IDs
 
 Frames returned by the experiment modules are checked before they are sent. Frames using the reserved ID 1, IDs
 outside of 0 - 255 or a payload ``msg`` that is not ``bytes`` are rejected: when starting an experiment, the start is
-aborted, later on the frame is dropped. In both cases the problem is logged. Frames exceeding the limits of MIN are
-dropped by the connection.
+aborted, later on the frame is dropped. In both cases the problem is logged. Frames exceeding the limits of MIN
+(ID 63, payload 128 bytes, the size of a tool-libs ``Frame``) are dropped by the connection, also logged.
 
 It is up to the user to guarantee that:
 
