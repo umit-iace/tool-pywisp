@@ -60,6 +60,7 @@ First, declare the following member variables:
 - :attr:`publicSettings`:``dict`` -- Settings for the module that will be exposed in the GUI and can be changed by the user (e.g.
   controller gains).
 - :attr:`dataPoints`:``list[str]`` -- Labels of the measurements that come from the test rig to be used for plots.
+- :attr:`dataPointElements`:``dict[str, list[str]]`` -- Optional names of the elements of array data points, see below.
 
 Then, implement the following methods that are invoked when data is sent *from* PyWisp *to* the test rig:
 
@@ -80,7 +81,9 @@ Finally, the measurement data from the rig must be processed, to do so implement
 to handle frames from test rig such that it can be shown in the GUI. It returns ``None`` for frames that are not
 meant for the module. A data point may also hold a 1d array, e.g.
 ``{'Time': t, 'DataPoints': {'state': np.array(data[1:])}}``. Its elements are shown as ``state.1`` ... ``state.n``
-below ``state`` in the data point list and can be plotted and exported like any other data point. Visualizers
+below ``state`` in the data point list and can be plotted and exported like any other data point. To name them,
+declare e.g. ``dataPointElements = {'state': ['pos', 'phi1', 'phi2']}``; elements beyond the given names keep the
+default name, e.g. ``state.4``. The names must be unique among all data points and elements of the experiment. Visualizers
 get the whole arrays, ``buffers['state'].values[-1]`` is the latest one.
 
 All four methods are optional, the default implementations send nothing and ignore all frames.

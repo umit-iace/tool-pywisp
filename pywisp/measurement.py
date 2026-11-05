@@ -7,15 +7,24 @@ import time
 
 from .buffer import DataPointBuffer
 
-__all__ = ["Measurement", "addDataPointValue"]
+__all__ = ["Measurement", "addDataPointValue", "elementName"]
 
 
-def addDataPointValue(buffers, name, time, value):
+def elementName(name, index, names=None):
+    """
+    Name of the element `index` (counted from 0) of the array data point `name`: `names[index]`
+    if given, else `name.<index + 1>`.
+    """
+    return names[index] if names and index < len(names) else f"{name}.{index + 1}"
+
+
+def addDataPointValue(buffers, name, time, value, elementNames=None):
     """
     Adds the value of the data point `name` to its buffer in `buffers`.
 
     A buffer receiving 1d arrays (e.g. numpy arrays or lists) stores them as rows, its
-    elements are added to `buffers` as :class:`pywisp.buffer.ElementBuffer` `name.1` ... `name.n`.
+    elements are added to `buffers` as :class:`pywisp.buffer.ElementBuffer`, named by
+    :func:`elementName` from `elementNames` (default `name.1` ... `name.n`).
 
     :return: `True` if new element buffers have been added
     :raises KeyError: if `name` has no buffer
@@ -25,7 +34,7 @@ def addDataPointValue(buffers, name, time, value):
     buf.addValue(time, value)
     created = False
     for idx in range(buf.columns or 0):
-        key = f"{name}.{idx + 1}"
+        key = elementName(name, idx, elementNames)
         if key not in buffers:
             buffers[key] = buf.column(idx)
             created = True

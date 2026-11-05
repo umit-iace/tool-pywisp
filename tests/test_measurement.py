@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from pywisp.measurement import Measurement, addDataPointValue
+from pywisp.measurement import Measurement, addDataPointValue, elementName
 
 
 def test_running_measurement():
@@ -41,6 +41,26 @@ def test_array_data_point():
     assert addDataPointValue(buffers, 'state', 3.0, (5.0, 6.0, 7.0))
     assert list(buffers['state.3'].time) == [1.0, 2.0, 3.0] and buffers['state.3'].values[-1] == 7.0
     assert np.isnan(buffers['state.3'].values[0])
+
+
+@pytest.mark.parametrize('names, expected', [
+    (None, ['state.1', 'state.2', 'state.3', 'state.4', 'state.5']),
+    ([], ['state.1', 'state.2', 'state.3', 'state.4', 'state.5']),
+    (['phi', 'theta'], ['phi', 'theta', 'state.3', 'state.4', 'state.5']),
+    (['a', 'b', 'c', 'd', 'e'], ['a', 'b', 'c', 'd', 'e']),
+    (['a', 'b', 'c', 'd', 'e', 'unused'], ['a', 'b', 'c', 'd', 'e']),
+])
+def test_element_name(names, expected):
+    assert [elementName('state', i, names) for i in range(5)] == expected
+
+
+def test_named_array_elements():
+    buffers = Measurement(1, {'Name': 'A'}, ['state']).dataPointBuffers
+    assert addDataPointValue(buffers, 'state', 1.0, [1.0, 2.0], ['phi'])
+    assert addDataPointValue(buffers, 'state', 2.0, [3.0, 4.0, 5.0], ['phi'])
+    assert list(buffers) == ['state', 'phi', 'state.2', 'state.3']
+    assert buffers['phi'].parent is buffers['state'] and list(buffers['phi'].values) == [1.0, 3.0]
+    assert list(buffers['state.2'].values) == [2.0, 4.0]
 
 
 def test_invalid_data_point_values():

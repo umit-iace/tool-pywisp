@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import QItemDelegate, QTreeView
 
 from .config import RESERVED_KEYS as NON_MODULE_KEYS
 from .experimentModules import ExperimentModuleException
+from .measurement import elementName
 from .min import CONTROL_FRAME_ID, Control, controlFrame
 from .registry import *
 import copy as cp
@@ -151,6 +152,7 @@ class ExperimentInteractor(QObject):
         self._logger = logging.getLogger(self.__class__.__name__)
         self.targetView = targetView
         self.dataPoints = None
+        self.dataPointElements = {}
         self.runningExperiment = False
         # create model
         self.targetModel = ExperimentModel(self)
@@ -294,6 +296,7 @@ class ExperimentInteractor(QObject):
         :return: `True` if successful, `False` if errors occurred.
         """
         self.dataPoints = []
+        declaredElements = {}
         self._instances = {}
         self._frameHandlerCache = {}
         self._settings = OrderedDict()
@@ -321,10 +324,18 @@ class ExperimentInteractor(QObject):
                 moduleName = parent.data(role=PropertyItem.RawDataRole)
                 self._addSettings(moduleName, parent)
                 self.dataPoints += self._readDataPoints(moduleName)
+                for dp, names in self._getModule(moduleName).dataPointElements.items():
+                    if isinstance(names, str):
+                        raise ExperimentException(f"dataPointElements of '{moduleName}': the names of '{dp}' "
+                                                  f"must be a list, not the string {names!r}")
+                    if dp in declaredElements:
+                        raise ExperimentException(f"dataPointElements: '{dp}' is declared by more than one module")
+                    declaredElements[dp] = names
                 self._getInstance(moduleName)
             except (ExperimentException, ExperimentModuleException) as e:
                 self._logger.error(e)
                 return False
+        self.dataPointElements = self._resolveElementNames(declaredElements)
 
         for moduleName, moduleValue in exp.items():
             if moduleName in NON_MODULE_KEYS or not moduleValue:
@@ -390,6 +401,40 @@ class ExperimentInteractor(QObject):
                 self.setParameter(moduleName, valKey, valVal)
 
         return True
+
+    def _resolveElementNames(self, declared):
+        """
+        Checks the element names declared in `dataPointElements` of the modules, an invalid name
+        is logged and replaced by the default name of the element.
+        :return: element names by data point
+        """
+        def isDefaultName(name):
+            return any(name.startswith(dp + '.') and name[len(dp) + 1:].isdigit() for dp in self.dataPoints)
+
+        used = set(self.dataPoints)
+        resolved = {}
+        for dp, names in declared.items():
+            if dp not in self.dataPoints:
+                self._logger.error(f"dataPointElements: '{dp}' is not a data point")
+                continue
+            resolved[dp] = []
+            for idx, name in enumerate(names):
+                default = elementName(dp, idx)
+                # names must be unique buffer keys, also with respect to default names of other elements
+                if name != default and (not isinstance(name, str) or name in used or isDefaultName(name)):
+                    self._logger.error(f"dataPointElements: invalid or duplicate name {name!r} for element "
+                                       f"{idx + 1} of '{dp}', using '{default}'")
+                    name = default
+                used.add(name)
+                resolved[dp].append(name)
+        return resolved
+
+    def getDataPointElements(self):
+        """
+        Returns the element names of the array data points of the experiment.
+        :return: dict mapping data point names to the names of their elements
+        """
+        return self.dataPointElements
 
     def getDataPoints(self):
         """

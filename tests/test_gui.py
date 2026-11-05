@@ -16,6 +16,7 @@ from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMenu
 
 import pywisp as pw
+from pywisp.measurement import elementName
 from pywisp.widgets.remote import MovableMultiButton, MovablePushButton, MovableSlider, MovableSwitch, MovableWidget
 
 SREG = """
@@ -758,9 +759,13 @@ def test_plot_manager_shows_measurement(gui, qtbot):
     assert pm.plotCharts == {} and pm.findAllPlotDocks() == []
 
 
-def test_array_data_points(gui, monkeypatch):
+@pytest.mark.parametrize('names', [None, ['pos', 'phi']])
+def test_array_data_points(gui, monkeypatch, names):
     pm = gui.plotManager
+    # without names the elements are called state.1 ..., given names come first
+    e1, e2, e3 = (elementName('state', i, names) for i in range(3))
     monkeypatch.setattr(gui.exp, 'getDataPoints', lambda: ['x', 'state'])
+    monkeypatch.setattr(gui.exp, 'getDataPointElements', lambda: {'state': names} if names else {})
     monkeypatch.setattr(gui.exp, 'handleFrame',
                         lambda f, connection: {'Time': f[0], 'DataPoints': {'state': np.array(f[1:])}})
     startExperiment(gui)
@@ -772,31 +777,31 @@ def test_array_data_points(gui, monkeypatch):
 
     assert [tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())] == ['x', 'state']
     assert children(tree.topLevelItem(0)) == []
-    assert children(tree.topLevelItem(1)) == ['state.1', 'state.2']
+    assert children(tree.topLevelItem(1)) == [e1, e2]
 
     # a longer array adds elements, expansion and selection are kept
     tree.topLevelItem(1).setExpanded(True)
     tree.topLevelItem(1).child(1).setSelected(True)
     gui.updateData([(3000, 3.0, 30.0, 300.0)], "DummyConnection")
     state = tree.topLevelItem(1)
-    assert children(state) == ['state.1', 'state.2', 'state.3']
-    assert state.isExpanded() and [item.text(0) for item in tree.selectedItems()] == ['state.2']
+    assert children(state) == [e1, e2, e3]
+    assert state.isExpanded() and [item.text(0) for item in tree.selectedItems()] == [e2]
 
     # a single element is plotted over time
     pm.addDataPointToTree()
     plot = pm.dataPointTreeWidget.topLevelItem(0)
-    assert plot.childCount() == 1 and plot.child(0).text(1) == 'state.2'
+    assert plot.childCount() == 1 and plot.child(0).text(1) == e2
     pm.plotVectorClicked(plot)
     gui.updateDataPlots()
-    x, y = pm.plotCharts['plot_000'].plotCurves['state.2'].getData()
+    x, y = pm.plotCharts['plot_000'].plotCurves[e2].getData()
     assert list(x) == [1.0, 2.0, 3.0] and list(y) == [10.0, 20.0, 30.0]
 
     # the parent stands for all of its elements
     tree.clearSelection()
     state.setSelected(True)
     pm.addDataPointToTree()
-    assert set(pm.plotCharts['plot_000'].plotCurves) == {'state.1', 'state.2', 'state.3'}
-    x, y = pm.plotCharts['plot_000'].plotCurves['state.3'].getData()
+    assert set(pm.plotCharts['plot_000'].plotCurves) == {e1, e2, e3}
+    x, y = pm.plotCharts['plot_000'].plotCurves[e3].getData()
     # earlier frames did not contain this element
     assert list(x) == [1.0, 2.0, 3.0] and np.isnan(y[:2]).all() and y[2] == 300.0
     gui.stopExperiment()
@@ -806,7 +811,7 @@ def test_array_data_points(gui, monkeypatch):
     assert children(tree.topLevelItem(1)) == []
     gui.stopExperiment()
     gui.loadLastMeas(gui.lastMeasList.item(0))
-    assert children(tree.topLevelItem(1)) == ['state.1', 'state.2', 'state.3']
+    assert children(tree.topLevelItem(1)) == [e1, e2, e3]
 
 
 def test_plot_manager_export_ends(gui, qtbot, tmp_path, monkeypatch):

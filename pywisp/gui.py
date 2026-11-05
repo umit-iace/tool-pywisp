@@ -1015,9 +1015,11 @@ class MainGui(QMainWindow):
                                "handleFrame() must return a dict with the keys 'Time' and 'DataPoints'")
                 continue
 
+            elementNames = self.exp.getDataPointElements()
             for key, value in dataPoints.items():
                 try:
-                    newBuffers |= addDataPointValue(self._currentDataPointBuffers, key, time, value)
+                    newBuffers |= addDataPointValue(self._currentDataPointBuffers, key, time, value,
+                                                    elementNames.get(key))
                 except KeyError:
                     self._warnOnce(('key', key), f"Received unknown data point '{key}'")
                 except (TypeError, ValueError):

@@ -10,11 +10,11 @@ from connection import Connection
 
 
 class DoublePendulum(ExperimentModule):
-    # state: pos, phi1, phi2
     dataPoints = [
         'state',
         'u',
     ]
+    dataPointElements = {'state': ['pos', 'phi1', 'phi2']}
 
     publicSettings = OrderedDict([
         ("Config", 0),

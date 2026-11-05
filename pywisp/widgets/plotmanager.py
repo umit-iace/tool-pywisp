@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import QAbstractItemView, QHBoxLayout, QInputDialog, QLabel
     QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 from pyqtgraph.dockarea import Dock
 
-from ..buffer import DataPointBuffer
+from ..buffer import DataPointBuffer, ElementBuffer
 from ..export import Exporter
 from .common import TreeWidgetStyledItemDelegate
 from .plotchart import PlotChart
@@ -130,14 +130,15 @@ class PlotManager(QWidget):
     def updateDataPoints(self, dataPointNames):
         """
         Shows the given data point names in the data point tree. The elements of array data
-        points (buffers `name.1` ... `name.n` of the shown measurement) are added as children.
+        points (the element buffers of the shown measurement) are added as children.
         The tree is only rebuilt if the names have changed.
         :param dataPointNames: list of data point names
         """
         if not dataPointNames:
             return
         buffers = self.currentBuffers()
-        shown = [(name, [key for key in buffers if key.startswith(name + '.') and key[len(name) + 1:].isdigit()])
+        shown = [(name, [key for key, buf in buffers.items()
+                         if isinstance(buf, ElementBuffer) and buf.parent is buffers.get(name)])
                  for name in dataPointNames]
         if shown == self._shownDataPoints:
             return
