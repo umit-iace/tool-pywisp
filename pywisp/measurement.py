@@ -12,10 +12,10 @@ __all__ = ["Measurement", "addDataPointValue", "elementName"]
 
 def elementName(name, index, names=None):
     """
-    Name of the element `index` (counted from 0) of the array data point `name`: `names[index]`
+    Name of the element `index` (counted from 0) of the array data point `name`: `name.<names[index]>`
     if given, else `name.<index + 1>`.
     """
-    return names[index] if names and index < len(names) else f"{name}.{index + 1}"
+    return f"{name}.{names[index] if names and index < len(names) else index + 1}"
 
 
 def addDataPointValue(buffers, name, time, value, elementNames=None):

@@ -72,9 +72,9 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
     dataPointElements: dict[str, list[str]] = {}
     """
     Optional names of the elements of array data points, mapping a name from :attr:`dataPoints`
-    to the names of its elements, e.g. ``{'state': ['pos', 'phi1', 'phi2']}``. Elements without
-    a name are called ``state.<k>`` (k counted from 1). The names must differ from all data points
-    and other element names, an invalid name is logged and replaced by the default one.
+    to the names of its elements, e.g. ``{'state': ['pos', 'phi1', 'phi2']}``. They are shown, plotted
+    and exported prefixed with the data point, ``state.pos`` etc. Elements without a name are called
+    ``state.<k>`` (k counted from 1). An invalid or duplicate name is logged and replaced by the default one.
     Names given as a string instead of a list, or a data point named by more than one module,
     make applying the experiment fail.
     """
@@ -96,7 +96,7 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
         * Time (float): Timestamp of the measurement.
         * DataPoints (dict): Dictionary of measurements where the keys are the labels and the values hold the
           actual data. A value is a number or a 1d array (e.g. ``{'state': np.array(data[1:])}``), whose
-          elements are shown and plotted as the data points named in :attr:`dataPointElements` or
+          elements are shown and plotted as ``state.<name>`` with the names of :attr:`dataPointElements` or
           ``state.1`` ... ``state.n``, the buffer ``state`` holds the arrays as rows.
 
         Return `None` if the frame is not meant for this module, which is also what the

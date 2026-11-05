@@ -204,19 +204,19 @@ def test_settings_of_a_new_instance():
 def test_element_names(interactor, caplog):
     class Arrays(pw.ExperimentModule):
         dataPoints = ['state', 'u']
-        dataPointElements = {'state': ['pos', 'gain', 'pos', 3, 'state.3', 'state.2', 'state.7'], 'missing': ['a']}
+        dataPointElements = {'state': ['pos', 'gain', 'pos', 3, '3', '2', '7'], 'missing': ['a']}
         publicSettings = OrderedDict()
         connection = 'Conn'
 
     pw.registerExperimentModule(Arrays)
     assert interactor.setExperiment({'Name': 'a', 'Arrays': {}, 'Echo': {}})
-    # names clashing with data points, other elements or default names fall back to the default name
-    assert interactor.getDataPointElements() == {
-        'state': ['pos', 'state.2', 'state.3', 'state.4', 'state.5', 'state.6', 'state.7']}
+    # the names are prefixed with the data point, so 'gain' does not clash with the data point of Echo,
+    # duplicates, non-strings and default names of other elements fall back to the default name
+    assert interactor.getDataPointElements() == {'state': ['pos', 'gain', '3', '4', '5', '6', '7']}
     errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
-    assert len(errors) == 6
+    assert len(errors) == 5
     assert "'missing' is not a data point" in errors[-1]
-    assert "'gain' for element 2 of 'state', using 'state.2'" in errors[0]
+    assert "'pos' for element 3 of 'state', using 'state.3'" in errors[0]
 
 
 @pytest.mark.parametrize("elements, problem", [

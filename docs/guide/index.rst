@@ -82,8 +82,9 @@ to handle frames from test rig such that it can be shown in the GUI. It returns 
 meant for the module. A data point may also hold a 1d array, e.g.
 ``{'Time': t, 'DataPoints': {'state': np.array(data[1:])}}``. Its elements are shown as ``state.1`` ... ``state.n``
 below ``state`` in the data point list and can be plotted and exported like any other data point. To name them,
-declare e.g. ``dataPointElements = {'state': ['pos', 'phi1', 'phi2']}``; elements beyond the given names keep the
-default name, e.g. ``state.4``. The names must be unique among all data points and elements of the experiment. Visualizers
+declare e.g. ``dataPointElements = {'state': ['pos', 'phi1', 'phi2']}``, they are prefixed with the data point,
+``state.pos`` etc.; elements beyond the given names keep the default name, e.g. ``state.4``. The names must be unique
+within the data point and must not be a number other than its own position. Visualizers
 get the whole arrays, ``buffers['state'].values[-1]`` is the latest one.
 
 All four methods are optional, the default implementations send nothing and ignore all frames.

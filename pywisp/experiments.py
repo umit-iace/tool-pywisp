@@ -420,12 +420,14 @@ class ExperimentInteractor(QObject):
             resolved[dp] = []
             for idx, name in enumerate(names):
                 default = elementName(dp, idx)
-                # names must be unique buffer keys, also with respect to default names of other elements
-                if name != default and (not isinstance(name, str) or name in used or isDefaultName(name)):
+                key = elementName(dp, 0, [name])
+                # the keys must be unique buffer keys, also with respect to default names of other elements
+                if not isinstance(name, str) or key != default and (key in used or isDefaultName(key)):
                     self._logger.error(f"dataPointElements: invalid or duplicate name {name!r} for element "
                                        f"{idx + 1} of '{dp}', using '{default}'")
-                    name = default
-                used.add(name)
+                    # the number gives the default name
+                    name, key = str(idx + 1), default
+                used.add(key)
                 resolved[dp].append(name)
         return resolved
 

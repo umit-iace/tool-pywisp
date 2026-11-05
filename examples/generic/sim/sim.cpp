@@ -38,6 +38,8 @@ void Pendulum::setInput(double val) {
 Support::Support() : min{.in = udp, .out = udp }{}
 
 void Support::init() {
+    // stop the experiment if pywisp sends no heartbeat (HeartbeatTime in default.sreg) for 1 s
+    e.setHeartbeatTimeout(1000, min.out);
     e.onEvent(e.STOP).call([](uint32_t) {
         u = Pendulum::Input{};
     });

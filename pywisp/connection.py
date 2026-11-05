@@ -439,7 +439,8 @@ class UdpConnection(SocketConnection):
 
     def _flush(self):
         """ send all collected frames as one datagram """
-        if not self._pending or not self.connected:
+        # the socket is closed when the flush scheduled before a close runs
+        if not self._pending or self.sock.fileno() == -1:
             self._pending.clear()
             return
         data, self._pending = bytes(self._pending), bytearray()
@@ -462,3 +463,8 @@ class UdpConnection(SocketConnection):
             if not self._pending:
                 QTimer.singleShot(0, self._flush)
             self._pending.extend(data)
+
+    def _disconnect(self):
+        # frames written right before closing, e.g. the stop command, must still reach the rig
+        self._flush()
+        super()._disconnect()

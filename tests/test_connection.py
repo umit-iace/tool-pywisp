@@ -3,7 +3,8 @@ import socket
 
 import pytest
 
-from pywisp.connection import Connection, TcpConnection
+from pywisp.connection import Connection, TcpConnection, UdpConnection
+from pywisp.min import Control, controlFrame
 
 
 @pytest.fixture
@@ -138,3 +139,16 @@ def test_no_connect_frames_on_failure(tcp):
     conn._onOpened(False)
     with pytest.raises(BlockingIOError):
         remote.recv(100)
+
+
+def test_udp_sends_pending_frames_on_close(qapp):
+    """ the stop command sent right before closing, e.g. when the gui is closed, must not be lost """
+    rig = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    rig.bind(("127.0.0.1", 0))
+    rig.settimeout(1)
+    conn = UdpConnection("127.0.0.1", rig.getsockname()[1])
+    assert conn.open()
+    conn.writeData(controlFrame(Control.STOP))
+    conn.close()
+    assert rig.recv(1400)
+    rig.close()

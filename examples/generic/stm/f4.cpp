@@ -65,6 +65,8 @@ Support::Support()
     : min{.in{board.serialMin}, .out{board.serialMin}} {}
 
 void Support::init() {
+    // stop the experiment if pywisp sends no heartbeat (HeartbeatTime in default.sreg) for 1 s
+    e.setHeartbeatTimeout(1000, min.out);
     board.supply.fan.pwm(0.8);
     k.every(1, [](uint32_t, uint32_t) {
     });

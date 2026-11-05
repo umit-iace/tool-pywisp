@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 import pywisp as pw
-from pywisp.min import Control, controlFrame
+from pywisp.min import CONTROL_FRAME_ID, Control, controlFrame
 
 EXAMPLE = Path(__file__).parents[1] / "examples" / "generic"
 
@@ -79,6 +79,8 @@ def test_generic_example(sim, example, qtbot):
         frames = [dict(f, connection=name)
                   for f in pendulum.getParams([0]) + traj.getParams([1, [0, 1], [0, 0.15]])]
         assert manager.expectStart({name: frames})
+        # the rig stops the experiment after 1 s without heartbeat
+        manager.startHeartbeat(250)
         with qtbot.waitSignal(manager.startConfirmed, timeout=5000):
             with qtbot.assertNotEmitted(manager.startFailed, wait=0):
                 for f in frames:
@@ -92,12 +94,20 @@ def test_generic_example(sim, example, qtbot):
         data = trajData()
         times = [d['Time'] for d in data]
         assert times == sorted(times)
-        assert data[-1]['DataPoints']['T: y'] == pytest.approx(0.15)
+        assert data[-1]['DataPoints']['T'][0] == pytest.approx(0.15)
 
         model = [pendulum.handleFrame(f) for f in received if f.id == 15]
         assert model and model[-1]['DataPoints']['state'][0] != 0
 
         manager.write(controlFrame(Control.STOP))
         qtbot.waitUntil(lambda: not manager.rigStatus[name][0].running, timeout=5000)
+
+        # without heartbeat, e.g. if pywisp crashed, the rig stops on its own and reports the missed heartbeat
+        manager.stopHeartbeat()
+        received.clear()
+        manager.write(controlFrame(Control.START))
+        qtbot.waitUntil(lambda: manager.rigStatus[name][0].running, timeout=5000)
+        qtbot.waitUntil(lambda: not manager.rigStatus[name][0].running, timeout=5000)
+        assert any(f.id == CONTROL_FRAME_ID for f in received)
     finally:
         manager.disconnectAll()
