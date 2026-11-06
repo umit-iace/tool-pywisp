@@ -10,20 +10,27 @@
 
 class Transport: public Comm {
 	public:
-	void handleFrame(Frame frame);
+	Transport() : tcp(0) { reset(); }
+
+	void handleFrame(const Frame &frame);
 
 	void sendData();
-	
+
 	void registerServer(Comm *serv);
+
+	/** forgets a partially received series, call while no client is connected */
+	void reset();
 
 	private:
 	Comm *tcp;
-
-	void unpackExp(Frame frame);
+	unsigned short seriesCount;	///< number of values of the series being received
+	unsigned short seriesRecv;	///< number of values of it received so far
 
 	void unpackBenchData(Frame frame);
 
 	void unpackTrajRampData(Frame frame);
+
+	void unpackTrajSeriesData(Frame frame);
 };
 
 #endif //TRANSPORT_CLASS_H

@@ -7,6 +7,10 @@ This is an example of how a testing rig can be implemented using the tool-libs
 framework. The system equations are generated using a sympy c-printer, after
 solving the system equations there.
 
+The tool-libs version is the one pywisp requires, ``TOOL_LIBS_VERSION`` in
+``pywisp/__init__.py``. ``tests/test_example_generic.py`` builds the simulation with it
+and runs an experiment.
+
 Requirements
 ------------
 
@@ -43,6 +47,12 @@ Simulation
     .. code-block:: bash
 
         $ make -C build-sim visu
+
+  The visu registers two connections, ``Udp`` (127.0.0.1:45670, the default) and ``Tcp`` (127.0.0.1:45671).
+  Select one in the ``Connections`` menu or the drop-down of the toolbar before connecting.
+  The simulation serves both at the same time (MIN frames over UDP, frames padded to 80 bytes payload
+  over TCP, one TCP client at a time) and answers over the one that received the last frame.
+  TCP needs a tool-libs version with the ``TCP`` transport.
 
 
 STM
@@ -97,7 +107,7 @@ After installation is done, you can switch in the `WSL` enviroment with::
 and install the following packages::
 
     $ pacman -Syu
-    $ pacman -S python3 uv eigen cmake arm-none-eabi-gcc git make gcc libgl qt5-base
+    $ pacman -S python3 uv eigen cmake arm-none-eabi-gcc git make gcc libgl qt6-base
 
 Switch to correct folder and install enviroment::
 

@@ -1,46 +1,35 @@
 # -*- coding: utf-8 -*-
-import unittest
+import pytest
 
-from PyQt5.QtWidgets import QApplication
-
-
-class SerialTestCase(unittest.TestCase):
-
-    def setUp(self):
-        pass
-
-    def test_valid_baudrate(self):
-        import pywisp as pw
-        # clear the registry the hard way
-        pw.registry._registry = pw.registry.Registry()
-        class GoodConnection(pw.SerialConnection):
-            settings = {
-                "port": 'ttyIDK',
-                "baud": 1000000, 
-            }
-            def __init__(self):
-                super().__init__(**self.settings)
-        pw.registerConnection(GoodConnection)
-        app = QApplication([])
-        form = pw.MainGui()
-        form.connect()
-
-    def test_invalid_baudrate(self):
-        import pywisp as pw
-        # clear the registry the hard way
-        pw.registry._registry = pw.registry.Registry()
-        class BadConnection(pw.SerialConnection):
-            settings = {
-                "port": 'ttyIDK',
-                "baud": 123456, 
-            }
-
-            def __init__(self):
-                super().__init__(**self.settings)
-        pw.registerConnection(BadConnection)
-        app = QApplication([])
-        form = pw.MainGui()
-        with self.assertRaises(ValueError):
-            form.connect()
+import pywisp as pw
 
 
+def makeConnection(baud):
+    class SerialTestConnection(pw.SerialConnection):
+        settings = {
+            "port": 'ttyIDK',
+            "baud": baud,
+        }
+
+        def __init__(self):
+            super().__init__(**self.settings)
+    return SerialTestConnection
+
+
+def test_valid_baudrate(qtbot, cleanRegistry):
+    pw.registerConnection(makeConnection(1000000))
+    form = pw.MainGui()
+    qtbot.addWidget(form)
+    # the port does not exist, so connecting fails gracefully
+    form.connectRig()
+    qtbot.waitUntil(lambda: form.connectionManager.state != form.connectionManager.CONNECTING, timeout=5000)
+    assert not form.isConnected
+    assert form.actConnect.isEnabled()
+
+
+def test_invalid_baudrate(qtbot, cleanRegistry):
+    pw.registerConnection(makeConnection(123456))
+    form = pw.MainGui()
+    qtbot.addWidget(form)
+    with pytest.raises(ValueError):
+        form.connectRig()

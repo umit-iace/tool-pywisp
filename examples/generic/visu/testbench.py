@@ -2,24 +2,21 @@
 import struct
 from collections import OrderedDict
 
-from pywisp.experimentModules import ExperimentModule
+import numpy as np
 
-from connection import Connection
+from pywisp.experimentModules import ExperimentModule
 
 
 class DoublePendulum(ExperimentModule):
     dataPoints = [
-        'pos',
-        'phi1',
-        'phi2',
+        'state',
         'u',
     ]
+    dataPointElements = {'state': ['pos', 'phi1', 'phi2']}
 
     publicSettings = OrderedDict([
         ("Config", 0),
     ])
-
-    connection = Connection.__name__
 
     def getParams(self, data) -> list[dict]:
         payloadConfig = struct.pack('<B',
@@ -36,11 +33,12 @@ class DoublePendulum(ExperimentModule):
 
     def handleFrame(self, frame) -> dict:
         dataPoints = {}
-        fid = frame.min_id
+        fid = frame.id
         if fid == 15:
-            data = struct.unpack(f'<L{len(DoublePendulum.dataPoints)}d', frame.payload)
+            # unpack_from: over Tcp the payload is padded to 80 bytes
+            data = struct.unpack_from('<L4d', frame.payload)
             dataPoints['Time'] = data[0]
-            dataPoints['DataPoints'] = dict(zip(DoublePendulum.dataPoints, data[1:]))
+            dataPoints['DataPoints'] = {'state': np.array(data[1:4]), 'u': data[4]}
         else:
             dataPoints = None
 

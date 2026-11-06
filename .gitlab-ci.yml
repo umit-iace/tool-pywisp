@@ -1,6 +1,41 @@
 stages:
+  - test
   - docu
   - deploy
+
+test:
+  stage: test
+  tags:
+    - shell
+  # same checks as .github/workflows/test.yml
+  parallel:
+    matrix:
+      # the lowest supported version and the one used for development
+      - UV_PYTHON: ["3.10", "3.12"]
+  # the simulation of the generic example uses a fixed udp port, the jobs share the host
+  resource_group: generic-example-sim
+  variables:
+    QT_QPA_PLATFORM: offscreen
+  script:
+    # a shell runner cannot install them, without cmake the example test would be skipped
+    - cmake --version && c++ --version
+    - uv sync --group dev
+    - uv run ruff check pywisp tests examples
+    - >
+      xvfb-run -a -s "-screen 0 1400x900x24"
+      uv run pytest -m "not slow" --cov --cov-report=term --cov-report=xml:coverage.xml
+      --junitxml=report.xml
+  coverage: '/^TOTAL.+?(\d+(?:\.\d+)?%)$/'
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+  after_script:
+    - uv clean
+    - rm -rf .venv/
 
 docu:
   stage: docu

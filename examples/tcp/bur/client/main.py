@@ -4,7 +4,7 @@ import sys
 import pywisp as pw
 import testbench
 import trajectory
-from PyQt5.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication
 from connection import ConnTestTCP
 from visualization import MplExampleVisualizer
 
@@ -17,4 +17,4 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     form = pw.MainGui()
     form.show()
-    app.exec_()
+    app.exec()

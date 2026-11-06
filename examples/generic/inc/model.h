@@ -25,7 +25,7 @@ struct Model {
     TrajType trajType;
 
     FrameRegistry &fr {support.min.reg};
-    Min::Out &out {support.min.out};
+    Sink<Frame> &out {support.out};
 
     void reset(uint32_t) {
         doublePendulum.reset();
@@ -33,6 +33,9 @@ struct Model {
     }
 
     void init() {
+        // status frames, pywisp shows whether the rig responds and checks the start
+        e.enableStatus(out);
+
         // reset
         e.onEvent(e.INIT).call(*this, &Model::reset);
 

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from matplotlib.offsetbox import *
+from matplotlib.offsetbox import AnnotationBbox, HPacker, TextArea
 from pywisp.visualization import MplVisualizer
 
 
@@ -82,7 +82,8 @@ class MplExampleVisualizer(MplVisualizer):
                }
 
         for key, value in dps.items():
-            if dataPoints[key].values:
+            # data points of modules that are not part of the experiment are missing
+            if key in dataPoints and dataPoints[key].values:
                 formatStr = "%." + value[1] + "f"
                 value[0].set_text(formatStr % dataPoints[key].values[-1])
 
