@@ -48,6 +48,12 @@ Simulation
 
         $ make -C build-sim visu
 
+  The visu registers two connections, ``Udp`` (127.0.0.1:45670, the default) and ``Tcp`` (127.0.0.1:45671).
+  Select one in the ``Connections`` menu or the drop-down of the toolbar before connecting.
+  The simulation serves both at the same time (MIN frames over UDP, frames padded to 80 bytes payload
+  over TCP, one TCP client at a time) and answers over the one that received the last frame.
+  TCP needs a tool-libs version with the ``TCP`` transport.
+
 
 STM
 ---

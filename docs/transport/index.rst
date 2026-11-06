@@ -1,13 +1,15 @@
 .. _communication_layer:
 
 Communication Layer
-===============
+===================
 
 To handle all communication interfaces for the different underlying hardwares in a similar way,
 a communication protocol is introduced.
 This is based on the `MIN-Protocol <https://github.com/min-protocol/min>`_.
 
-Currently the ``MIN``-specified frame packing is not used on `TCP`-based interfaces.
+Serial and UDP connections pack the frames with ``MIN``. TCP already delivers a reliable byte stream, so
+:class:`pywisp.connection.TcpConnection` sends every frame as a fixed size record instead, see
+:ref:`tcp_framing`.
 
 MIN-Frame
 ---------
@@ -20,7 +22,7 @@ The smallest unit in the communication stack, each ``Frame`` has the structure:
 
     * - ID
       - Payload
-    * - unique identifier, packed as a 7-bit value (``0x0`` - ``0x7f``)
+    * - unique identifier, 6 bits with MIN (``0`` - ``63``), one byte over TCP
       - data, packed as little-endian byte array
 
 Note that the maximum possible length of a frame differs on each device.
@@ -48,15 +50,49 @@ Frame IDs
 
         A frame with this ID received from the rig signals a missed heartbeat and stops the experiment.
 
-    * - 0, 2 - 63
-      - User defined for connections using MIN (serial, UDP)
-    * - 0, 2 - 255
-      - User defined for the TCP connection
+    * - 63
+      - Rig status (:data:`pywisp.min.STATUS_FRAME_ID`), sent by the rig, see
+        :ref:`rig_status`
+    * - 0, 2 - 62
+      - User defined
+    * - 64 - 255
+      - Only over TCP to rigs that are not built on tool-libs (e.g. the B&R example), the frame registry of
+        tool-libs dispatches ids 0 - 63 only
 
 Frames returned by the experiment modules are checked before they are sent. Frames using the reserved ID 1, IDs
 outside of 0 - 255 or a payload ``msg`` that is not ``bytes`` are rejected: when starting an experiment, the start is
 aborted, later on the frame is dropped. In both cases the problem is logged. Frames exceeding the limits of MIN
-(ID 63, payload 128 bytes, the size of a tool-libs ``Frame``) are dropped by the connection, also logged.
+(ID 63, payload 128 bytes, the size of a tool-libs ``Frame``) are dropped by the connection, also logged. Over TCP
+the limit is ``maxPayload`` (80 bytes).
+
+.. _tcp_framing:
+
+Frames over TCP
+---------------
+
+:class:`pywisp.connection.TcpConnection` sends and receives every frame as a record of ``1 + maxPayload`` bytes:
+one byte id, then the payload padded with zeros to ``maxPayload`` (default 80). There is no checksum and no
+resynchronisation, longer payloads are dropped and logged. The receiver gets the full padded payload, so unpack it
+with :func:`struct.unpack_from` instead of :func:`struct.unpack`. Both sides have to use the same ``maxPayload``.
+
+On a rig built on tool-libs this is the ``TCP`` transport (``sys/comm.h``, Linux only, a server for one client at a
+time: the next client is accepted once the last one disconnected, data sent while no client is connected is dropped)
+wrapped in ``FixedFrame<80>`` (``comm/fixedframe.h``), which is used like ``Min``. Both need a tool-libs version that
+contains them, PyWisp's examples and tests build against :data:`pywisp.TOOL_LIBS_VERSION`.
+
+A rig can serve UDP and TCP at the same time by feeding the frames of both into one frame registry and answering over
+the link the last frame came from, as the simulation of the generic example does
+(``examples/generic/sim/sim.cpp``):
+
+.. literalinclude:: ../../examples/generic/sim/sim.cpp
+   :language: c++
+   :start-at: UDP udp
+   :end-at: FixedFrame<> tcpFrames
+
+.. literalinclude:: ../../examples/generic/sim/sim.cpp
+   :language: c++
+   :start-at: /** frames to pywisp
+   :end-before: Support::Support
 
 It is up to the user to guarantee that:
 
@@ -97,14 +133,14 @@ Using the :mod:`struct` module from the standard library, the payload can be cre
 
 .. literalinclude:: ../../examples/generic/visu/trajectory.py
    :language: python
-   :lines: 27-29
+   :lines: 26-28
 
 However, if more than just a handful of parameters are to be sent (for example when sending the interpolation points of
 a trajectory), the helper function :meth:`pywisp.utils.packArrayToFrame` may be used:
 
 .. literalinclude:: ../../examples/generic/visu/trajectory.py
    :language: python
-   :lines: 31-34
+   :lines: 30-33
 
 
 Unpacking a frame
@@ -114,7 +150,7 @@ When a frame is received by PyWisp, it has to be unpacked to further process the
 
 .. literalinclude:: ../../examples/generic/visu/trajectory.py
    :language: python
-   :lines: 38-45
+   :lines: 37-47
 
 Note that currently no logic is available in PyWisp to unpack a series of frames
 and join them into one set of measurements.

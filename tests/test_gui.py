@@ -7,13 +7,14 @@ import logging
 import os
 import stat
 import textwrap
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 import yaml
 from PyQt6.QtCore import QEvent, QPoint, QPointF, Qt
 from PyQt6.QtGui import QMouseEvent
-from PyQt6.QtWidgets import QApplication, QFileDialog, QMenu
+from PyQt6.QtWidgets import QApplication, QFileDialog
 
 import pywisp as pw
 from pywisp.measurement import elementName
@@ -64,7 +65,6 @@ class DummySerial(pw.SerialConnection):
 class Dummy(pw.ExperimentModule):
     dataPoints = ["x"]
     publicSettings = OrderedDict([("gain", 1.0)])
-    connection = DummyConnection.__name__
 
     def getParams(self, data):
         return [{'id': 10, 'msg': struct.pack('<d', float(data[0]))}]
@@ -95,27 +95,24 @@ def test_empty_remote_section(gui):
     assert gui.remotePanel.widgets == []
 
 
-def test_baud_menu(gui):
-    menu = QMenu()
-    gui.connectionManager.getBauds(DummySerial.settings, menu)
-    checked = [a.text() for a in menu.actions() if a.isChecked()]
-    assert checked == ["115200"]
+def ports(*devices):
+    return [SimpleNamespace(device=d, description="USB Serial") for d in devices]
 
 
 def test_menu_refresh_does_not_leak_actions(gui, monkeypatch):
     from PyQt6.QtGui import QAction
     monkeypatch.setattr(pw.gui, 'getAllGamepads', lambda: [])
-    baudMenu, portMenu = QMenu(gui), QMenu(gui)
+    monkeypatch.setattr("serial.tools.list_ports.comports", lambda: ports("/dev/ttyUSB0", "/dev/ttyACM0"))
+    deviceMenu = serialMenu(gui)
 
     def refresh():
-        gui.connectionManager.getBauds(DummySerial.settings, baudMenu)
-        gui.connectionManager.getComPorts(DummySerial.settings, portMenu)
+        deviceMenu.aboutToShow.emit()
         gui.detectGamepads()
         return len(gui.findChildren(QAction))
 
     first = refresh()
     assert refresh() == refresh() == first
-    assert len(baudMenu.actions()) == len(pw.SerialConnection.supportedBaudrates)
+    assert len(deviceMenu.actions()) == 2
 
 
 def test_missing_config(qtbot, cleanRegistry):
@@ -213,29 +210,206 @@ def test_movable_widgets_use_mixin_handlers():
 def connectRig(gui, qtbot):
     """ connect like the user does and wait for the result of the background connection """
     gui.connectRig()
-    qtbot.waitUntil(lambda: not gui.connectionManager._pendingConnections, timeout=5000)
+    qtbot.waitUntil(lambda: gui.connectionManager.state != gui.connectionManager.CONNECTING, timeout=5000)
 
 
-def test_connection_names_are_bound_correctly(gui, qtbot):
-    gui.connectionManager.connections = {"DummyConnection": {"cls": DummyConnection}}
+def test_frames_of_the_active_connection_reach_the_gui(gui, qtbot):
     with mock.patch.object(DummyConnection, "_connect", return_value=True):
         connectRig(gui, qtbot)
     try:
         assert gui.isConnected
+        assert isinstance(gui.connectionManager.connection, DummyConnection)
         with mock.patch.object(gui, "updateData") as updateData:
-            gui.connectionManager.connections["DummyConnection"]["inst"].receivedFrames.emit([pw.Frame(15, b"")])
+            gui.connectionManager.connection.receivedFrames.emit([pw.Frame(15, b"")])
         updateData.assert_called_once()
-        assert updateData.call_args.args[1] == "DummyConnection"
+        assert [f.id for f in updateData.call_args.args[0]] == [15]
     finally:
         gui.disconnectRig()
     assert not gui.isConnected
-    assert "inst" not in gui.connectionManager.connections["DummyConnection"]
+    assert gui.connectionManager.connection is None
+
+
+def connectionMenuActions(gui):
+    return [a for a in gui.connMenu.actions() if a.isCheckable()]
+
+
+def test_connection_selection(gui):
+    manager = gui.connectionManager
+    # the first registered connection is the default
+    assert manager.activeConnection == "DummyConnection"
+    actions = connectionMenuActions(gui)
+    assert [a.text() for a in actions] == ["DummyConnection", "DummySerial"]
+    assert [a.isChecked() for a in actions] == [True, False]
+    assert manager.connectionActions.isExclusive()
+    combo = gui.connComboBox
+    assert [combo.itemText(i) for i in range(combo.count())] == ["DummyConnection", "DummySerial"]
+    assert combo.currentText() == "DummyConnection"
+    # the combobox sits left of the connect action, separated by a line
+    toolbarActions = gui.toolbarExp.actions()
+    assert gui.toolbarExp.widgetForAction(toolbarActions[toolbarActions.index(gui.actConnect) - 2]) is combo
+
+    # radio button selects, combobox follows
+    actions[1].trigger()
+    assert manager.activeConnection == "DummySerial"
+    assert combo.currentText() == "DummySerial"
+    assert [a.isChecked() for a in actions] == [False, True]
+    assert gui.exp.connection == "DummySerial"
+
+    # combobox selects, radio buttons follow
+    combo.setCurrentText("DummyConnection")
+    assert manager.activeConnection == "DummyConnection"
+    assert [a.isChecked() for a in actions] == [True, False]
+    assert gui.exp.connection == "DummyConnection"
+
+    # unknown names are refused
+    assert not manager.setActiveConnection("Unknown")
+    assert manager.activeConnection == "DummyConnection"
+
+
+def serialMenu(gui):
+    return next(a.menu() for a in gui.connMenu.actions() if a.text() == "DummySerial")
+
+
+def test_connection_menu_structure(gui):
+    actions = gui.connMenu.actions()
+    assert [a.text() for a in actions] == ["DummyConnection", "DummySerial", "", "Settings"]
+    assert actions[0].menu() is None and actions[1].menu() is not None
+    assert actions[2].isSeparator()
+    assert actions[3] is gui.connectionManager.actSettings and not actions[3].isCheckable()
+    # the serial entry with its submenu is a radio button like the others
+    assert actions[1] in gui.connectionManager.connectionActions.actions()
+
+
+def test_connection_group_is_delimited_in_the_toolbar(gui):
+    """ separator | combobox | connect, disconnect | """
+    actions = gui.toolbarExp.actions()
+    assert actions[0].isSeparator()
+    assert gui.toolbarExp.widgetForAction(actions[1]) is gui.connComboBox
+    assert actions[2].isSeparator()
+    assert actions[3:5] == [gui.actConnect, gui.actDisconnect]
+    assert actions[5].isSeparator()
+
+
+def test_serial_device_menu(gui, monkeypatch):
+    manager = gui.connectionManager
+    monkeypatch.setitem(DummySerial.settings, "port", "/dev/ttyACM0")
+    monkeypatch.setattr("serial.tools.list_ports.comports", lambda: ports("/dev/ttyUSB0", "/dev/ttyACM0"))
+    menu = serialMenu(gui)
+    menu.aboutToShow.emit()
+    devices = menu.actions()
+    assert [a.text() for a in devices] == ["/dev/ttyUSB0", "/dev/ttyACM0"]
+    assert [a.isChecked() for a in devices] == [False, True]
+
+    # selecting a device sets the port and activates the connection
+    devices[0].trigger()
+    assert DummySerial.settings["port"] == "/dev/ttyUSB0"
+    assert manager.activeConnection == "DummySerial"
+    assert gui.connComboBox.currentText() == "DummySerial"
+    assert [a.isChecked() for a in connectionMenuActions(gui)] == [False, True]
+    menu.aboutToShow.emit()
+    assert [a.isChecked() for a in menu.actions()] == [True, False]
+
+    # refreshed when shown
+    monkeypatch.setattr("serial.tools.list_ports.comports", lambda: [])
+    menu.aboutToShow.emit()
+    assert [(a.text(), a.isEnabled()) for a in menu.actions()] == [("No devices found", False)]
+
+
+def test_settings_dialog_from_menu(gui, monkeypatch):
+    from pywisp.widgets.dialogs import ConnectionSettingsDialog
+    shown = []
+
+    def exec(dialog):
+        shown.append(dialog.connList.currentText())
+        dialog.connList.setCurrentText("DummyConnection")
+        dialog._fields["DummyConnection"][1].setText("46000")
+        return ConnectionSettingsDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(ConnectionSettingsDialog, "exec", exec)
+    monkeypatch.setitem(DummyConnection.settings, "port", 45999)
+    gui.connComboBox.setCurrentText("DummySerial")
+    gui.connectionManager.actSettings.trigger()
+    # the active connection is shown first and stays active
+    assert shown == ["DummySerial"]
+    assert DummyConnection.settings["port"] == 46000
+    assert gui.connectionManager.activeConnection == "DummySerial"
+
+
+def test_settings_dialog_cancel_discards(gui, monkeypatch):
+    from pywisp.widgets.dialogs import ConnectionSettingsDialog
+
+    def exec(dialog):
+        dialog._fields["DummySerial"][1].setCurrentText("9600")
+        return ConnectionSettingsDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(ConnectionSettingsDialog, "exec", exec)
+    gui.connectionManager.actSettings.trigger()
+    assert DummySerial.settings["baud"] == 115200
+
+
+def test_connection_selection_is_persistent(gui, qtbot):
+    gui.connComboBox.setCurrentText("DummySerial")
+    gui.connectionManager._settings.sync()
+    form = pw.MainGui()
+    qtbot.addWidget(form)
+    assert form.connectionManager.activeConnection == "DummySerial"
+    assert form.connComboBox.currentText() == "DummySerial"
+    assert [a.isChecked() for a in connectionMenuActions(form)] == [False, True]
+
+
+def test_unregistered_saved_connection_falls_back_to_the_first(qtbot, cleanRegistry):
+    from pywisp.settings import Settings
+    Settings().setValue("connection/active", "Gone")
+    pw.registerConnection(DummyConnection)
+    form = pw.MainGui()
+    qtbot.addWidget(form)
+    assert form.connectionManager.activeConnection == "DummyConnection"
+
+
+def test_selection_is_disabled_while_connected(gui, qtbot):
+    manager = gui.connectionManager
+    with mock.patch.object(DummyConnection, "_connect", return_value=True):
+        connectRig(gui, qtbot)
+    try:
+        assert gui.isConnected
+        assert not gui.connComboBox.isEnabled()
+        assert not manager.connectionActions.isEnabled()
+        assert not manager.actSettings.isEnabled()
+        # the serial entry with the device menu is locked too
+        assert not serialMenu(gui).menuAction().isEnabled()
+        assert not manager.setActiveConnection("DummySerial")
+        # a refused selection is reverted in the menu and the combobox
+        connectionMenuActions(gui)[1].trigger()
+        gui.connComboBox.setCurrentText("DummySerial")
+        assert manager.activeConnection == "DummyConnection"
+        assert gui.connComboBox.currentText() == "DummyConnection"
+        assert [a.isChecked() for a in connectionMenuActions(gui)] == [True, False]
+    finally:
+        gui.disconnectRig()
+    assert gui.connComboBox.isEnabled() and manager.connectionActions.isEnabled() and manager.actSettings.isEnabled()
+
+
+def test_only_the_active_connection_is_opened(gui, qtbot):
+    gui.connComboBox.setCurrentText("DummySerial")
+    with mock.patch.object(DummyConnection, "_connect", return_value=True) as udp, \
+            mock.patch.object(DummySerial, "_connect", return_value=False) as serial:
+        connectRig(gui, qtbot)
+        qtbot.waitUntil(lambda: not pw.Connection._aborting, timeout=5000)
+    serial.assert_called_once()
+    udp.assert_not_called()
+
+
+def test_modules_get_the_active_connection(gui):
+    gui.experimentDoubleClicked(gui.experimentList.item(0))
+    mod = gui.exp._getInstance('Dummy')
+    assert mod.connection == "DummyConnection"
+    gui.connComboBox.setCurrentText("DummySerial")
+    assert mod.connection == "DummySerial"
 
 
 def test_connection_traffic_light(gui, qtbot):
     """ green while connected, yellow if the rig does not respond or misses status bits """
     import struct
-    gui.connectionManager.connections = {"DummyConnection": {"cls": DummyConnection}}
     assert gui.connectionLedState == 'red'
     with mock.patch.object(DummyConnection, "_connect", return_value=True):
         connectRig(gui, qtbot)
@@ -245,7 +419,7 @@ def test_connection_traffic_light(gui, qtbot):
 
         def status(flags):
             payload = struct.pack('<BBBBHIIBHI', 1, 0, flags, 0, 0, 0, 1000, 0, 0, 0)
-            gui.connectionManager._onFrames([pw.Frame(63, payload)], "DummyConnection")
+            gui.connectionManager._onFrames([pw.Frame(63, payload)])
 
         with mock.patch.object(DummyConnection, "statusFlags", ['ODrive', 'Motor'], create=True):
             status(0b11)
@@ -264,14 +438,14 @@ def test_connection_traffic_light(gui, qtbot):
     assert gui.connectionLedState == 'red'
 
 
-def test_failed_connection_closes_others(gui, qtbot):
-    with mock.patch.object(DummyConnection, "_connect", return_value=True), \
-            mock.patch.object(DummySerial, "_connect", return_value=False):
+def test_failed_connection(gui, qtbot):
+    gui.connComboBox.setCurrentText("DummySerial")
+    with mock.patch.object(DummySerial, "_connect", return_value=False):
         connectRig(gui, qtbot)
         qtbot.waitUntil(lambda: not pw.Connection._aborting, timeout=5000)
     assert not gui.isConnected
-    assert gui.actConnect.isEnabled()
-    assert all("inst" not in c for c in gui.connectionManager.connections.values())
+    assert gui.actConnect.isEnabled() and gui.connComboBox.isEnabled()
+    assert gui.connectionManager.connection is None
 
 
 def test_connecting_does_not_block_the_gui(gui, qtbot):
@@ -283,7 +457,6 @@ def test_connecting_does_not_block_the_gui(gui, qtbot):
         release.wait(5)
         return True
 
-    gui.connectionManager.connections = {"DummyConnection": {"cls": DummyConnection}}
     with mock.patch.object(DummyConnection, "_connect", slowConnect):
         gui.connectRig()
         assert gui.connectionLedState == 'red'
@@ -308,7 +481,6 @@ def test_close_waits_for_aborted_connections(gui, qtbot):
         release.wait(5)
         return True
 
-    gui.connectionManager.connections = {"DummyConnection": {"cls": DummyConnection}}
     with mock.patch.object(DummyConnection, "_connect", slowConnect):
         gui.connectRig()
         threading.Timer(0.2, release.set).start()
@@ -386,14 +558,14 @@ def startExperiment(gui):
 
 def test_data_path_handles_batches(gui):
     startExperiment(gui)
-    gui.updateData([frame(1000, 1.0), frame(2000, 2.0)], "DummyConnection")
+    gui.updateData([frame(1000, 1.0), frame(2000, 2.0)])
     buf = gui._currentDataPointBuffers['x']
     assert list(buf.time) == [1.0, 2.0]
     assert list(buf.values) == [1.0, 2.0]
     gui.stopExperiment()
     # the finished run keeps its data and is no longer modified
     stored = gui.measurements[-1].dataPointBuffers['x']
-    gui.updateData([frame(3000, 3.0)], "DummyConnection")
+    gui.updateData([frame(3000, 3.0)])
     assert len(stored) == 2
 
 
@@ -402,7 +574,7 @@ def test_failing_module_does_not_crash(gui, monkeypatch, caplog):
         raise RuntimeError("boom")
     monkeypatch.setattr(Dummy, "handleFrame", broken)
     startExperiment(gui)
-    gui.updateData([frame(1000, 1.0)] * 50, "DummyConnection")
+    gui.updateData([frame(1000, 1.0)] * 50)
     errors = [r for r in caplog.records if "failed to handle frame" in r.getMessage()]
     assert len(errors) == 1
     gui.stopExperiment()
@@ -574,14 +746,13 @@ def test_copy_remote_source(gui):
     assert remote['Go']['position'] == [150, 60]
 
 
-def test_heartbeat_goes_to_all_connections(gui):
-    sent = {}
-    for name in gui.connectionManager.connections:
-        inst = mock.Mock()
-        inst.writeData.side_effect = lambda data, name=name: sent.setdefault(name, []).append(data)
-        gui.connectionManager.connections[name]['inst'] = inst
+def test_frames_go_to_the_active_connection(gui):
+    inst = mock.Mock()
+    gui.connectionManager.connection = inst
     gui.connectionManager.heartbeat()
-    assert sent == {name: [{'id': 1, 'msg': b'\x02'}] for name in gui.connectionManager.connections}
+    gui.connectionManager.write({'id': 10, 'msg': b'x'})
+    assert [c.args[0] for c in inst.writeData.call_args_list] == [{'id': 1, 'msg': b'\x02'}, {'id': 10, 'msg': b'x'}]
+    gui.connectionManager.connection = None
 
 
 def test_measurement_list(gui):
@@ -633,7 +804,7 @@ def test_parameters_only_go_to_the_shown_running_experiment(gui, caplog):
 
 def test_load_last_measurement(gui):
     startExperiment(gui)
-    gui.updateData([frame(1000, 1.0)], "DummyConnection")
+    gui.updateData([frame(1000, 1.0)])
     gui.stopExperiment()
 
     # switch to the second experiment, then restore the measurement of the first one
@@ -731,7 +902,7 @@ def test_push_button_reset_value(gui):
 def test_plot_manager_shows_measurement(gui, qtbot):
     pm = gui.plotManager
     startExperiment(gui)
-    gui.updateData([frame(1000, 1.0), frame(2000, 2.0)], "DummyConnection")
+    gui.updateData([frame(1000, 1.0), frame(2000, 2.0)])
     tree = pm.dataPointNameTree
     assert [tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())] == ['x']
 
@@ -767,9 +938,9 @@ def test_array_data_points(gui, monkeypatch, names):
     monkeypatch.setattr(gui.exp, 'getDataPoints', lambda: ['x', 'state'])
     monkeypatch.setattr(gui.exp, 'getDataPointElements', lambda: {'state': names} if names else {})
     monkeypatch.setattr(gui.exp, 'handleFrame',
-                        lambda f, connection: {'Time': f[0], 'DataPoints': {'state': np.array(f[1:])}})
+                        lambda f: {'Time': f[0], 'DataPoints': {'state': np.array(f[1:])}})
     startExperiment(gui)
-    gui.updateData([(1000, 1.0, 10.0), (2000, 2.0, 20.0)], "DummyConnection")
+    gui.updateData([(1000, 1.0, 10.0), (2000, 2.0, 20.0)])
     tree = pm.dataPointNameTree
 
     def children(item):
@@ -782,7 +953,7 @@ def test_array_data_points(gui, monkeypatch, names):
     # a longer array adds elements, expansion and selection are kept
     tree.topLevelItem(1).setExpanded(True)
     tree.topLevelItem(1).child(1).setSelected(True)
-    gui.updateData([(3000, 3.0, 30.0, 300.0)], "DummyConnection")
+    gui.updateData([(3000, 3.0, 30.0, 300.0)])
     state = tree.topLevelItem(1)
     assert children(state) == [e1, e2, e3]
     assert state.isExpanded() and [item.text(0) for item in tree.selectedItems()] == [e2]
@@ -818,7 +989,7 @@ def test_plot_manager_export_ends(gui, qtbot, tmp_path, monkeypatch):
     from pywisp.widgets.fileselector import FileSelector
     pm = gui.plotManager
     startExperiment(gui)
-    gui.updateData([frame(1000, 1.0)], "DummyConnection")
+    gui.updateData([frame(1000, 1.0)])
     gui.stopExperiment()
     monkeypatch.setattr(FileSelector, 'getSaveFileName', lambda self: str(tmp_path / "x.csv"))
     pm.dataPointNameTree.topLevelItem(0).setSelected(True)
@@ -832,13 +1003,12 @@ def test_plot_manager_export_ends(gui, qtbot, tmp_path, monkeypatch):
 
 def test_connection_manager_reports_lost_connections(gui, qtbot):
     manager = gui.connectionManager
-    manager.connections = {"DummyConnection": {"cls": DummyConnection}}
     with mock.patch.object(DummyConnection, "_connect", return_value=True):
         connectRig(gui, qtbot)
     assert manager.state == manager.CONNECTED and gui.actDisconnect.isEnabled()
 
     startExperiment(gui)
-    inst = manager.connections["DummyConnection"]["inst"]
+    inst = manager.connection
     with qtbot.waitSignal(manager.connectionLost, timeout=2000):
         # e.g. the rig has closed the connection
         inst.close()
@@ -846,4 +1016,4 @@ def test_connection_manager_reports_lost_connections(gui, qtbot):
     assert not gui.actStopExperiment.isEnabled() and gui.actConnect.isEnabled()
     assert gui.connectionLedState == 'red'
     assert gui.connectionLed.toolTip() == "Not connected"
-    assert "inst" not in manager.connections["DummyConnection"]
+    assert manager.connection is None

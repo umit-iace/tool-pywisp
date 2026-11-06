@@ -2,7 +2,6 @@
 from collections import OrderedDict
 
 import struct
-from connection import ConnTestTCP
 
 from pywisp.experimentModules import ExperimentModule
 
@@ -22,8 +21,6 @@ class Test(ExperimentModule):
                                   ("Value4", 10)])
 
     ids = [10, 12]
-
-    connection = ConnTestTCP.__name__
 
     def __init__(self):
         ExperimentModule.__init__(self)

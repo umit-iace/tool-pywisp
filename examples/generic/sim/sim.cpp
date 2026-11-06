@@ -2,6 +2,7 @@
  *
  * Copyright (c) 2024 IACE
  */
+#include <comm/fixedframe.h>
 #include <core/experiment.h>
 #include <sys/comm.h>
 #include <sys/sim.h>
@@ -11,6 +12,9 @@
 
 TTY tty{"/dev/tty"};
 UDP udp{"127.0.0.1", 45670};
+// pywisp's TcpConnection sends 1 byte id + 80 bytes payload per frame, no MIN
+TCP tcp{"127.0.0.1", 45671};
+FixedFrame<> tcpFrames{.in = tcp, .out = tcp};
 Pendulum::Input u;
 
 void Pendulum::updateState(uint32_t time, uint32_t dt_ms) {
@@ -35,11 +39,32 @@ void Pendulum::setInput(double val) {
     u = val;
 }
 
-Support::Support() : min{.in = udp, .out = udp }{}
+/** frames to pywisp go to the link that received the last frame */
+struct Reply : Sink<Frame> {
+    Sink<Frame> *to;
+    Reply(Sink<Frame> &to) : to{&to} {}
+    bool full() override { return to->full(); }
+    using Sink::push;
+    void push(Frame &&f) override { to->push(std::move(f)); }
+} reply{support.min.out};
+
+/** both links feed the same registry */
+void poll(uint32_t, uint32_t) {
+    while (!support.min.in.empty()) {
+        reply.to = &support.min.out;
+        support.min.reg.handle(support.min.in.pop());
+    }
+    while (!tcpFrames.in.empty()) {
+        reply.to = &tcpFrames.out;
+        support.min.reg.handle(tcpFrames.in.pop());
+    }
+}
+
+Support::Support() : min{.in = udp, .out = udp }, out{reply} {}
 
 void Support::init() {
     // stop the experiment if pywisp sends no heartbeat (HeartbeatTime in default.sreg) for 1 s
-    e.setHeartbeatTimeout(1000, min.out);
+    e.setHeartbeatTimeout(1000, out);
     e.onEvent(e.STOP).call([](uint32_t) {
         u = Pendulum::Input{};
     });
@@ -56,7 +81,7 @@ Experiment e{&support.min.reg};
 int main(int argc, char *argv[]) {
     k.initLog(tty);
     k.setTimeStep(getSimTimeStep(argc, argv));
-    k.every(1, support.min, &Min::poll);
+    k.every(1, poll);
     support.init();
 
     Model m;

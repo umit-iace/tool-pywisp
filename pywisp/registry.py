@@ -37,7 +37,8 @@ def getRegisteredExperimentModules():
 
 def registerConnection(connCls):
     """
-    hook to register a connection in the pywisp framework
+    hook to register a connection in the pywisp framework, several connections can be registered,
+    the user selects the active one in the gui, the first one is the default
     :param connCls: class to be registered
     """
     _registry.register(Connection, connCls)

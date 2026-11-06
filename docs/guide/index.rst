@@ -41,11 +41,26 @@ Its ``_connect`` method is called in the reader thread of the connection, so it 
 timeout, but must not access the gui. Scripts without a gui can use the blocking
 :meth:`pywisp.connection.Connection.open` instead of :meth:`pywisp.connection.Connection.openAsync`.
 The actual settings such as ports and baud rate can also be changed in the GUI later on.
-A simple UDP based setup could look like this:
+The generic example offers its rig over UDP and TCP:
 
 .. literalinclude:: ../../examples/generic/visu/connection.py
    :language: python
-   :lines: 5-12
+   :lines: 5-22
+
+Register every connection the rig offers in ``main.py``, the first one is selected by default:
+
+.. code-block:: python
+
+    pw.registerConnection(Udp)
+    pw.registerConnection(Tcp)
+
+The user selects the active connection in the ``Connections`` menu or in the drop-down of the toolbar while
+disconnected, the choice is remembered. Only the active connection is opened, all experiment modules use it.
+The entry of a serial connection in the menu opens a list of the available serial devices (e.g. ``/dev/ttyUSB0``),
+choosing one sets the port of the connection and selects it. ``Settings`` below the connections opens a dialog
+with the settings of the registered connections: choose a connection in its drop-down to edit its ip address and
+port (socket) or its port and baud rate (serial). OK stores the values in the ``settings`` of the connection
+classes, the active connection stays the same. The menu entries are disabled while connected.
 
 ExperimentModule
 ----------------
@@ -55,12 +70,15 @@ testbench handling itself. To implement your functionality, derive from it and t
 
 First, declare the following member variables:
 
-- :attr:`connection`:``str`` -- The name of the connection class (derived from :class:`pywisp.connection.Connection`) that shall be used to
-  communicate with the test rig.
 - :attr:`publicSettings`:``dict`` -- Settings for the module that will be exposed in the GUI and can be changed by the user (e.g.
   controller gains).
 - :attr:`dataPoints`:``list[str]`` -- Labels of the measurements that come from the test rig to be used for plots.
 - :attr:`dataPointElements`:``dict[str, list[str]]`` -- Optional names of the elements of array data points, see below.
+
+A module does not name its connection, it sends and receives via the active one. Its name (the name of the
+connection class) is available as ``self.connection`` and updated when the user selects another connection,
+e.g. to pack frames differently per connection. The former class attribute ``connection`` is not needed any more,
+it is ignored and logged as deprecated.
 
 Then, implement the following methods that are invoked when data is sent *from* PyWisp *to* the test rig:
 
@@ -75,7 +93,7 @@ could look like
 
 .. literalinclude:: ../../examples/generic/visu/testbench.py
    :language: python
-   :lines: 24-35
+   :lines: 21-32
 
 Finally, the measurement data from the rig must be processed, to do so implement :meth:`handleFrame`
 to handle frames from test rig such that it can be shown in the GUI. It returns ``None`` for frames that are not

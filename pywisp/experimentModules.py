@@ -34,8 +34,11 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
 
     An instance of the module is created when an experiment using it is applied and
     is kept until another experiment is applied, so it can store state in attributes.
-    :attr:`publicSettings`, :attr:`dataPoints` and :attr:`connection` are read from the
-    class and have to be class attributes.
+    :attr:`publicSettings` and :attr:`dataPoints` are read from the class and have to be
+    class attributes.
+
+    All modules send and receive via the connection selected in the gui, see
+    :meth:`pywisp.registry.registerConnection`.
 
     Attributes:
         settings (OrderedDict): Current values of the :attr:`publicSettings`. They are set
@@ -43,11 +46,23 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
             passed to :meth:`getStartParams`, :meth:`getParams` and :meth:`getStopParams`
             right before these are called. So :meth:`handleFrame` sees the values that have
             been sent to the test rig last.
+        connection (str): Name of the active connection class, e.g. to pack the frames differently
+            per connection. It is set when the module is created and updated when another connection
+            is selected, `None` outside of the gui.
     """
+    # module classes warned about their own `connection` attribute
+    _connectionWarned = set()
+
     def __init__(self):
         QObject.__init__(self, None)
         self._logger = logging.getLogger(self.__class__.__name__)
+        cls = type(self)
+        if hasattr(cls, 'connection') and cls not in ExperimentModule._connectionWarned:
+            ExperimentModule._connectionWarned.add(cls)
+            self._logger.warning(f"{cls.__name__}.connection is deprecated and ignored, the module uses the "
+                                 f"connection selected in the gui, remove the attribute")
         self.settings = OrderedDict(self.publicSettings)
+        self.connection = None
 
     @property
     @abstractmethod
@@ -78,14 +93,6 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
     Names given as a string instead of a list, or a data point named by more than one module,
     make applying the experiment fail.
     """
-
-    @property
-    @abstractmethod
-    def connection(self) -> str:
-        """
-        Name of the connection class to be used.
-        """
-        pass
 
     def handleFrame(self, frame: Frame) -> dict:
         """

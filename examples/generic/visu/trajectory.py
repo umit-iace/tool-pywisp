@@ -6,8 +6,6 @@ from pywisp.utils import packArrayToFrame, flatten
 
 import numpy as np
 
-from connection import Connection
-
 
 class Trajectory(ExperimentModule):
     dataPoints = [
@@ -20,8 +18,6 @@ class Trajectory(ExperimentModule):
         ("times", [0]),
         ("values", [0])
     ])
-
-    connection = Connection.__name__
 
     def __init__(self):
         ExperimentModule.__init__(self)
@@ -42,7 +38,8 @@ class Trajectory(ExperimentModule):
         dataPoints = {}
         fid = frame.id
         if fid == 25:
-            data = struct.unpack('<L2d', frame.payload)
+            # unpack_from: over Tcp the payload is padded to 80 bytes
+            data = struct.unpack_from('<L2d', frame.payload)
             dataPoints['Time'] = data[0]
             dataPoints['DataPoints'] = {'T': np.array(data[1:3])}
         else:

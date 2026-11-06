@@ -2,7 +2,6 @@
 from collections import OrderedDict
 
 import struct
-from connection import ConnTestTCP
 from pywisp.experimentModules import ExperimentModule
 from pywisp.utils import packArrayToFrame
 import numpy as np
@@ -18,8 +17,6 @@ class RampTrajectory(ExperimentModule):
                                   ("EndTime", 15)])
 
     ids = [11, 13]
-
-    connection = ConnTestTCP.__name__
 
     def __init__(self):
         ExperimentModule.__init__(self)
@@ -63,8 +60,6 @@ class SeriesTrajectory(ExperimentModule):
                                   ("EndTime", 15)])
 
     ids = [15, 14]
-
-    connection = ConnTestTCP.__name__
 
     oldData = None
     _logger = logging.getLogger(__name__)

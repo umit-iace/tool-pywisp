@@ -5,11 +5,12 @@ import testbench
 import trajectory
 import visualization
 from PyQt6.QtWidgets import QApplication
-from connection import Connection
+from connection import Tcp, Udp
 
 if __name__ == '__main__':
-    # connection
-    pw.registerConnection(Connection)
+    # connections, the first one is selected by default, the other one in the connections menu
+    pw.registerConnection(Udp)
+    pw.registerConnection(Tcp)
 
     # model
     pw.registerExperimentModule(testbench.DoublePendulum)

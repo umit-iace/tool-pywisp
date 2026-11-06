@@ -1,13 +1,16 @@
+from types import SimpleNamespace
+
 import pytest
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QValidator
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QDialog, QFileDialog
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QFileDialog
 
 from pywisp.config import validateExperiments
+from pywisp.connection import SerialConnection, UdpConnection
 from pywisp.experimentModules import ExperimentModule
 from pywisp.settings import Settings
-from pywisp.widgets.dialogs import DataIntDialog, DataTcpIpDialog, RemoteWidgetEdit, ShortcutCreator
+from pywisp.widgets.dialogs import ConnectionSettingsDialog, DataIntDialog, DataTcpIpDialog, RemoteWidgetEdit, ShortcutCreator
 from pywisp.widgets.fileselector import FileSelector
 from pywisp.widgets.remote import REMOTE_WIDGETS
 
@@ -66,6 +69,65 @@ def test_tcp_dialog(qtbot):
 def test_tcp_dialog_get_data(monkeypatch):
     acceptDialogs(monkeypatch)
     assert DataTcpIpDialog.getData(ip='127.0.0.1', port=1234) == ('127.0.0.1', '1234', True)
+
+
+class Udp(UdpConnection):
+    settings = {'ip': '127.0.0.1', 'port': 45999}
+
+
+class Uart(SerialConnection):
+    settings = {'port': '/dev/ttyUSB0', 'baud': 115200}
+
+
+@pytest.fixture
+def connSettingsDialog(qtbot, monkeypatch):
+    monkeypatch.setattr(Udp, 'settings', dict(Udp.settings))
+    monkeypatch.setattr(Uart, 'settings', dict(Uart.settings))
+    monkeypatch.setattr("serial.tools.list_ports.comports",
+                        lambda: [SimpleNamespace(device=d, description='') for d in ('/dev/ttyUSB0', '/dev/ttyACM0')])
+    dialog = ConnectionSettingsDialog({'Udp': Udp, 'Uart': Uart}, 'Uart')
+    qtbot.addWidget(dialog)
+    return dialog
+
+
+def test_connection_settings_dialog_switches_connections(connSettingsDialog):
+    dialog = connSettingsDialog
+    assert [dialog.connList.itemText(i) for i in range(dialog.connList.count())] == ['Udp', 'Uart']
+    # the given connection is shown first
+    assert dialog.connList.currentText() == 'Uart'
+    port, baud = dialog._fields['Uart']
+    assert dialog.pages.currentWidget().isAncestorOf(port)
+    assert [port.itemText(i) for i in range(port.count())] == ['/dev/ttyUSB0', '/dev/ttyACM0']
+    assert port.currentText() == '/dev/ttyUSB0' and baud.currentText() == '115200'
+
+    dialog.connList.setCurrentText('Udp')
+    ip, udpPort = dialog._fields['Udp']
+    assert dialog.pages.currentWidget().isAncestorOf(ip)
+    assert (ip.text(), udpPort.text()) == ('127.0.0.1', '45999')
+
+
+def test_connection_settings_dialog_applies_values(connSettingsDialog):
+    dialog = connSettingsDialog
+    ip, udpPort = dialog._fields['Udp']
+    port, baud = dialog._fields['Uart']
+    ip.setText('10.0.0.2')
+    udpPort.setText('50007')
+    port.setCurrentText('/dev/ttyACM0')
+    baud.setCurrentText('9600')
+    # nothing changes before apply, cancel discards by not calling it
+    assert Udp.settings == {'ip': '127.0.0.1', 'port': 45999}
+    dialog.apply()
+    assert Udp.settings == {'ip': '10.0.0.2', 'port': 50007}
+    assert Uart.settings == {'port': '/dev/ttyACM0', 'baud': 9600}
+
+
+def test_connection_settings_dialog_needs_valid_sockets(connSettingsDialog):
+    ok = connSettingsDialog.buttons.button(QDialogButtonBox.StandardButton.Ok)
+    ip = connSettingsDialog._fields['Udp'][0]
+    ip.setText('1.2.3')
+    assert not ok.isEnabled()
+    ip.setText('1.2.3.4')
+    assert ok.isEnabled()
 
 
 def test_remote_edit_modules_and_parameters(qtbot):

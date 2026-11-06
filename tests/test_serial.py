@@ -22,7 +22,7 @@ def test_valid_baudrate(qtbot, cleanRegistry):
     qtbot.addWidget(form)
     # the port does not exist, so connecting fails gracefully
     form.connectRig()
-    qtbot.waitUntil(lambda: not form.connectionManager._pendingConnections, timeout=5000)
+    qtbot.waitUntil(lambda: form.connectionManager.state != form.connectionManager.CONNECTING, timeout=5000)
     assert not form.isConnected
     assert form.actConnect.isEnabled()
 

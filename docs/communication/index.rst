@@ -7,12 +7,17 @@ The underlying program flow should however only differ slightly on other rigs.
 Establishing a connection
 -------------------------
 
-``Connect`` in the gui calls :meth:`pywisp.MainGui.connectRig`. Every registered connection is
+A project can register several connections, e.g. USB and WLAN of the same rig. Exactly one of them is
+active: it is selected with the radio buttons of the ``Connections`` menu or the drop-down left of the
+connect button, only while disconnected. The selection is stored and restored on the next start, the first
+registered connection is the default.
+
+``Connect`` in the gui calls :meth:`pywisp.MainGui.connectRig`. The active connection is
 established in its reader thread with :meth:`pywisp.connection.Connection.openAsync`, so a rig that
 does not answer does not block the gui. Meanwhile the status bar shows ``Connecting ...``. The result
-is reported with the ``opened`` signal, once all connections are open the gui is connected. If one of
-them fails, all others are closed again. ``Disconnect`` also aborts connections that are still being
-established.
+is reported with the ``opened`` signal, once the connection is open the gui is connected.
+``Disconnect`` also aborts a connection that is still being established. All experiment modules send
+and receive via the active connection.
 
 .. uml::
     :caption: Connecting to a serial port
@@ -74,6 +79,8 @@ Note that all actions occur on the machine that PyWisp is running on, and no
 actual data is sent or received over any channel in this step. Only a tcp socket
 performs a handshake with the rig. Opening a serial port or connecting a udp socket
 succeeds without the rig, so ``Connected!`` does not prove that the rig is running.
+A tool-libs rig serves one TCP client at a time. A second client is connected by the operating system as
+well, but the rig only reads from it once the first one disconnected, until then it gets no data.
 
 Powering on the rig
 -------------------
@@ -171,6 +178,8 @@ Running an experiment
     end
 
 Note, that again no messages from the rig to the pc are sent within this action and no failure modes are present.
+
+.. _rig_status:
 
 Status of the rig and start confirmation
 ----------------------------------------

@@ -14,7 +14,6 @@ class Counter(pw.ExperimentModule):
     """ keeps state between calls, which needs an instance """
     dataPoints = ['n']
     publicSettings = OrderedDict([('step', 1)])
-    connection = 'Conn'
 
     def __init__(self):
         super().__init__()
@@ -61,7 +60,6 @@ class Echo(pw.ExperimentModule):
     """ reports its settings with every frame """
     dataPoints = ['gain', 'offset']
     publicSettings = OrderedDict([('gain', 1.0), ('offset', 0.0)])
-    connection = 'Conn'
 
     def __init__(self):
         # does not call the base class, which used to be harmless
@@ -79,7 +77,6 @@ class Rogue(pw.ExperimentModule):
     """ sends frames given by the test """
     dataPoints = []
     publicSettings = OrderedDict([('x', 0)])
-    connection = 'Conn'
     startFrames = []
     frames = []
 
@@ -93,21 +90,14 @@ class Rogue(pw.ExperimentModule):
 class Broken(pw.ExperimentModule):
     dataPoints = []
     publicSettings = OrderedDict()
-    connection = 'Conn'
 
     def __init__(self):
         raise RuntimeError("hardware missing")
 
 
-class Incomplete(pw.ExperimentModule):
-    """ lacks the mandatory connection attribute """
-    dataPoints = []
-    publicSettings = OrderedDict()
-
-
 @pytest.fixture
 def interactor(qtbot, cleanRegistry):
-    for mod in (Counter, Legacy, Echo, Rogue, Broken, Incomplete):
+    for mod in (Counter, Legacy, Echo, Rogue, Broken):
         pw.registerExperimentModule(mod)
     view = QTreeView()
     qtbot.addWidget(view)
@@ -131,38 +121,56 @@ def test_state_is_kept_in_the_instance(interactor):
     assert ids(interactor) == [20, 21, 1]
 
     for _ in range(3):
-        result = interactor.handleFrame(Frame(30, b''), 'Conn')
+        result = interactor.handleFrame(Frame(30, b''))
     assert result == {'Time': 3, 'DataPoints': {'n': 3}}
 
     # the instance lives on for further runs of the same experiment
     interactor.stopExperiment()
     interactor.runExperiment()
-    assert interactor.handleFrame(Frame(30, b''), 'Conn')['Time'] == 4
+    assert interactor.handleFrame(Frame(30, b''))['Time'] == 4
     assert interactor._getInstance('Counter').started == 2
 
 
 def test_applying_an_experiment_creates_new_instances(interactor):
     interactor.setExperiment({'Name': 'a', 'Counter': {}})
     first = interactor._getInstance('Counter')
-    interactor.handleFrame(Frame(30, b''), 'Conn')
+    interactor.handleFrame(Frame(30, b''))
 
     interactor.setExperiment({'Name': 'b', 'Counter': {}})
     second = interactor._getInstance('Counter')
     assert second is not first
-    assert interactor.handleFrame(Frame(30, b''), 'Conn')['Time'] == 1
+    assert interactor.handleFrame(Frame(30, b''))['Time'] == 1
 
 
-def test_frames_only_reach_modules_of_the_connection(interactor):
-    interactor.setExperiment({'Name': 'a', 'Counter': {}})
-    assert interactor.handleFrame(Frame(30, b''), 'Other') is None
-    assert interactor._getInstance('Counter').count == 0
+def test_modules_know_the_active_connection(interactor):
+    interactor.setConnection('Udp')
+    interactor.setExperiment({'Name': 'a', 'Counter': {}, 'Echo': {}})
+    counter, echo = interactor._getInstance('Counter'), interactor._getInstance('Echo')
+    assert counter.connection == echo.connection == 'Udp'
+    interactor.setConnection('Tcp')
+    assert counter.connection == echo.connection == 'Tcp'
+    # new instances get the current one
+    interactor.setExperiment({'Name': 'b', 'Counter': {}})
+    assert interactor._getInstance('Counter').connection == 'Tcp'
+
+
+def test_old_connection_attribute_is_deprecated(interactor, caplog, monkeypatch):
+    monkeypatch.setattr(pw.ExperimentModule, '_connectionWarned', set())
+    interactor.setConnection('Udp')
+    with caplog.at_level(logging.WARNING):
+        interactor.setExperiment({'Name': 'a', 'Legacy': {}})
+        interactor.setExperiment({'Name': 'b', 'Legacy': {}})
+    assert caplog.text.count("Legacy.connection is deprecated") == 1
+    # the class attribute is overwritten by the active connection
+    assert interactor._getInstance('Legacy').connection == 'Udp'
+    assert Legacy.connection == 'Conn'
 
 
 def test_legacy_module(interactor):
     assert interactor.setExperiment({'Name': 'a', 'Legacy': {'gain': 5}})
     interactor.runExperiment()
     assert frames(interactor) == [(22, b'\x05'), (1, b'\x01')]
-    assert interactor.handleFrame(Frame(31, b'\x07'), 'Conn') == {'Time': 1, 'DataPoints': {'v': 7}}
+    assert interactor.handleFrame(Frame(31, b'\x07')) == {'Time': 1, 'DataPoints': {'v': 7}}
 
     interactor.sent.clear()
     interactor.stopExperiment()
@@ -175,17 +183,11 @@ def test_failing_constructor(interactor, caplog):
     assert "hardware missing" in caplog.text
 
 
-def test_missing_mandatory_attribute(interactor, caplog):
-    assert not interactor.setExperiment({'Name': 'a', 'Incomplete': {}})
-    assert "connection" in caplog.text
-
-
 def test_defaults_of_the_base_class():
     class Minimal(pw.ExperimentModule):
         dataPoints = []
         publicSettings = OrderedDict()
-        connection = 'Conn'
-
+    
     mod = Minimal()
     assert mod.getStartParams([]) == []
     assert mod.getParams([]) == []
@@ -206,8 +208,7 @@ def test_element_names(interactor, caplog):
         dataPoints = ['state', 'u']
         dataPointElements = {'state': ['pos', 'gain', 'pos', 3, '3', '2', '7'], 'missing': ['a']}
         publicSettings = OrderedDict()
-        connection = 'Conn'
-
+    
     pw.registerExperimentModule(Arrays)
     assert interactor.setExperiment({'Name': 'a', 'Arrays': {}, 'Echo': {}})
     # the names are prefixed with the data point, so 'gain' does not clash with the data point of Echo,
@@ -228,8 +229,7 @@ def test_invalid_element_declarations_fail(interactor, caplog, elements, problem
         dataPoints = ['state', 'shared']
         dataPointElements = {'shared': ['b']}
         publicSettings = OrderedDict()
-        connection = 'Conn'
-
+    
     class Second(First):
         dataPoints = []
         dataPointElements = elements
@@ -244,7 +244,7 @@ def test_settings_follow_the_experiment(interactor):
     interactor.setExperiment({'Name': 'a', 'Echo': {'gain': 2.0}})
     mod = interactor._getInstance('Echo')
     assert mod.settings == {'gain': 2.0, 'offset': 0.0}
-    assert interactor.handleFrame(Frame(41, b''), 'Conn')['DataPoints'] == {'gain': 2.0, 'offset': 0.0}
+    assert interactor.handleFrame(Frame(41, b''))['DataPoints'] == {'gain': 2.0, 'offset': 0.0}
 
 
 def test_settings_are_updated_when_sent(interactor):

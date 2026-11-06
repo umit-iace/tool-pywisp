@@ -89,7 +89,7 @@ class MainGui(QMainWindow):
             self.splashScreen.setEnabled(False)
             self.splashScreen.show()
 
-        # establishes the connections to the rig
+        # establishes the connection to the rig
         self.connectionManager = ConnectionManager(self)
         self.connectionManager.stateChanged.connect(self._onConnectionStateChanged)
         self.connectionManager.connectionLost.connect(self.disconnectRig)
@@ -106,7 +106,7 @@ class MainGui(QMainWindow):
         # problem of the communication with the rig, shown by the yellow traffic light
         self._commError = None
         # looked up on every call, so it can be replaced, e.g. in tests
-        self.connectionManager.framesReceived.connect(lambda frames, name: self.updateData(frames, name))
+        self.connectionManager.framesReceived.connect(lambda frames: self.updateData(frames))
         self.selectedExp = False
 
         self.timer = QTimer()
@@ -216,6 +216,14 @@ class MainGui(QMainWindow):
         self.actStopExperiment.triggered.connect(self.stopExperiment)
 
         self.visComboBox = QComboBox()
+
+        # selection of the active connection, synced with the radio buttons of the connections menu
+        self.connComboBox = QComboBox()
+        self.connComboBox.setToolTip("Connection to the rig")
+        self.connComboBox.addItems(list(self.connectionManager.connections))
+        self.connComboBox.setCurrentText(self.connectionManager.activeConnection or "")
+        self.connComboBox.currentTextChanged.connect(self._onConnComboBoxChanged)
+        self.connectionManager.activeConnectionChanged.connect(self.connComboBox.setCurrentText)
         self.visComboBox.currentIndexChanged.connect(self.visualizerChanged)
 
         # lastmeas dock
@@ -336,6 +344,10 @@ class MainGui(QMainWindow):
         self.toolbarExp.setMovable(False)
         self.toolbarExp.setIconSize(iconSize)
         self.addToolBar(self.toolbarExp)
+        # separators around the groups of the connection and of the visualizers
+        self.toolbarExp.addSeparator()
+        self.toolbarExp.addWidget(self.connComboBox)
+        self.toolbarExp.addSeparator()
         self.toolbarExp.addAction(self.actConnect)
         self.toolbarExp.addAction(self.actDisconnect)
         self.toolbarExp.addSeparator()
@@ -376,6 +388,8 @@ class MainGui(QMainWindow):
         self.remotePanel.saveRequested.connect(lambda: self.saveExperiments())
         self.remoteDock.addWidget(self.remotePanel)
         self.exp.sendData.connect(self.connectionManager.write)
+        self.exp.setConnection(self.connectionManager.activeConnection)
+        self.connectionManager.activeConnectionChanged.connect(self.exp.setConnection)
         self.runExp.connect(self.exp.runExperiment)
         self.stopExp.connect(self.exp.stopExperiment)
         self.exp.expFinished.connect(self.saveLastMeas)
@@ -554,9 +568,8 @@ class MainGui(QMainWindow):
         timeout = max(int(self.config['TimerTime']), 40)
         self.timer.start(timeout)
         self.connectionManager.startHeartbeat(self.config['HeartbeatTime'])
-        for name in self.connectionManager.connections:
-            if self.connectionManager.isResponding(name) is False:
-                self._logger.warning(f"{name}: the rig does not respond")
+        if self.connectionManager.isResponding() is False:
+            self._logger.warning("the rig does not respond")
         self._startConfirmed = False
         self._startRetried = False
         self._setCommError(None)
@@ -850,7 +863,7 @@ class MainGui(QMainWindow):
 
     def closeEvent(self, QCloseEvent):
         """
-        Is called by closing the GUI. Disconnects all connections and sends close event.
+        Is called by closing the GUI. Disconnects and sends close event.
         :param QCloseEvent:
         """
         self._logger.info("Close Event received, shutting down.")
@@ -863,25 +876,30 @@ class MainGui(QMainWindow):
 
     @property
     def isConnected(self):
-        """ `True` if all connections to the rig are established """
+        """ `True` if the connection to the rig is established """
         return self.connectionManager.isConnected
 
     @pyqtSlot()
     def connectRig(self):
         """
-        Establishes all connections in the background, the button states are set
-        once all of them are open.
+        Establishes the active connection in the background, the button states are set
+        once it is open.
         """
-        self.connectionManager.connectAll()
+        self.connectionManager.connect()
 
     @pyqtSlot()
     def disconnectRig(self):
         """
-        Stops a running experiment and disconnects all connections.
+        Stops a running experiment and disconnects.
         """
         if self.actStopExperiment.isEnabled():
             self.stopExperiment()
-        self.connectionManager.disconnectAll()
+        self.connectionManager.disconnect()
+
+    def _onConnComboBoxChanged(self, name):
+        # a refused selection shows the active connection again
+        if not self.connectionManager.setActiveConnection(name):
+            self.connComboBox.setCurrentText(self.connectionManager.activeConnection or "")
 
     def _startRig(self):
         """
@@ -922,13 +940,13 @@ class MainGui(QMainWindow):
         self._setCommError(f"Start not confirmed, experiment stopped: {reason}")
         self.stopExperiment()
 
-    def _onRigStatusChanged(self, name):
-        """ shows the status of the rigs, stops the experiment if a rig ended it by itself """
-        status = self.connectionManager.rigStatus.get(name)
+    def _onRigStatusChanged(self):
+        """ shows the status of the rig, stops the experiment if the rig ended it by itself """
+        status = self.connectionManager.rigStatus
         if (status is not None and self._startConfirmed and not status[0].running
                 and self.actStopExperiment.isEnabled()):
-            self._logger.error(f"{name}: the rig ended the experiment, e.g. by a restart")
-            self._commError = f"{name}: the rig ended the experiment, e.g. by a restart"
+            self._logger.error("the rig ended the experiment, e.g. by a restart")
+            self._commError = "the rig ended the experiment, e.g. by a restart"
             self.stopExperiment()
         self._updateConnectionStatus()
 
@@ -951,17 +969,15 @@ class MainGui(QMainWindow):
         if not self.connectionManager.isConnected:
             return
         parts, problems = [], []
-        for name in self.connectionManager.connections:
-            responding = self.connectionManager.isResponding(name)
-            if responding is None:
-                continue
-            if not responding:
-                parts.append(f"{name}: no response")
-                problems.append(f"{name}: the rig does not respond")
-                continue
-            status = self.connectionManager.rigStatus[name][0]
+        name = self.connectionManager.activeConnection
+        responding = self.connectionManager.isResponding()
+        if responding is False:
+            parts.append(f"{name}: no response")
+            problems.append(f"{name}: the rig does not respond")
+        elif responding:
+            status = self.connectionManager.rigStatus[0]
             text = f"{name}: {'RUN' if status.running else 'IDLE'}"
-            missing = [flag for bit, flag in enumerate(self.connectionManager.statusFlagNames(name))
+            missing = [flag for bit, flag in enumerate(self.connectionManager.statusFlagNames())
                        if not status.flags & (1 << bit)]
             if missing:
                 text += f", missing: {', '.join(missing)}"
@@ -974,6 +990,7 @@ class MainGui(QMainWindow):
 
     def _onConnectionStateChanged(self, state):
         """ sets the button states and the status bar """
+        self.connComboBox.setEnabled(state == ConnectionManager.DISCONNECTED)
         if state == ConnectionManager.CONNECTING:
             self.actConnect.setEnabled(False)
             self.actDisconnect.setEnabled(True)
@@ -995,23 +1012,22 @@ class MainGui(QMainWindow):
             self._setConnectionLed('red', "Not connected")
             self.statusbarLabel.setText("")
 
-    def updateData(self, frames, connection):
+    def updateData(self, frames):
         """
         Stores the data points of the received frames in the buffers of the current measurement.
         :param frames: list of frames received by the connection
-        :param connection: name of the connection
         """
         lastTime = None
         newBuffers = False
         for frame in frames:
-            data = self.exp.handleFrame(frame, connection)
+            data = self.exp.handleFrame(frame)
             if data is None or self._currentDataPointBuffers is None:
                 continue
             try:
                 time = data['Time'] / 1000.0
                 dataPoints = data['DataPoints']
             except (KeyError, TypeError):
-                self._warnOnce(('format', connection),
+                self._warnOnce(('format',),
                                "handleFrame() must return a dict with the keys 'Time' and 'DataPoints'")
                 continue
 

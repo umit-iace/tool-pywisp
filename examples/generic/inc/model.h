@@ -25,7 +25,7 @@ struct Model {
     TrajType trajType;
 
     FrameRegistry &fr {support.min.reg};
-    Min::Out &out {support.min.out};
+    Sink<Frame> &out {support.out};
 
     void reset(uint32_t) {
         doublePendulum.reset();

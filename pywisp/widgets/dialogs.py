@@ -4,13 +4,19 @@ Dialogs for settings and the configuration of remote widgets.
 """
 from PyQt6.QtCore import Qt, QRegularExpression
 from PyQt6.QtGui import QIcon, QIntValidator, QKeySequence, QRegularExpressionValidator
+import serial.tools.list_ports
 from PyQt6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QLayout, \
-    QLineEdit, QPushButton, QVBoxLayout, QWidget
+    QLineEdit, QPushButton, QStackedWidget, QVBoxLayout, QWidget
 
+from ..connection import SerialConnection, SocketConnection
 from ..utils import getResource
 from .remote import REMOTE_WIDGETS
 
-__all__ = ["DataIntDialog", "DataTcpIpDialog", "RemoteWidgetEdit", "ShortcutCreator"]
+__all__ = ["ConnectionSettingsDialog", "DataIntDialog", "DataTcpIpDialog", "RemoteWidgetEdit", "ShortcutCreator"]
+
+
+IP_RANGE = "(?:[0-1]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])"
+IP_REGEX = "^" + "\\.".join([IP_RANGE] * 4) + "$"
 
 
 class DataIntDialog(QDialog):
@@ -91,10 +97,7 @@ class DataTcpIpDialog(QDialog):
         self.ipValue = kwargs.get("ip", '127.0.0.1')
         self.portValue = kwargs.get("port", 0)
 
-        ipRange = "(?:[0-1]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])"  # Part of the regular expression
-        # regular expression
-        ipRegex = QRegularExpression("^" + ipRange + "\\." + ipRange + "\\." + ipRange + "\\." + ipRange + "$")
-        ipValidator = QRegularExpressionValidator(ipRegex, self)
+        ipValidator = QRegularExpressionValidator(QRegularExpression(IP_REGEX), self)
 
         mainLayout = QVBoxLayout(self)
 
@@ -134,6 +137,88 @@ class DataTcpIpDialog(QDialog):
         ipData, portData = dialog._getData()
 
         return ipData, portData, result == QDialog.DialogCode.Accepted
+
+
+class ConnectionSettingsDialog(QDialog):
+    """
+    Edits the settings of the registered connections: the drop-down selects the connection, below it are its
+    settings (ip and port of a socket, port and baud rate of a serial connection).
+    :meth:`apply` writes the edited values of all connections to their `settings`.
+
+    :param connections: registered connection classes by name
+    :param current: name of the connection shown first
+    """
+
+    def __init__(self, connections, current=None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Connection settings")
+        self.setWindowIcon(QIcon(getResource("icon.svg")))
+        self._connections = connections
+        # input widgets by connection name
+        self._fields = {}
+
+        mainLayout = QVBoxLayout(self)
+        #: selects the connection whose settings are shown
+        self.connList = QComboBox(self)
+        self.connList.addItems(list(connections))
+        mainLayout.addWidget(self.connList)
+        self.pages = QStackedWidget(self)
+        mainLayout.addWidget(self.pages)
+        for name, cls in connections.items():
+            page = QWidget()
+            layout = QFormLayout(page)
+            if issubclass(cls, SocketConnection):
+                ip = QLineEdit(str(cls.settings['ip']))
+                ip.setValidator(QRegularExpressionValidator(QRegularExpression(IP_REGEX), ip))
+                port = QLineEdit(str(cls.settings['port']))
+                port.setValidator(QIntValidator(0, 65535, port))
+                for field in (ip, port):
+                    field.textChanged.connect(self._checkInput)
+                layout.addRow("IP:", ip)
+                layout.addRow("Port:", port)
+                self._fields[name] = (ip, port)
+            elif issubclass(cls, SerialConnection):
+                port = QComboBox()
+                # a device that is not plugged in yet can be typed
+                port.setEditable(True)
+                port.addItems([p.device for p in serial.tools.list_ports.comports()])
+                port.setCurrentText(cls.settings['port'])
+                baud = QComboBox()
+                baud.addItems([str(b) for b in SerialConnection.supportedBaudrates])
+                baud.setCurrentText(str(cls.settings['baud']))
+                layout.addRow("Port:", port)
+                layout.addRow("Baud rate:", baud)
+                self._fields[name] = (port, baud)
+            else:
+                layout.addRow(QLabel("No settings"))
+            self.pages.addWidget(page)
+        self.connList.currentIndexChanged.connect(self.pages.setCurrentIndex)
+        if current in connections:
+            self.connList.setCurrentText(current)
+
+        self.buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            Qt.Orientation.Horizontal, self)
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        mainLayout.addWidget(self.buttons)
+
+    def _checkInput(self):
+        """ OK is only possible if the ip addresses and ports of all sockets are valid """
+        valid = all(f.hasAcceptableInput() for name, fields in self._fields.items()
+                    if issubclass(self._connections[name], SocketConnection) for f in fields)
+        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(valid)
+
+    def apply(self):
+        """ writes the edited values to the settings of the connection classes """
+        for name, (first, second) in self._fields.items():
+            settings = self._connections[name].settings
+            if issubclass(self._connections[name], SocketConnection):
+                settings['ip'] = first.text()
+                settings['port'] = int(second.text())
+            else:
+                settings['port'] = first.currentText()
+                settings['baud'] = int(second.currentText())
 
 
 class RemoteWidgetEdit(QDialog):

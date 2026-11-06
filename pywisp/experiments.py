@@ -166,8 +166,10 @@ class ExperimentInteractor(QObject):
         self.modSets = {}
         # instances of the modules of the applied experiment
         self._instances = {}
-        # modules per connection that handle incoming frames
-        self._frameHandlerCache = {}
+        # name of the active connection, passed to the modules as their `connection` attribute
+        self.connection = None
+        # modules that handle incoming frames, None until first needed
+        self._frameHandlerCache = None
         # number of failed handleFrame calls per module
         self._frameErrors = {}
 
@@ -223,8 +225,18 @@ class ExperimentInteractor(QObject):
                 instance = cls()
             except Exception as e:
                 raise ExperimentModuleException(f"Cannot create experiment module '{moduleName}': {e!r}") from e
+            instance.connection = self.connection
             self._instances[moduleName] = instance
         return instance
+
+    def setConnection(self, name):
+        """
+        Sets the name of the active connection, also in all module instances.
+        :param name: name of the connection class
+        """
+        self.connection = name
+        for instance in self._instances.values():
+            instance.connection = name
 
     def itemChanged(self, item):
         """
@@ -298,7 +310,7 @@ class ExperimentInteractor(QObject):
         self.dataPoints = []
         declaredElements = {}
         self._instances = {}
-        self._frameHandlerCache = {}
+        self._frameHandlerCache = None
         self._settings = OrderedDict()
         self._settingItems = {}
         self.targetModel.clear()
@@ -445,11 +457,10 @@ class ExperimentInteractor(QObject):
         """
         return self.dataPoints
 
-    def handleFrame(self, frame, connection):
+    def handleFrame(self, frame):
         """
         Returns the corresponding data points of a frame of the test rig.
         :param frame: data from the test rig
-        :param connection: connection of the frame
         :return: data points or None if nothing found
         """
         if frame.id == CONTROL_FRAME_ID:
@@ -457,7 +468,7 @@ class ExperimentInteractor(QObject):
             self._logger.warning("rig missed heartbeat! disconnecting...")
             self.missedbeat.emit()
             return None
-        for mod, name in self._frameHandlers(connection):
+        for mod, name in self._frameHandlers():
             try:
                 dataPoints = mod.handleFrame(frame)
             except Exception:
@@ -468,17 +479,14 @@ class ExperimentInteractor(QObject):
 
         return None
 
-    def _frameHandlers(self, connection):
+    def _frameHandlers(self):
         """
-        Returns the modules handling frames of the given connection.
+        Returns the modules handling frames.
         The result is cached, since this is called for every received frame.
         """
-        handlers = self._frameHandlerCache.get(connection)
-        if handlers is None:
-            handlers = [(mod, name) for mod, name in self._activeModuleInstances()
-                        if mod.connection == connection]
-            self._frameHandlerCache[connection] = handlers
-        return handlers
+        if self._frameHandlerCache is None:
+            self._frameHandlerCache = list(self._activeModuleInstances())
+        return self._frameHandlerCache
 
     def _reportFrameError(self, name, frame):
         """
@@ -498,7 +506,7 @@ class ExperimentInteractor(QObject):
 
     def _collectParams(self, mod, name, funcName, settings, abort=False):
         """
-        Calls a parameter function of a module and converts the result to connection data.
+        Calls a parameter function of a module and returns the valid frames.
         Errors in user code are logged instead of crashing the gui.
         :param settings: current settings of the module, also stored in its `settings` attribute
         :param abort: re-raise the error as `ExperimentModuleException`
@@ -513,7 +521,11 @@ class ExperimentInteractor(QObject):
             return []
 
         frames = []
-        for frame in self.paramsToConnData(params, mod.connection):
+        if not params:
+            params = []
+        elif not isinstance(params, list):
+            params = [params]
+        for frame in params:
             problem = checkFrame(frame)
             if problem is None:
                 frames.append(frame)
@@ -533,7 +545,7 @@ class ExperimentInteractor(QObject):
         Sends all start parameters of all modules that are registered in the target model to start an experiment and
         adds and frame with id 1 and payload 1 as general start command.
 
-        :return: the frames sent before the start command by connection name, for the rig to confirm, see
+        :return: the frames sent before the start command, for the rig to confirm, see
             :meth:`ConnectionManager.expectStart`, `None` if the experiment could not be started
         """
         data = []
@@ -561,18 +573,14 @@ class ExperimentInteractor(QObject):
 
     @staticmethod
     def _expected(data):
-        """ the sent frames by connection name, control frames excluded """
-        frames = {}
-        for _data in data:
-            if _data['id'] != CONTROL_FRAME_ID:
-                frames.setdefault(_data['connection'], []).append(_data)
-        return frames
+        """ the sent frames, control frames excluded """
+        return [_data for _data in data if _data['id'] != CONTROL_FRAME_ID]
 
     def sendChangedParameterExperiment(self):
         """
         Sends changed parameters of all modules that are registered in the target model to an experiment.
 
-        :return: the sent frames by connection name, for the rig to confirm, see
+        :return: the sent frames, for the rig to confirm, see
             :meth:`ConnectionManager.sync`, `None` if nothing was sent
         """
         data = []
@@ -648,13 +656,6 @@ class ExperimentInteractor(QObject):
         """ yields instance, name and a copy of the settings of every module of the applied experiment """
         for name, settings in self._settings.items():
             yield self._getInstance(name), name, OrderedDict(settings)
-
-    def paramsToConnData(self, params, conn):
-        if not params:
-            return []
-        if not isinstance(params, list):
-            params = [params]
-        return [dict(p, connection=conn) if isinstance(p, dict) else p for p in params]
 
 
 def checkFrame(frame):
