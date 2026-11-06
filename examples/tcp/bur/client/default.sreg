@@ -50,4 +50,4 @@
   Config:
     MovingWindowSize: 5
     MovingWindowEnable: True
-    HeartbeatTime: 0
+    HeartbeatTime: 250  # [ms], the plc stops the experiment after 1 s without heartbeat

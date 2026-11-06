@@ -16,7 +16,9 @@ MAX_MIN_ID = 63
 #: longer frames are dropped there without notice
 MAX_MIN_PAYLOAD = 128
 
-#: frame id reserved for the control of the experiment, modules must not use it
+#: frame ids reserved for the system frames (control, status, 3..5 for future use), modules must not use them
+SYSTEM_FRAME_IDS = range(1, 6)
+#: frame id reserved for the control of the experiment
 CONTROL_FRAME_ID = 1
 
 
@@ -45,7 +47,7 @@ def syncFrame(syncId):
 
 
 #: frame id reserved for the status the rig sends (tool-libs `Experiment::enableStatus`)
-STATUS_FRAME_ID = 63
+STATUS_FRAME_ID = 2
 
 
 @dataclass

@@ -265,14 +265,17 @@ def test_settings_are_updated_when_sent(interactor):
 
 
 @pytest.mark.parametrize("frame, problem", [
-    ({'id': 5, 'msg': b'x'}, None),
+    ({'id': 10, 'msg': b'x'}, None),
     ({'id': 0, 'msg': bytearray(b'x')}, None),
     ({'id': 1, 'msg': b'x'}, "reserved"),
+    ({'id': 2, 'msg': b'x'}, "reserved"),
+    ({'id': 5, 'msg': b'x'}, "reserved"),
+    ({'id': 6, 'msg': b'x'}, None),
     ({'id': 256, 'msg': b'x'}, "[0, 255]"),
     ({'id': '5', 'msg': b'x'}, "integer"),
     ({'id': True, 'msg': b'x'}, "integer"),
-    ({'id': 5, 'msg': 'x'}, "bytes"),
-    ({'id': 5}, "bytes"),
+    ({'id': 10, 'msg': 'x'}, "bytes"),
+    ({'id': 10}, "bytes"),
     ([5, b'x'], "dicts"),
 ])
 def test_check_frame(frame, problem):
@@ -298,7 +301,7 @@ def test_reserved_id_aborts_start(interactor, monkeypatch, caplog):
     # nothing reaches the rig, especially no start command
     assert interactor.sent == []
     assert not interactor.runningExperiment
-    assert "reserved for the experiment control" in caplog.text
+    assert "reserved for the system frames" in caplog.text
 
 
 def test_invalid_frames_are_dropped_while_running(interactor, monkeypatch, caplog):

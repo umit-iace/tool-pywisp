@@ -12,7 +12,7 @@
  */
 class Comm {
 	public:
-	virtual void handleFrame(Frame frame) = 0;
+	virtual void handleFrame(const Frame &frame) = 0;
 };
 
 #endif

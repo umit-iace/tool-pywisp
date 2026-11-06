@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import QItemDelegate, QTreeView
 from .config import RESERVED_KEYS as NON_MODULE_KEYS
 from .experimentModules import ExperimentModuleException
 from .measurement import elementName
-from .min import CONTROL_FRAME_ID, Control, controlFrame
+from .min import CONTROL_FRAME_ID, SYSTEM_FRAME_IDS, Control, controlFrame
 from .registry import *
 import copy as cp
 
@@ -669,8 +669,9 @@ def checkFrame(frame):
     fid = frame.get('id')
     if not isinstance(fid, int) or isinstance(fid, bool) or not 0 <= fid <= 255:
         return "the id must be an integer in [0, 255]"
-    if fid == CONTROL_FRAME_ID:
-        return f"the id {CONTROL_FRAME_ID} is reserved for the experiment control"
+    if fid in SYSTEM_FRAME_IDS:
+        return (f"the id {fid} is reserved for the system frames "
+                f"({SYSTEM_FRAME_IDS.start}..{SYSTEM_FRAME_IDS.stop - 1}), use another id")
     if not isinstance(frame.get('msg'), (bytes, bytearray)):
         return "the payload 'msg' must be bytes"
     return None

@@ -419,7 +419,7 @@ def test_connection_traffic_light(gui, qtbot):
 
         def status(flags):
             payload = struct.pack('<BBBBHIIBHI', 1, 0, flags, 0, 0, 0, 1000, 0, 0, 0)
-            gui.connectionManager._onFrames([pw.Frame(63, payload)])
+            gui.connectionManager._onFrames([pw.Frame(pw.STATUS_FRAME_ID, payload)])
 
         with mock.patch.object(DummyConnection, "statusFlags", ['ODrive', 'Motor'], create=True):
             status(0b11)

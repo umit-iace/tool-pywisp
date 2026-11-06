@@ -50,18 +50,20 @@ Frame IDs
 
         A frame with this ID received from the rig signals a missed heartbeat and stops the experiment.
 
-    * - 63
+    * - 2
       - Rig status (:data:`pywisp.min.STATUS_FRAME_ID`), sent by the rig, see
         :ref:`rig_status`
-    * - 0, 2 - 62
+    * - 3 - 5
+      - Reserved for future system frames
+    * - 0, 6 - 63
       - User defined
     * - 64 - 255
       - Only over TCP to rigs that are not built on tool-libs (e.g. the B&R example), the frame registry of
         tool-libs dispatches ids 0 - 63 only
 
-Frames returned by the experiment modules are checked before they are sent. Frames using the reserved ID 1, IDs
-outside of 0 - 255 or a payload ``msg`` that is not ``bytes`` are rejected: when starting an experiment, the start is
-aborted, later on the frame is dropped. In both cases the problem is logged. Frames exceeding the limits of MIN
+Frames returned by the experiment modules are checked before they are sent. Frames using the reserved system IDs
+1 - 5 (:data:`pywisp.min.SYSTEM_FRAME_IDS`), IDs outside of 0 - 255 or a payload ``msg`` that is not ``bytes`` are
+rejected: when starting an experiment, the start is aborted, later on the frame is dropped. In both cases the problem is logged. Frames exceeding the limits of MIN
 (ID 63, payload 128 bytes, the size of a tool-libs ``Frame``) are dropped by the connection, also logged. Over TCP
 the limit is ``maxPayload`` (80 bytes).
 

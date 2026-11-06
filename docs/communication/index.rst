@@ -185,7 +185,7 @@ Status of the rig and start confirmation
 ----------------------------------------
 
 A rig that calls ``e.enableStatus(out)`` of the tool-libs ``Experiment`` sends a status frame with the reserved
-id 63 every 250 ms and at every start, also while IDLE. Its payload (little endian):
+id 2 every 250 ms and at every start, also while IDLE. Its payload (little endian):
 
 ====== =====================================================
 bytes  content

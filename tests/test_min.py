@@ -3,7 +3,8 @@ import random
 
 import pytest
 
-from pywisp.min import CONTROL_FRAME_ID, HDR, STF, Bytewise, Control, HDRStuf, Packer, Unpacker, controlFrame
+from pywisp.min import (CONTROL_FRAME_ID, HDR, STATUS_FRAME_ID, STF, Bytewise, Control, HDRStuf, Packer, Unpacker,
+                        controlFrame)
 from pywisp.utils import coroutine, pipe
 
 
@@ -66,6 +67,7 @@ def test_packer_drops_invalid_frames(caplog):
 def test_control_frames(command, payload):
     assert controlFrame(command) == {'id': CONTROL_FRAME_ID, 'msg': bytes([payload])}
     assert CONTROL_FRAME_ID == 1
+    assert STATUS_FRAME_ID == 2
 
 
 def test_control_frame_rejects_unknown_command():

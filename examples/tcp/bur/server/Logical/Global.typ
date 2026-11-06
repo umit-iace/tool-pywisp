@@ -9,6 +9,9 @@ TYPE
 		dEndValue : LREAL;
 		lEndTime : UDINT;
 		dOutput : LREAL;
+		adSeries : ARRAY[0..255]OF LREAL; (*series received from pyWisp: all times [ms], then all values*)
+		uiSeriesPoints : UINT; (*number of points of the series, 0 while it is received*)
+		dSeriesOutput : LREAL;
 	END_STRUCT;
 	_benchData : 	STRUCT 
 		lTime : UDINT;
