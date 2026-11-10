@@ -28,8 +28,9 @@ except ImportError:
     from yaml import SafeLoader
 from PyQt6.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QCoreApplication
 from PyQt6.QtGui import QAction, QActionGroup, QBrush, QFontDatabase, QGuiApplication, QIcon, QKeySequence, QPalette, QPixmap
-from PyQt6.QtWidgets import QAbstractItemView, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QSizePolicy, QSplashScreen, QStatusBar, QTextEdit, QToolBar, QToolButton, QVBoxLayout, \
-    QWidget
+from PyQt6.QtWidgets import QAbstractItemView, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QSizePolicy, QSplashScreen, QStatusBar, QTextEdit, QStyle, QStyleOptionToolButton, QStylePainter, QToolBar, QToolButton, \
+    QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QMessageBox
 from pyqtgraph.dockarea import DockArea
 
 from .config import dumpExperiments, validateExperiments
@@ -49,6 +50,33 @@ from .themes import THEMES, applyTheme, isDark, themedIcon
 from .widgets.plotmanager import PlotManager
 
 __all__ = ["MainGui"]
+
+
+class _CenteredToolButton(QToolButton):
+    """ tool button showing one action, with a fixed width it centers icon and text, the styles align them left """
+
+    def setDefaultAction(self, action):
+        # with more than one action the button gets a menu arrow and a popup with them
+        for act in self.actions():
+            self.removeAction(act)
+        super().setDefaultAction(action)
+
+    def paintEvent(self, event):
+        painter = QStylePainter(self)
+        opt = QStyleOptionToolButton()
+        self.initStyleOption(opt)
+        # the bevel over the full width, with an empty label
+        bevel = QStyleOptionToolButton(opt)
+        bevel.text, bevel.icon = "", QIcon()
+        bevel.toolButtonStyle = Qt.ToolButtonStyle.ToolButtonTextOnly
+        painter.drawComplexControl(QStyle.ComplexControl.CC_ToolButton, bevel)
+        # the label in a rect of its natural width in the middle, without a second bevel
+        offset = max(0, (self.width() - self.sizeHint().width()) // 2)
+        opt.rect = self.rect().adjusted(offset, 0, -offset, 0)
+        opt.state &= ~(QStyle.StateFlag.State_MouseOver | QStyle.StateFlag.State_Sunken | QStyle.StateFlag.State_On
+                       | QStyle.StateFlag.State_Raised | QStyle.StateFlag.State_HasFocus)
+        opt.state |= QStyle.StateFlag.State_AutoRaise
+        painter.drawComplexControl(QStyle.ComplexControl.CC_ToolButton, opt)
 
 
 class MainGui(QMainWindow):
@@ -98,11 +126,16 @@ class MainGui(QMainWindow):
         self.connectionManager.startFailed.connect(self._onStartFailed)
         self.connectionManager.syncConfirmed.connect(self._onSyncConfirmed)
         self.connectionManager.syncFailed.connect(self._onSyncFailed)
+        self.connectionManager.rigRestarted.connect(lambda: self.exp.clearRigSettings())
         # start of the running experiment confirmed by the rig, a second start attempted
         self._startConfirmed = False
         self._startRetried = False
         # sync id of all parameters sent again after a failed sync, None if none is pending
         self._recoverySyncId = None
+        # sync id of the parameters sent before the start, None if none is pending
+        self._startSyncId = None
+        # settings sent with the pending syncs {syncId: {module: settings}}, confirmed with the sync
+        self._syncSnapshots = {}
         # problem of the communication with the rig, shown by the yellow traffic light
         self._commError = None
         # looked up on every call, so it can be replaced, e.g. in tests
@@ -348,13 +381,15 @@ class MainGui(QMainWindow):
         def _swap(btn, a, b):
             btn.setDefaultAction(b if b.isEnabled() else a)
 
-        self.connButton = QToolButton()
-        self.expButton = QToolButton()
-        for btn, a, b in ((self.connButton, self.actConnect, self.actDisconnect),
-                          (self.expButton, self.actStartExperiment, self.actStopExperiment)):
+        self.connButton = _CenteredToolButton()
+        self.expButton = _CenteredToolButton()
+        self._toggleButtons = ((self.connButton, self.actConnect, self.actDisconnect),
+                               (self.expButton, self.actStartExperiment, self.actStopExperiment))
+        for btn, a, b in self._toggleButtons:
             # widgets added to a toolbar do not inherit its icon size and style
             btn.setIconSize(iconSize)
             btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            btn.setAutoRaise(True)
             for act in (a, b):
                 act.changed.connect(lambda btn=btn, a=a, b=b: _swap(btn, a, b))
             _swap(btn, a, b)
@@ -535,7 +570,8 @@ class MainGui(QMainWindow):
     @pyqtSlot()
     def startExperiment(self):
         """
-        Starts the experiment, the timer, and the connections. Disables the start button.
+        Sends the parameters of the experiment, once the rig confirmed them with a sync the experiment is started,
+        see :meth:`_beginRun`. Rigs without sync support are started right away. Disables the start button.
         """
         if self._currentExpListItem is None:
             self._logger.error("No experiment selected!")
@@ -551,16 +587,49 @@ class MainGui(QMainWindow):
         expName = self._currentExperimentName
         self._logger.info(f"Experiment: {expName}")
 
-        if self.visualizer is not None:
-            self.visualizer.setExpName(expName)
-            self.visualizer.startAnimation()
-
+        # stop stays possible while the rig confirms the parameters
         self.actStartExperiment.setDisabled(True)
         self.actStopExperiment.setDisabled(False)
+        self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.GlobalColor.darkYellow))
+        self.experimentList.repaint()
+
+        if self.connectionManager.isResponding() is False:
+            self._logger.warning("the rig does not respond")
+        self._startConfirmed = False
+        self._startRetried = False
+        self._setCommError(None)
+        self._prepareStart()
+
+    def _prepareStart(self):
+        """ sends the parameters, the rig confirms them with a sync before the start command is sent """
+        expected = self.exp.prepareExperiment()
+        if expected is None:
+            # the experiment has already been stopped
+            return
+        syncId = self.connectionManager.sync(expected)
+        if syncId is None:
+            self._logger.warning("The rig does not confirm parameters (no sync support), "
+                                 "starting without confirmation")
+            # not confirmed, only taken over for the parameter log
+            self.exp.confirmSettings(self.exp.lastSent)
+            self._beginRun(expected)
+            return
+        self._startSyncId = syncId
+        self._syncSnapshots[syncId] = self.exp.lastSent
+
+    def _beginRun(self, expected):
+        """
+        Creates the measurement and sends the start command.
+        :param expected: the frames the rig has to report with the start, see
+            :meth:`ConnectionManager.expectStart`, none after a confirmed sync
+        """
+        dataPointNames = self.exp.getDataPoints()
+        if self.visualizer is not None:
+            self.visualizer.setExpName(self._currentExperimentName)
+            self.visualizer.startAnimation()
+
         self.actSendParameter.setDisabled(False)
         self.actSendChangedParameter.setDisabled(False)
-        self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.GlobalColor.darkGreen))
-        self.experimentList.repaint()
 
         measurement = Measurement(len(self.measurements) + 1, self.exp.getExperiment(), dataPointNames)
         self.measurements.append(measurement)
@@ -578,16 +647,21 @@ class MainGui(QMainWindow):
         timeout = max(int(self.config['TimerTime']), 40)
         self.timer.start(timeout)
         self.connectionManager.startHeartbeat(self.config['HeartbeatTime'])
-        if self.connectionManager.isResponding() is False:
-            self._logger.warning("the rig does not respond")
-        self._startConfirmed = False
-        self._startRetried = False
-        self._setCommError(None)
-        self._startRig()
 
-        if self.actStopExperiment.isEnabled():
-            self.guiStartTime = time.time()
-            self.guiTimer.start(1000)
+        self.exp.runExperiment()
+        item = self.experimentList.item(self._currentExperimentIndex)
+        # the experiment turns green once the rigs that send status frames confirmed the start
+        if self.connectionManager.expectStart(expected):
+            item.setBackground(QBrush(Qt.GlobalColor.darkYellow))
+        else:
+            item.setBackground(QBrush(Qt.GlobalColor.darkGreen))
+        self.experimentList.repaint()
+
+        rig = self.exp.rigSettings or {}
+        measurement.logParameters(0.0, [(module, key, value) for module in measurement.experiment if module in rig
+                                        for key, value in rig[module].items()])
+        self.guiStartTime = time.time()
+        self.guiTimer.start(1000)
 
     @pyqtSlot()
     def stopExperiment(self):
@@ -610,6 +684,8 @@ class MainGui(QMainWindow):
         self.connectionManager.cancelSyncChecks()
         self._startConfirmed = False
         self._recoverySyncId = None
+        self._startSyncId = None
+        self._syncSnapshots.clear()
         self.exp.stopExperiment()
 
         # show the complete data, then detach the buffers of the finished run, so
@@ -654,18 +730,55 @@ class MainGui(QMainWindow):
             self._syncParameters(self.exp.sendChangedParameterExperiment())
 
     def _syncParameters(self, expected):
-        """ lets the rigs confirm the parameters sent during the run """
-        if expected is not None:
-            self.connectionManager.sync(expected)
+        """
+        Lets the rig confirm the parameters sent during the run.
+        :return: the sync id, `None` if nothing was sent or the rig does not support syncs
+        """
+        if expected is None:
+            return None
+        syncId = self.connectionManager.sync(expected)
+        if syncId is None:
+            # rigs without sync support do not confirm, the sent values are logged
+            self._logParameters(self.exp.confirmSettings(self.exp.lastSent))
+        else:
+            self._syncSnapshots[syncId] = self.exp.lastSent
+        return syncId
+
+    def _logParameters(self, changes):
+        """ logs changed rig values in the running measurement at the time of the last data """
+        measurement = self._runningMeasurement
+        if measurement is not None and changes:
+            measurement.logParameters(measurement.lastTime, changes)
 
     def _onSyncConfirmed(self, syncId):
+        snapshot = self._syncSnapshots.pop(syncId, None)
+        changes = self.exp.confirmSettings(snapshot) if snapshot is not None else []
+        if syncId == self._startSyncId:
+            self._startSyncId = None
+            self._logger.info("Parameters confirmed by the rig, starting the experiment")
+            # the sync reset the frame counter of the rig, it reports no frames with the start
+            self._beginRun([])
+            return
+        self._logParameters(changes)
         if syncId == self._recoverySyncId:
             self._recoverySyncId = None
             self._setCommError(None)
             self._logger.info("Parameters confirmed by the rig after sending them again")
 
     def _onSyncFailed(self, syncId, reason):
-        """ sends all parameters once more, stops the experiment if they are not confirmed either """
+        """
+        Does not start the experiment if the parameters sent before the start are not confirmed.
+        During the run all parameters are sent once more, the experiment is stopped if they are not confirmed either.
+        """
+        self._syncSnapshots.pop(syncId, None)
+        if syncId == self._startSyncId:
+            self._startSyncId = None
+            msg = f"Parameters not confirmed by the rig, the experiment is not started: {reason}"
+            self._logger.error(msg)
+            self.stopExperiment()
+            self._setCommError(msg)
+            QMessageBox.warning(self, "Start failed", msg)
+            return
         if not self.actStopExperiment.isEnabled():
             return
         if self._recoverySyncId is not None:
@@ -678,9 +791,7 @@ class MainGui(QMainWindow):
         self._logger.warning(f"Parameters not confirmed, sending all of them again: {reason}")
         self._setCommError(f"Parameters not confirmed, sending all of them again: {reason}")
         self.connectionManager.cancelSyncChecks()
-        expected = self.exp.sendParameterExperiment()
-        if expected is not None:
-            self._recoverySyncId = self.connectionManager.sync(expected)
+        self._recoverySyncId = self._syncParameters(self.exp.sendParameterExperiment())
 
     def loadExpFromFile(self, fileName):
         """
@@ -911,21 +1022,6 @@ class MainGui(QMainWindow):
         if not self.connectionManager.setActiveConnection(name):
             self.connComboBox.setCurrentText(self.connectionManager.activeConnection or "")
 
-    def _startRig(self):
-        """
-        Sends the parameters and the start command, the experiment turns green once the rigs
-        that send status frames confirmed it, all others are not checked.
-        """
-        expected = self.exp.runExperiment()
-        if expected is None:
-            return
-        item = self.experimentList.item(self._currentExperimentIndex)
-        if self.connectionManager.expectStart(expected):
-            item.setBackground(QBrush(Qt.GlobalColor.darkYellow))
-        else:
-            item.setBackground(QBrush(Qt.GlobalColor.darkGreen))
-        self.experimentList.repaint()
-
     def _onStartConfirmed(self):
         if not self.actStopExperiment.isEnabled():
             return
@@ -943,16 +1039,32 @@ class MainGui(QMainWindow):
             self._startRetried = True
             self._logger.warning(f"Start not confirmed, trying again: {reason}")
             self._setCommError(f"Start not confirmed, trying again: {reason}")
+            failed = self._runningMeasurement
             self.exp.stopExperiment()
-            self._startRig()
+            # the retry records a new measurement, one per start of the user
+            self._dropMeasurement(failed)
+            self._prepareStart()
             return
         self._logger.error(f"Start not confirmed, experiment stopped: {reason}")
         self._setCommError(f"Start not confirmed, experiment stopped: {reason}")
         self.stopExperiment()
 
+    def _dropMeasurement(self, measurement):
+        """ removes a measurement from the list of measurements """
+        if measurement is None:
+            return
+        item = self._measurementItem(measurement)
+        if item is not None:
+            self.lastMeasList.takeItem(self.lastMeasList.row(item))
+        self.measurements.remove(measurement)
+        if self._runningMeasurement is measurement:
+            self._runningMeasurement = None
+
     def _onRigStatusChanged(self):
         """ shows the status of the rig, stops the experiment if the rig ended it by itself """
         status = self.connectionManager.rigStatus
+        # only rigs that support syncs confirm parameters
+        self.exp.trackRig(status is not None and status[0].syncId is not None)
         if (status is not None and self._startConfirmed and not status[0].running
                 and self.actStopExperiment.isEnabled()):
             self._logger.error("the rig ended the experiment, e.g. by a restart")
@@ -1019,6 +1131,9 @@ class MainGui(QMainWindow):
             self.actDisconnect.setEnabled(False)
             self.actStartExperiment.setEnabled(False)
             self.actStopExperiment.setEnabled(False)
+            # the rig values are unknown until the next confirmation
+            self.exp.trackRig(False)
+            self.exp.clearRigSettings()
             self._setConnectionLed('red', "Not connected")
             self.statusbarLabel.setText("")
 
@@ -1058,6 +1173,8 @@ class MainGui(QMainWindow):
             self.updateDataPoints(self.exp.getDataPoints())
         if lastTime is not None:
             self.expTimeLabel.setText(timeString(lastTime))
+            if self._runningMeasurement is not None:
+                self._runningMeasurement.lastTime = lastTime
 
     def _warnOnce(self, key, msg):
         """ log a warning only once per experiment run, the data path is called at the frame rate """
@@ -1269,6 +1386,15 @@ class MainGui(QMainWindow):
         self.actToggleTheme.setToolTip("Switch to light mode" if isDark(name) else "Switch to dark mode")
         for act, (icon, colors) in self._themedIcons.items():
             act.setIcon(themedIcon(getResource(icon), colors and colors[isDark(name)]))
+        # fixed width of the longer label so the toolbar does not shift on a swap, the style sets the margins
+        for btn, a, b in self._toggleButtons:
+            current = btn.defaultAction()
+            widths = []
+            for act in (a, b):
+                btn.setDefaultAction(act)
+                widths.append(btn.sizeHint().width())
+            btn.setDefaultAction(current)
+            btn.setFixedWidth(max(widths))
         if self.visualizer is not None:
             self.visualizer.updateTheme()
 

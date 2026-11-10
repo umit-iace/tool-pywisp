@@ -49,7 +49,7 @@ pywisp = ["resources/*.yaml", "resources/icons/*"]
 [dependency-groups]
 dev = [
     "sphinx",
-    "sphinxcontrib-plantuml>=0.31",
+    "sphinxcontrib-mermaid>=2.1.1",
     "pytest",
     "pytest-qt",
     "pytest-cov",

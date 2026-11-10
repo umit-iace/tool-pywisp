@@ -57,6 +57,19 @@ class Measurement:
         self.dataPointBuffers = {name: DataPointBuffer() for name in dataPointNames}
         self.startTime = time.time()
         self.stopTime = None
+        #: values of the settings confirmed by the rig: {'Module.setting': [(time, value), ...]}
+        self.parameters = {}
+        #: [s] time of the last received data, changed parameters are logged at this time
+        self.lastTime = 0.0
+
+    def logParameters(self, t, changes):
+        """
+        Logs changed settings.
+        :param t: [s] time of the change
+        :param changes: list of (module, setting, value)
+        """
+        for module, key, value in changes:
+            self.parameters.setdefault(f"{module}.{key}", []).append((t, copy.deepcopy(value)))
 
     @property
     def name(self):

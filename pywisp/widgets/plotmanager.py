@@ -311,7 +311,9 @@ class PlotManager(QWidget):
 
         # snapshots share the memory, but are not affected by data that is still being added
         expData = {lbl: buf.snapshot() for lbl, buf in dataPoints.items()}
-        self.exporter = Exporter(dataPoints=expData)
+        # copied, confirmed parameters may still be logged during the export
+        parameters = {key: list(values) for key, values in measurement.parameters.items()}
+        self.exporter = Exporter(dataPoints=expData, parameters=parameters)
         self.exporter.done.connect(self._onExportDone)
         self.exporter.runExport()
 

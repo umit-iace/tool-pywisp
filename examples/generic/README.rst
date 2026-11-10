@@ -54,6 +54,15 @@ Simulation
   over TCP, one TCP client at a time) and answers over the one that received the last frame.
   TCP needs a tool-libs version with the ``TCP`` transport.
 
+* Start, parameters and export
+
+  ``Start`` sends the parameters followed by a sync, the simulation confirms them and only then the start command is
+  sent. If they are not confirmed, the experiment is not started and a message box says why. The column ``Rig`` of
+  the parameter view shows the values the simulation confirmed: red after editing a value, green again once it is
+  sent with ``F8`` (*Send changed parameter*) and confirmed. The confirmed values are logged with the measurement, the
+  CSV export writes them as columns ``Module.setting`` (e.g. ``DoublePendulum.Config``) after ``time``.
+  ``tests/test_example_generic.py`` checks this over UDP and TCP.
+
 
 STM
 ---

@@ -21,14 +21,13 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.viewcode',
     'sphinx.ext.imgmath',
-    'sphinxcontrib.plantuml',
+    'sphinxcontrib.mermaid',
 ]
 
 numfig = True
 
-# define the command to build plantuml diagrams
-# plantuml = 'java -jar /path/to/plantuml.jar'
-plantuml = 'plantuml'
+# mermaid diagrams are rendered in the browser, pin the version of mermaid.js loaded from the cdn
+mermaid_version = '12.2.0'
 
 # Add napoleon to the extension (to write/precompile google style docstrings)
 

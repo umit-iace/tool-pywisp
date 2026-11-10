@@ -56,6 +56,8 @@ class ConnectionManager(QObject):
     syncConfirmed = pyqtSignal(int)
     #: the rig did not confirm the parameters of the given sync id or received others, with the reason
     syncFailed = pyqtSignal(int, str)
+    #: the uptime of the rig went backwards, it lost its parameters
+    rigRestarted = pyqtSignal()
 
     #: [s] a rig that sent status frames before and then none for this long does not respond
     statusTimeout = 1.0
@@ -235,9 +237,10 @@ class ConnectionManager(QObject):
 
     def _onStatus(self, status):
         last = self.rigStatus
+        self.rigStatus = (status, time.monotonic())
         if last is not None and status.uptime < last[0].uptime:
             self._logger.warning("the rig has been restarted")
-        self.rigStatus = (status, time.monotonic())
+            self.rigRestarted.emit()
         # the uptime changes with every frame, only report what is shown
         if (last is None or self._staleReported
                 or (last[0].running, last[0].flags) != (status.running, status.flags)):

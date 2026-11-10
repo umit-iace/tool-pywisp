@@ -73,3 +73,13 @@ def test_invalid_data_point_values():
     with pytest.raises(ValueError):
         addDataPointValue(buffers, 'state', 0.0, [1.0, 'a'])
     assert list(buffers) == ['state'] and len(buffers['state']) == 0
+
+
+def test_log_parameters():
+    meas = Measurement(1, {'Name': 'A'}, [])
+    assert meas.parameters == {} and meas.lastTime == 0.0
+    values = [1, 2]
+    meas.logParameters(0.0, [('Dummy', 'gain', 2.0), ('Dummy', 'list', values)])
+    values.append(3)
+    meas.logParameters(1.5, [('Dummy', 'gain', 3.0)])
+    assert meas.parameters == {'Dummy.gain': [(0.0, 2.0), (1.5, 3.0)], 'Dummy.list': [(0.0, [1, 2])]}

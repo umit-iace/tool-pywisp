@@ -10,9 +10,32 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
+from .buffer import ElementBuffer
+from .measurement import elementName
 from .widgets.fileselector import FileSelector
 
 __all__ = ["Exporter", "plotDataPoints"]
+
+
+def expandDataPoints(dataPoints):
+    """
+    Replaces the array data points in `dataPoints` by their elements, named by
+    :func:`pywisp.measurement.elementName`. An array data point whose element buffers are already
+    given (e.g. the buffers of a measurement, with custom element names) is left out.
+
+    :param dataPoints: dict of data point names and buffers
+    :return: dict of names and buffers of numbers
+    """
+    given = {id(buf.parent) for buf in dataPoints.values() if isinstance(buf, ElementBuffer)}
+    result = {}
+    for name, buf in dataPoints.items():
+        columns = getattr(buf, 'columns', None)
+        if columns is None:
+            result.setdefault(name, buf)
+        elif id(buf) not in given:
+            for idx in range(columns):
+                result.setdefault(elementName(name, idx), buf.column(idx))
+    return result
 
 
 def plotDataPoints(dataPoints):
@@ -27,7 +50,7 @@ def plotDataPoints(dataPoints):
     FigureCanvasAgg(fig)
     axes = fig.add_subplot(1, 1, 1)
 
-    for name, buf in dataPoints.items():
+    for name, buf in expandDataPoints(dataPoints).items():
         axes.plot(buf.time, buf.values, label=name)
 
     axes.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=4,
@@ -41,6 +64,12 @@ def plotDataPoints(dataPoints):
 class Exporter(QObject):
     """
     Class exports data points from GUI to different formats (csv, png) as pandas dataframe.
+
+    :param dataPoints: dict of data point names and buffers
+    :param parameters: optional logged settings ``{'Module.setting': [(time, value), ...]}``, see
+        :attr:`pywisp.measurement.Measurement.parameters`, exported as forward-filled csv columns before
+        the data points, the png ignores them
+    :param fileName: target file, asked for if not given
     """
     done = pyqtSignal(bool)
     # running exports keep themselves alive, destroying a running QThread aborts the process
@@ -53,7 +82,7 @@ class Exporter(QObject):
             ["CSV Data (*.csv)", "PNG Image (*.png)"]
         ).getSaveFileName()
 
-        self.worker = self.ExportThread(dataPoints, fileName)
+        self.worker = self.ExportThread(dataPoints, fileName, kwargs.get("parameters"))
         self.logger = logging.getLogger("Exporter")
         def handleLog(done, lvl, msg):
             self.logger.log(lvl, msg)
@@ -78,10 +107,11 @@ class Exporter(QObject):
 
     class ExportThread(QThread):
         info = pyqtSignal(bool,int,str)
-        def __init__(self, data, file):
+        def __init__(self, data, file, parameters=None):
             super().__init__()
             self.dataPoints = data
             self.fileName = file
+            self.parameters = parameters or {}
             self.df = None
 
         def run(self):
@@ -116,11 +146,19 @@ class Exporter(QObject):
         def _buildFrame(self):
             # build pandas data frame
             d = {key: pd.Series(val.values, index=val.time)
-                 for key, val in self.dataPoints.items()}
+                 for key, val in expandDataPoints(self.dataPoints).items()}
             try:
-                self.df = pd.DataFrame.from_dict(d, orient='index').transpose()
+                df = pd.DataFrame.from_dict(d, orient='index').transpose()
+                df.sort_index(inplace=True)
+                params = {}
+                for key, values in self.parameters.items():
+                    times, vals = zip(*values)
+                    series = pd.Series(vals, index=times, dtype=object)
+                    # of changes at the same time the last one is valid
+                    series = series[~series.index.duplicated(keep='last')].sort_index()
+                    params[key] = series.reindex(df.index, method='ffill')
+                self.df = pd.concat([pd.DataFrame(params, index=df.index), df], axis=1)
                 self.df.index.name = 'time'
-                self.df.sort_index(inplace=True)
             except Exception:
                 self.df = None
 

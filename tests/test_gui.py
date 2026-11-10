@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import QApplication, QFileDialog
 import pywisp as pw
 from pywisp.measurement import elementName
 from pywisp.widgets.remote import MovableMultiButton, MovablePushButton, MovableSlider, MovableSwitch, MovableWidget
+from test_status import statusFrame
 
 SREG = """
 - Name: First
@@ -303,6 +304,17 @@ def test_toolbar_buttons_show_the_enabled_action(gui):
     assert gui.expButton.defaultAction() is gui.actStopExperiment
     gui.actStopExperiment.setEnabled(False)
     assert gui.expButton.defaultAction() is gui.actStartExperiment
+
+
+def test_toolbar_buttons_keep_their_width(gui):
+    """ the toolbar must not shift when a button swaps its action """
+    for btn, a, b in gui._toggleButtons:
+        width = btn.width()
+        a.setEnabled(True)
+        b.setEnabled(not b.isEnabled())
+        assert btn.width() == width == btn.minimumWidth() == btn.maximumWidth()
+        # a second action would give the button a menu arrow
+        assert btn.actions() == [btn.defaultAction()]
 
 
 def test_serial_device_menu(gui, monkeypatch):
@@ -1032,3 +1044,136 @@ def test_connection_manager_reports_lost_connections(gui, qtbot):
     assert gui.connectionLedState == 'red'
     assert gui.connectionLed.toolTip() == "Not connected"
     assert manager.connection is None
+
+
+START = pw.controlFrame(pw.Control.START)
+
+
+def rigStatus(gui, **kwargs):
+    """ a status frame of the rig, see tests/test_status.py """
+    gui.connectionManager._onFrames([statusFrame(**kwargs)])
+
+
+def rigCell(gui):
+    """ text and background color of the rig value of the setting gain """
+    model = gui.exp.targetModel
+    index = model.index(0, 2, model.index(0, 0))
+    brush = model.data(index, Qt.ItemDataRole.BackgroundRole)
+    return model.data(index), brush.color() if brush is not None else None
+
+
+@pytest.fixture
+def sent(gui):
+    """ the frames sent by the experiment """
+    frames = []
+    gui.exp.sendData.connect(frames.append)
+    return frames
+
+
+def startConfirmed(gui, sent):
+    """ start with a rig supporting syncs, which confirms the parameters and the start """
+    rigStatus(gui, sync=(0, 0, 0))
+    startExperiment(gui)
+    rigStatus(gui, sync=(gui._startSyncId, *pw.frameCrc(sent)))
+    rigStatus(gui, running=True, seq=1, sync=(gui.connectionManager._syncId, 0, 0))
+    assert gui._startConfirmed
+
+
+def test_start_waits_for_the_sync(gui, sent):
+    green = pw.ExperimentInteractor.RIG_COLORS[True]
+    red = pw.ExperimentInteractor.RIG_COLORS[False]
+    rigStatus(gui, sync=(0, 0, 0))
+    assert rigCell(gui) == ("", red)
+    startExperiment(gui)
+    assert sent == [{'id': 10, 'msg': struct.pack('<d', 2.0)}]
+    assert gui._startSyncId is not None and gui.measurements == []
+    assert gui.actStopExperiment.isEnabled()
+
+    rigStatus(gui, sync=(gui._startSyncId, *pw.frameCrc(sent)))
+    assert sent[-1] == START
+    assert gui.exp.runningExperiment and gui._runningMeasurement is gui.measurements[-1]
+    assert gui.measurements[-1].parameters == {'Dummy.gain': [(0.0, 2.0)]}
+    assert gui.exp.rigSettings == {'Dummy': {'gain': 2.0}}
+    assert rigCell(gui) == ("2.0", green)
+    # the sync reset the counter of the rig, it reports no frames with the start
+    rigStatus(gui, running=True, seq=1, sync=(gui.connectionManager._syncId, 0, 0))
+    assert gui._startConfirmed
+    gui.stopExperiment()
+
+
+@pytest.mark.parametrize("confirm", [True, False])
+def test_start_without_confirmed_parameters(gui, sent, qtbot, confirm):
+    rigStatus(gui, sync=(0, 0, 0))
+    gui.connectionManager.startTimeout = 100
+    with mock.patch("pywisp.gui.QMessageBox.warning") as warning:
+        startExperiment(gui)
+        if confirm:
+            # other parameters arrived
+            rigStatus(gui, sync=(gui._startSyncId, 1, 0x123))
+        else:
+            qtbot.waitUntil(lambda: warning.called, timeout=2000)
+    warning.assert_called_once()
+    assert "not confirmed" in warning.call_args.args[2]
+    assert START not in sent
+    assert gui.measurements == [] and not gui.exp.runningExperiment
+    assert not gui.actStopExperiment.isEnabled()
+    assert "not confirmed" in gui._commError
+
+
+def test_rig_without_sync_starts_with_a_warning(gui, sent, caplog):
+    rigStatus(gui)
+    startExperiment(gui)
+    assert sent[-1] == START
+    assert "no sync support" in caplog.text
+    # the sent values are logged, but not shown as confirmed
+    assert gui.measurements[-1].parameters == {'Dummy.gain': [(0.0, 2.0)]}
+    assert rigCell(gui) == ("", None)
+    gui.stopExperiment()
+
+
+def test_changed_parameters_are_logged_once_confirmed(gui, sent):
+    green = pw.ExperimentInteractor.RIG_COLORS[True]
+    red = pw.ExperimentInteractor.RIG_COLORS[False]
+    startConfirmed(gui, sent)
+    gui.updateData([frame(1500, 1.0)])
+    gui.exp.setParameter('Dummy', 'gain', 3.0)
+    assert rigCell(gui) == ("2.0", red)
+    count = len(sent)
+    gui.sendChangedParameter()
+    syncId = gui.connectionManager._syncId
+    # not confirmed yet
+    assert gui.measurements[-1].parameters == {'Dummy.gain': [(0.0, 2.0)]}
+    rigStatus(gui, running=True, seq=1, sync=(syncId, *pw.frameCrc(sent[count:])))
+    assert gui.measurements[-1].parameters == {'Dummy.gain': [(0.0, 2.0), (1.5, 3.0)]}
+    assert rigCell(gui) == ("3.0", green)
+    gui.stopExperiment()
+
+
+def test_rig_values_are_cleared(gui, sent, qtbot):
+    with mock.patch.object(DummyConnection, "_connect", return_value=True):
+        connectRig(gui, qtbot)
+    startConfirmed(gui, sent)
+    gui.stopExperiment()
+    # a restart of the rig loses the parameters
+    rigStatus(gui, uptime=10, sync=(0, 0, 0))
+    assert gui.exp.rigSettings is None
+    gui.exp.confirmSettings({'Dummy': {'gain': 2.0}})
+    gui.disconnectRig()
+    assert gui.exp.rigSettings is None
+    assert rigCell(gui) == ("", None)
+
+
+def test_start_retry_keeps_one_measurement(gui, sent):
+    rigStatus(gui, sync=(0, 0, 0))
+    startExperiment(gui)
+    rigStatus(gui, sync=(gui._startSyncId, *pw.frameCrc(sent)))
+    assert len(gui.measurements) == 1
+    # the rig reports other frames with the start, the start is tried again with a new sync
+    rigStatus(gui, running=True, seq=1, count=3, crc=0x123, sync=(gui.connectionManager._syncId, 0, 0))
+    assert gui._startRetried and gui._startSyncId is not None
+    count = len(sent)
+    rigStatus(gui, seq=1, sync=(gui._startSyncId, *pw.frameCrc(sent[count - 1:])))
+    assert sent[-1] == START
+    assert len(gui.measurements) == 1 and gui.lastMeasList.count() == 1
+    assert gui._runningMeasurement is gui.measurements[0] and gui.measurements[0].running
+    gui.stopExperiment()

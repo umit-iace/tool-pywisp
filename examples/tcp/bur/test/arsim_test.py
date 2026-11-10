@@ -1,6 +1,6 @@
 """
 Builds the B&R server (``../server/br_server.apj``), starts it in ARsim (or transfers it to a PLC) and runs a TCP
-integration test against it: status frame, start/sync/stop, data frames, heartbeat, reconnect.
+integration test against it: status frame, start/sync/stop, sync before start, data frames, heartbeat, reconnect.
 Talks raw TCP (81-byte chunks: 1 id + 80 payload) with pywisp.min for the control/status frames, no GUI.
 
 Build and ARsim need Windows with Automation Studio 4.4 (BR.AS.Build.exe) and PVI (PVITransfer.exe),
@@ -262,8 +262,12 @@ class Rig:
         self.send(controlFrame(Control.START))
         s = self.status(lambda s: s.running and s.startSeq == (before.startSeq + 1) & 0xff,
                         what="running status with incremented start counter")
-        padded = [{'id': f['id'], 'msg': bytes(f['msg']) + bytes(PAYLOAD - len(f['msg']))} for f in paramFrames]
-        return s, frameCrc(padded)
+        return s, frameCrc(padded(paramFrames))
+
+
+def padded(frames):
+    """ the frames as the server receives them, see pywisp.TcpConnection.rigFrame """
+    return [{'id': f['id'], 'msg': bytes(f['msg']) + bytes(PAYLOAD - len(f['msg']))} for f in frames]
 
 
 def testIdleStatus(args):
@@ -284,12 +288,38 @@ def testStartSyncStop(args):
         rig.send(params[0])
         rig.send(syncFrame(42))
         s = rig.status(lambda s: s.syncId == 42, timeout=1.0, what="status for sync 42")
-        count, crc = frameCrc([{'id': 20, 'msg': bytes(params[0]['msg']) + bytes(PAYLOAD - 8)}])
+        count, crc = frameCrc(padded(params[:1]))
         assert (s.syncCount, s.syncCrc) == (count, crc), \
             f"sync confirmation {s.syncCount}/{s.syncCrc:#x}, expected {count}/{crc:#x}"
         assert s.running, "sync stopped the experiment"
 
         rig.send(controlFrame(Control.STOP))
+        rig.status(lambda s: not s.running, what="idle status after stop")
+
+
+def testSyncBeforeStart(args):
+    """ as pywisp starts: parameters and a sync while idle, START once the sync is confirmed """
+    params = [{'id': 20, 'msg': bytes(range(1, 9))}, {'id': 21, 'msg': b'\xff' * PAYLOAD}]
+    with Rig(args) as rig:
+        rig.heartbeat(True)
+        before = rig.status(lambda s: not s.running, what="idle status before the sync")
+        syncId = (before.syncId + 1) & 0xff
+        for f in params:
+            rig.send(f)
+        rig.send(syncFrame(syncId))
+        s = rig.status(lambda s: s.syncId == syncId, timeout=1.0, what=f"status for sync {syncId}")
+        count, crc = frameCrc(padded(params))
+        assert (s.syncCount, s.syncCrc) == (count, crc), \
+            f"sync confirmation {s.syncCount}/{s.syncCrc:#x}, expected {count}/{crc:#x}"
+        assert not s.running, "sync started the experiment"
+
+        # the sync reset the frame counter, the start reports no frames
+        s, _ = rig.start()
+        try:
+            assert (s.startCount, s.startCrc) == (0, 0), \
+                f"start confirmation {s.startCount}/{s.startCrc:#x} after the sync, expected 0/0"
+        finally:
+            rig.send(controlFrame(Control.STOP))
         rig.status(lambda s: not s.running, what="idle status after stop")
 
 
@@ -348,7 +378,8 @@ def testReconnectAfterAbort(args):
                 raise
 
 
-TESTS = [testIdleStatus, testStartSyncStop, testDataFrames, testMissedHeartbeat, testReconnectAfterAbort]
+TESTS = [testIdleStatus, testStartSyncStop, testSyncBeforeStart, testDataFrames, testMissedHeartbeat,
+         testReconnectAfterAbort]
 
 
 def runTests(args):

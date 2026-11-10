@@ -24,7 +24,15 @@ Communication
 
 pyWisp's ``TcpConnection`` sends and receives every frame as 1 byte id + 80 bytes payload, shorter payloads are
 padded with zeros. All data is little endian. The ids 1 to 5 are reserved for the system frames, the modules
-use the ids from 10 on:
+use the ids from 10 on.
+
+``Start`` sends the parameters and a sync while the server is idle, the server confirms count and CRC32 of the
+received frames with a status frame, only then pyWisp sends the start (the server reports count 0 and CRC 0 with it).
+Without the confirmation the experiment is not started and a message box says why. The column ``Rig`` of the
+parameter view shows the confirmed values, red for edited ones until they are sent (``F8``) and confirmed. The
+confirmed values are logged with the measurement and exported as CSV columns ``Module.setting`` after ``time``.
+
+The frames:
 
 .. list-table::
     :widths: 10 30 30 15 15

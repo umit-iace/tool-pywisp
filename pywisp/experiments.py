@@ -4,7 +4,7 @@ import logging
 from collections import OrderedDict
 
 from PyQt6.QtCore import Qt, QSize, pyqtSignal, QObject
-from PyQt6.QtGui import QStandardItemModel, QStandardItem
+from PyQt6.QtGui import QBrush, QColor, QStandardItemModel, QStandardItem
 from PyQt6.QtWidgets import QItemDelegate, QTreeView
 
 from .config import RESERVED_KEYS as NON_MODULE_KEYS
@@ -147,6 +147,9 @@ class ExperimentInteractor(QObject):
     sendData = pyqtSignal(object)
     missedbeat = pyqtSignal()
 
+    #: background of a rig value that equals the value (`True`) or not (`False`)
+    RIG_COLORS = {True: QColor(92, 184, 92, 110), False: QColor(217, 83, 79, 110)}
+
     def __init__(self, targetView, parent=None):
         QObject.__init__(self, parent)
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -172,6 +175,14 @@ class ExperimentInteractor(QObject):
         self._frameHandlerCache = None
         # number of failed handleFrame calls per module
         self._frameErrors = {}
+        #: settings sent by the last parameter function, {module: settings}, see :meth:`confirmSettings`
+        self.lastSent = {}
+        #: settings confirmed by the rig, {module: settings}, `None` if unknown
+        self.rigSettings = None
+        # the rig confirms parameters, its values are shown with colors
+        self._trackRig = False
+        # rig items of the model by (module, setting)
+        self._rigItems = {}
 
     def _addSettings(self, moduleName, parent):
         """
@@ -184,7 +195,7 @@ class ExperimentInteractor(QObject):
         for key, val in settings.items():
             settingName = PropertyItem(key)
             settingValue = PropertyItem(val)
-            parent.appendRow([settingName, settingValue])
+            parent.appendRow([settingName, settingValue, QStandardItem()])
 
     def _readSettings(self, moduleName):
         """
@@ -313,9 +324,10 @@ class ExperimentInteractor(QObject):
         self._frameHandlerCache = None
         self._settings = OrderedDict()
         self._settingItems = {}
+        self._rigItems = {}
         self.targetModel.clear()
         # insert header
-        self.targetModel.setHorizontalHeaderLabels(['Property', 'Value'])
+        self.targetModel.setHorizontalHeaderLabels(['Property', 'Value', 'Rig'])
         # insert main items
         for key, value in exp.items():
             if key == 'Name':
@@ -372,6 +384,8 @@ class ExperimentInteractor(QObject):
             for child in range(moduleItem.rowCount()):
                 key = moduleItem.child(child, 0).data(role=PropertyItem.RawDataRole)
                 self._settingItems[(moduleName, key)] = moduleItem.child(child, 1)
+                self._rigItems[(moduleName, key)] = moduleItem.child(child, 2)
+        self._updateRigItems()
 
         for mod, _, settings in self.activeModules():
             mod.settings = OrderedDict(settings)
@@ -393,12 +407,61 @@ class ExperimentInteractor(QObject):
         item = self._settingItems[(module, parameter)]
         item.setData(value, role=PropertyItem.RawDataRole)
         self.targetModel.dataChanged.emit(item.index(), item.index())
+        self._updateRigItem(module, parameter)
         return True
 
     def _onSettingEdited(self, module, parameter, value):
         """ takes over a value the user has edited in the view """
         if module in self._settings:
             self._settings[module][parameter] = value
+            self._updateRigItem(module, parameter)
+
+    def trackRig(self, enabled):
+        """
+        Shows the rig values with their background, green if they equal the values, else red.
+        Only for rigs that confirm the parameters, otherwise the rig values are not shown.
+        """
+        self._trackRig = enabled
+        self._updateRigItems()
+
+    def confirmSettings(self, snapshot):
+        """
+        Takes over settings confirmed by the rig.
+        :param snapshot: confirmed settings {module: settings}, e.g. :attr:`lastSent`
+        :return: list of the (module, setting, value) that changed on the rig
+        """
+        if self.rigSettings is None:
+            self.rigSettings = {}
+        changes = []
+        for module, settings in snapshot.items():
+            rig = self.rigSettings.setdefault(module, {})
+            for key, value in settings.items():
+                if key not in rig or rig[key] != value:
+                    changes.append((module, key, value))
+                rig[key] = value
+        self._updateRigItems()
+        return changes
+
+    def clearRigSettings(self):
+        """ forgets the rig values, e.g. after a disconnect or a restart of the rig """
+        self.rigSettings = None
+        self._updateRigItems()
+
+    def _updateRigItems(self):
+        for module, key in self._rigItems:
+            self._updateRigItem(module, key)
+
+    def _updateRigItem(self, module, key):
+        item = self._rigItems.get((module, key))
+        if item is None:
+            return
+        rig = (self.rigSettings or {}).get(module, {})
+        known = self._trackRig and key in rig
+        item.setText(str(rig[key]) if known else "")
+        brush = None
+        if self._trackRig:
+            brush = QBrush(self.RIG_COLORS[known and rig[key] == self._settings[module][key]])
+        item.setData(brush, Qt.ItemDataRole.BackgroundRole)
 
     def _editExperiment(self, exp):
         """
@@ -518,6 +581,7 @@ class ExperimentInteractor(QObject):
             if abort:
                 raise ExperimentModuleException(f"{name}.{funcName}() failed: {e!r}") from e
             self._logger.exception(f"{name}.{funcName}() failed")
+            self._collectFailed = True
             return []
 
         frames = []
@@ -534,42 +598,61 @@ class ExperimentInteractor(QObject):
             if abort:
                 raise ExperimentModuleException(msg)
             self._logger.error(msg + ", dropping it")
+            self._collectFailed = True
         return frames
+
+    def _collectSent(self, mod, name, settings, data):
+        """
+        Adds the parameter frames of a module to `data`. Modules with dropped frames stay out of
+        :attr:`lastSent`, others would be taken for confirmed values.
+        """
+        self._collectFailed = False
+        data.extend(self._collectParams(mod, name, 'getParams', settings))
+        # a module without frames has nothing to confirm, its settings count as on the rig
+        if not self._collectFailed:
+            self.lastSent[name] = cp.deepcopy(settings)
 
     def updateSendParameter(self, module, parameter, value):
         if module in self.modSets:
             self.modSets[module][parameter] = value
 
-    def runExperiment(self):
+    def prepareExperiment(self):
         """
-        Sends all start parameters of all modules that are registered in the target model to start an experiment and
-        adds and frame with id 1 and payload 1 as general start command.
+        Sends the start parameters and parameters of all modules of the applied experiment,
+        :meth:`runExperiment` starts it afterwards. The sent settings are stored in :attr:`lastSent`.
 
-        :return: the frames sent before the start command, for the rig to confirm, see
-            :meth:`ConnectionManager.expectStart`, `None` if the experiment could not be started
+        :return: the sent frames, for the rig to confirm, see :meth:`ConnectionManager.sync`,
+            `None` if the experiment cannot be started
         """
         data = []
-        self.runningExperiment = True
-        self._frameErrors = {}
+        self.lastSent = {}
         try:
             for mod, name, settings in self.activeModules():
 
                 self.modSets[name] = cp.copy(settings)
 
-                data.extend(self._collectParams(mod, name, 'getStartParams', settings, abort=True))
-                data.extend(self._collectParams(mod, name, 'getParams', settings, abort=True))
+                frames = self._collectParams(mod, name, 'getStartParams', settings, abort=True)
+                frames += self._collectParams(mod, name, 'getParams', settings, abort=True)
+                data.extend(frames)
+                # a module without frames has nothing to confirm, its settings count as on the rig
+                self.lastSent[name] = cp.deepcopy(settings)
 
         except ExperimentModuleException as eme:
             self._logger.error(eme)
-            self.runningExperiment = False
+            self.lastSent = {}
             self.expFinished.emit()
             self.expStop.emit()
             return None
 
-        data.append(controlFrame(Control.START))
         for _data in data:
             self.sendData.emit(_data)
         return self._expected(data)
+
+    def runExperiment(self):
+        """ sends the general start command (control frame), after :meth:`prepareExperiment` """
+        self.runningExperiment = True
+        self._frameErrors = {}
+        self.sendData.emit(controlFrame(Control.START))
 
     @staticmethod
     def _expected(data):
@@ -584,12 +667,13 @@ class ExperimentInteractor(QObject):
             :meth:`ConnectionManager.sync`, `None` if nothing was sent
         """
         data = []
+        self.lastSent = {}
         for mod, name, settings in self.activeModules():
 
             if self.modSets.get(name) == settings:
                 continue
             self.modSets[name] = cp.copy(settings)
-            data.extend(self._collectParams(mod, name, 'getParams', settings))
+            self._collectSent(mod, name, settings, data)
 
         for _data in data:
             self.sendData.emit(_data)
@@ -602,9 +686,10 @@ class ExperimentInteractor(QObject):
         :return: as :meth:`sendChangedParameterExperiment`
         """
         data = []
+        self.lastSent = {}
         for mod, name, settings in self.activeModules():
 
-            data.extend(self._collectParams(mod, name, 'getParams', settings))
+            self._collectSent(mod, name, settings, data)
 
         for _data in data:
             self.sendData.emit(_data)

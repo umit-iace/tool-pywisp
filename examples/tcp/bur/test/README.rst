@@ -66,6 +66,9 @@ Tests
 ``testStartSyncStop``
     start after two parameter frames: start counter, frame count and CRC32 match ``pywisp.min.frameCrc``;
     a sync confirms the frames since the last control frame; stop
+``testSyncBeforeStart``
+    as pyWisp starts: two parameter frames and a sync while idle, the status confirms their count and CRC32 and
+    stays idle; the following start reports count 0 and CRC 0
 ``testDataFrames``
     the ``Test`` parameters (frame 12) come back in frame 10, whose time starts at 0 and grows by 100 ms;
     warns if the server does not run in real time (``Cyclic#4``)
