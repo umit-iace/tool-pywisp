@@ -18,6 +18,8 @@ Open ``br_server.apj`` in Automation Studio and build it. Start the simulation (
 project to it. The server listens on TCP port 50007, the ip is set in the ``connection.py`` of the client
 (``127.0.0.1`` for ARsim on the same pc).
 
+``../test/arsim_test.py`` does build, ARsim start and a TCP integration test in one step, see its README.
+
 Structure
 ^^^^^^^^^
 

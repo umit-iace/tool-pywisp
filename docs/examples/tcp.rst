@@ -23,3 +23,9 @@ Client
 
 .. include:: ../../examples/tcp/bur/client/README.rst
    :start-after: sphinx-marker
+
+Test with ARsim
+~~~~~~~~~~~~~~~
+
+.. include:: ../../examples/tcp/bur/test/README.rst
+   :start-after: sphinx-marker

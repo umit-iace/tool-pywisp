@@ -41,6 +41,23 @@ CYCLE_MS = 100  # Cyclic#4, benchData.lTime step
 
 # ---------------------------------------------------------------- build and ARsim
 
+BR_ROOT = Path(r'C:\BrAutomation')
+
+
+def findTool(path, pattern, prefer, option):
+    """ the given path, else the match of pattern below C:\\BrAutomation, the one containing prefer if several """
+    if path:
+        if not Path(path).is_file():
+            raise RuntimeError(f"{path} not found, check {option}")
+        return path
+    found = sorted(BR_ROOT.glob(pattern))
+    if not found:
+        raise RuntimeError(f"no {pattern} below {BR_ROOT}, pass {option} <path to the exe>")
+    tool = next((f for f in found if prefer in str(f)), found[-1])
+    print(f"   {tool.name}: {tool}" + (f" (of {len(found)}, choose with {option})" if len(found) > 1 else ""))
+    return str(tool)
+
+
 def stopArsim(arsimDir):
     """ ARsim runs as ar000loader.exe / AR000.exe, only one instance can use the port; a PVITransfer left over from an
     aborted run can keep files of the ARsim directory open """
@@ -356,9 +373,9 @@ def main():
     parser.add_argument('--install-mode', default='Consistent', choices=['Consistent', 'ForceInitialInstallation'],
                         help="ForceInitialInstallation reinstalls everything if Consistent fails")
     parser.add_argument('--configuration', default='minimal')
-    # paths of an Automation Studio 4.4 installation, adjust to yours
-    parser.add_argument('--as-build', default=r'C:\BrAutomation\AS44\Bin-en\BR.AS.Build.exe')
-    parser.add_argument('--pvi-transfer', default=r'C:\BrAutomation\PVI\V4.4\PVI\Tools\PVITransfer\PVITransfer.exe')
+    # default: searched below C:\BrAutomation, Automation Studio 4.4 (the project version) preferred
+    parser.add_argument('--as-build', help="path of BR.AS.Build.exe")
+    parser.add_argument('--pvi-transfer', help="path of PVITransfer.exe")
     parser.add_argument('--arsim-dir', default=os.path.join(tempfile.gettempdir(), 'arsim-br_server'))
     parser.add_argument('--start-timeout', type=int, default=120, help="[s] for PVITransfer and the server start")
     parser.add_argument('--skip-build', action='store_true', help="reuse the last RUCPackage.zip")
@@ -374,23 +391,31 @@ def main():
         parser.error("build and ARsim need Windows with Automation Studio, use --test-only elsewhere")
 
     useArsim = not onPlc
+    arsimStarted = False
     try:
+        if not args.skip_build:
+            args.as_build = findTool(args.as_build, 'AS*/Bin-*/BR.AS.Build.exe', 'AS44', '--as-build')
+        args.pvi_transfer = findTool(args.pvi_transfer, 'PVI/**/PVITransfer.exe', 'V4.4', '--pvi-transfer')
         if useArsim:
             stopArsim(args.arsim_dir)
         if not args.skip_build:
             build(args, onPlc)
         ruc = findRuc(args)
-        transferToPlc(args, ruc) if onPlc else startArsim(args, ruc)
+        if onPlc:
+            transferToPlc(args, ruc)
+        else:
+            startArsim(args, ruc)
+            arsimStarted = True
         waitForServer(args, checkArsim=useArsim)
         print("== Run tests", flush=True)
         return runTests(args)
-    except RuntimeError as e:
+    except (RuntimeError, OSError) as e:
         print(f"ERROR: {e}")
         return 1
     finally:
         if useArsim and not args.keep_running:
             stopArsim(args.arsim_dir)
-        elif useArsim:
+        elif arsimStarted:
             print(f"== ARsim keeps running ({args.arsim_dir})")
 
 
