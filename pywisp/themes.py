@@ -68,11 +68,11 @@ def isDark(name):
     return THEMES[name][0]
 
 
-def themedIcon(resPath):
-    """ the monochrome icon in the text color of the current theme """
+def themedIcon(resPath, color=None):
+    """ the monochrome icon in the given color, default the text color of the current theme """
     pixmap = QPixmap(resPath)
     painter = QPainter(pixmap)
     painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
-    painter.fillRect(pixmap.rect(), QApplication.palette().color(QPalette.ColorRole.WindowText))
+    painter.fillRect(pixmap.rect(), QColor(color) if color else QApplication.palette().color(QPalette.ColorRole.WindowText))
     painter.end()
     return QIcon(pixmap)

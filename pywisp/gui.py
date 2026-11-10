@@ -28,7 +28,7 @@ except ImportError:
     from yaml import SafeLoader
 from PyQt6.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QCoreApplication
 from PyQt6.QtGui import QAction, QActionGroup, QBrush, QFontDatabase, QGuiApplication, QIcon, QKeySequence, QPalette, QPixmap
-from PyQt6.QtWidgets import QAbstractItemView, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QSizePolicy, QSplashScreen, QStatusBar, QTextEdit, QToolBar, QVBoxLayout, \
+from PyQt6.QtWidgets import QAbstractItemView, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QSizePolicy, QSplashScreen, QStatusBar, QTextEdit, QToolBar, QToolButton, QVBoxLayout, \
     QWidget
 from pyqtgraph.dockarea import DockArea
 
@@ -344,28 +344,38 @@ class MainGui(QMainWindow):
         self.toolbarExp.setMovable(False)
         self.toolbarExp.setIconSize(iconSize)
         self.addToolBar(self.toolbarExp)
-        # separators around the groups of the connection and of the visualizers
-        self.toolbarExp.addSeparator()
+        # one toggle button each for connect/disconnect and start/stop, showing the action that is enabled
+        def _swap(btn, a, b):
+            btn.setDefaultAction(b if b.isEnabled() else a)
+
+        self.connButton = QToolButton()
+        self.expButton = QToolButton()
+        for btn, a, b in ((self.connButton, self.actConnect, self.actDisconnect),
+                          (self.expButton, self.actStartExperiment, self.actStopExperiment)):
+            # widgets added to a toolbar do not inherit its icon size and style
+            btn.setIconSize(iconSize)
+            btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            for act in (a, b):
+                act.changed.connect(lambda btn=btn, a=a, b=b: _swap(btn, a, b))
+            _swap(btn, a, b)
         self.toolbarExp.addWidget(self.connComboBox)
+        self.toolbarExp.addWidget(self.connButton)
         self.toolbarExp.addSeparator()
-        self.toolbarExp.addAction(self.actConnect)
-        self.toolbarExp.addAction(self.actDisconnect)
-        self.toolbarExp.addSeparator()
-        self.toolbarExp.addAction(self.actStartExperiment)
-        self.toolbarExp.addAction(self.actStopExperiment)
+        self.toolbarExp.addWidget(self.expButton)
         self.toolbarExp.addSeparator()
         vSpacer = QWidget()
         vSpacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.toolbarExp.addWidget(vSpacer)
-        self.toolbarExp.addSeparator()
         self.toolbarExp.addWidget(self.visComboBox)
         self.toolbarExp.addSeparator()
         self.toolbarExp.addAction(self.actToggleTheme)
 
-        # the icons are drawn in the text color of the theme
-        self._themedIcons = {self.actStartExperiment: "play.png", self.actStopExperiment: "stop.png",
-                             self.actConnect: "connected.png", self.actDisconnect: "disconnected.png",
-                             self.actToggleTheme: "theme.svg"}
+        # the icons are drawn in the text color of the theme or in the given (light, dark) color
+        green, red = ("#2e7d32", "#66bb6a"), ("#c62828", "#e57373")
+        self._themedIcons = {self.actStartExperiment: ("play.png", green), self.actStopExperiment: ("stop.png", red),
+                             self.actConnect: ("connected.png", green),
+                             self.actDisconnect: ("disconnected.png", red),
+                             self.actToggleTheme: ("theme.svg", None)}
 
         self._currentExpListItem = None
         self._currentLastMeasItem = None
@@ -1257,8 +1267,8 @@ class MainGui(QMainWindow):
         for act in self._themeActions.actions():
             act.setChecked(act.text() == name)
         self.actToggleTheme.setToolTip("Switch to light mode" if isDark(name) else "Switch to dark mode")
-        for act, icon in self._themedIcons.items():
-            act.setIcon(themedIcon(getResource(icon)))
+        for act, (icon, colors) in self._themedIcons.items():
+            act.setIcon(themedIcon(getResource(icon), colors and colors[isDark(name)]))
         if self.visualizer is not None:
             self.visualizer.updateTheme()
 

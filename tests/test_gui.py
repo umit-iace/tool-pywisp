@@ -244,9 +244,8 @@ def test_connection_selection(gui):
     combo = gui.connComboBox
     assert [combo.itemText(i) for i in range(combo.count())] == ["DummyConnection", "DummySerial"]
     assert combo.currentText() == "DummyConnection"
-    # the combobox sits left of the connect action, separated by a line
-    toolbarActions = gui.toolbarExp.actions()
-    assert gui.toolbarExp.widgetForAction(toolbarActions[toolbarActions.index(gui.actConnect) - 2]) is combo
+    # the combobox sits left of the connect button
+    assert gui.toolbarExp.widgetForAction(gui.toolbarExp.actions()[0]) is combo
 
     # radio button selects, combobox follows
     actions[1].trigger()
@@ -281,13 +280,29 @@ def test_connection_menu_structure(gui):
 
 
 def test_connection_group_is_delimited_in_the_toolbar(gui):
-    """ separator | combobox | connect, disconnect | """
+    """ combobox, connect/disconnect | start/stop | """
     actions = gui.toolbarExp.actions()
-    assert actions[0].isSeparator()
-    assert gui.toolbarExp.widgetForAction(actions[1]) is gui.connComboBox
+    assert [gui.toolbarExp.widgetForAction(a) for a in actions[:2]] == [gui.connComboBox, gui.connButton]
     assert actions[2].isSeparator()
-    assert actions[3:5] == [gui.actConnect, gui.actDisconnect]
-    assert actions[5].isSeparator()
+    assert gui.toolbarExp.widgetForAction(actions[3]) is gui.expButton
+    assert actions[4].isSeparator()
+
+
+def test_toolbar_buttons_show_the_enabled_action(gui):
+    gui.actConnect.setEnabled(True)
+    gui.actDisconnect.setEnabled(False)
+    assert gui.connButton.defaultAction() is gui.actConnect
+    gui.actDisconnect.setEnabled(True)
+    assert gui.connButton.defaultAction() is gui.actDisconnect
+    gui.actDisconnect.setEnabled(False)
+    assert gui.connButton.defaultAction() is gui.actConnect
+
+    gui.actStopExperiment.setEnabled(False)
+    assert gui.expButton.defaultAction() is gui.actStartExperiment
+    gui.actStopExperiment.setEnabled(True)
+    assert gui.expButton.defaultAction() is gui.actStopExperiment
+    gui.actStopExperiment.setEnabled(False)
+    assert gui.expButton.defaultAction() is gui.actStartExperiment
 
 
 def test_serial_device_menu(gui, monkeypatch):
