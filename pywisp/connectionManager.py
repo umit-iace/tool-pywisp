@@ -165,8 +165,9 @@ class ConnectionManager(QObject):
             return
         self._logger.info(f"Connection for {name} established!")
         self._setState(self.CONNECTED)
-        # udp rigs only know where to send their status after they received something
-        self.heartbeat()
+        # sync 0 (never used by sync()) resets the frame count of the rig, which may include
+        # connectFrames of the connection, rigs take it as heartbeat, so udp rigs learn where to send their status
+        self.write(syncFrame(0))
 
     def _onFinished(self):
         """ the connection has been closed, by the manager or by itself """

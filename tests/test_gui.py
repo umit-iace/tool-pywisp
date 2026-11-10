@@ -230,6 +230,19 @@ def test_frames_of_the_active_connection_reach_the_gui(gui, qtbot):
     assert gui.connectionManager.connection is None
 
 
+def test_connect_resets_the_frame_count_of_the_rig(gui, qtbot):
+    """ connect frames would be counted by the rig and break the first start check, sync 0 resets the count """
+    session = {'id': 62, 'msg': bytes([1, 1])}
+    with mock.patch.object(DummyConnection, "_connect", return_value=True), \
+            mock.patch.object(DummyConnection, "connectFrames", [session]), \
+            mock.patch.object(DummyConnection, "writeData") as writeData:
+        connectRig(gui, qtbot)
+        try:
+            assert [c.args[0] for c in writeData.call_args_list] == [session, pw.syncFrame(0)]
+        finally:
+            gui.disconnectRig()
+
+
 def connectionMenuActions(gui):
     return [a for a in gui.connMenu.actions() if a.isCheckable()]
 
