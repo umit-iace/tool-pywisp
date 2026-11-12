@@ -1111,6 +1111,27 @@ def test_plot_manager_export_ends(gui, qtbot, tmp_path, monkeypatch):
     assert (tmp_path / "x.csv").exists()
 
 
+def test_missed_heartbeat_stops_but_keeps_the_connection(gui, qtbot, monkeypatch):
+    """ the rig reports the missed heartbeat with a control frame, that frame arrived, so the connection is fine """
+    manager = gui.connectionManager
+    # the socket of the dummy has no peer, sending would close the connection
+    monkeypatch.setattr(DummyConnection, "writeData", lambda self, data: None)
+    with mock.patch.object(DummyConnection, "_connect", return_value=True):
+        connectRig(gui, qtbot)
+    try:
+        # the rig has answered, so only the missed heartbeat turns the light yellow
+        manager.answered = True
+        startExperiment(gui)
+        assert gui.exp.runningExperiment
+        manager.connection.receivedFrames.emit([pw.Frame(pw.CONTROL_FRAME_ID, b"\x00")])
+        assert not gui.exp.runningExperiment
+        assert not gui.actStopExperiment.isEnabled() and gui.actStartExperiment.isEnabled()
+        assert manager.state == manager.CONNECTED
+        assert gui.connectionLedState == 'yellow' and "missed the heartbeat" in gui.connectionLed.toolTip()
+    finally:
+        gui.disconnectRig()
+
+
 def test_connection_manager_reports_lost_connections(gui, qtbot):
     manager = gui.connectionManager
     with mock.patch.object(DummyConnection, "_connect", return_value=True):

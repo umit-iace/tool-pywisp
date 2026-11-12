@@ -528,7 +528,7 @@ class ExperimentInteractor(QObject):
         """
         if frame.id == CONTROL_FRAME_ID:
             self.stopExperiment(broadcast=False)
-            self._logger.warning("rig missed heartbeat! disconnecting...")
+            self._logger.warning("rig missed heartbeat! the experiment has been stopped by the rig")
             self.missedbeat.emit()
             return None
         for mod, name in self._frameHandlers():

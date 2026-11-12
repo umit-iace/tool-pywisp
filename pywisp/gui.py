@@ -438,7 +438,7 @@ class MainGui(QMainWindow):
         self.runExp.connect(self.exp.runExperiment)
         self.stopExp.connect(self.exp.stopExperiment)
         self.exp.expFinished.connect(self.saveLastMeas)
-        self.exp.missedbeat.connect(self.disconnectRig)
+        self.exp.missedbeat.connect(self._onMissedHeartbeat)
         self.exp.expStop.connect(self.stopExperiment)
 
         self.visualizer = None
@@ -1059,6 +1059,12 @@ class MainGui(QMainWindow):
         self.measurements.remove(measurement)
         if self._runningMeasurement is measurement:
             self._runningMeasurement = None
+
+    def _onMissedHeartbeat(self):
+        """ the rig stopped the experiment, its frame arrived, so the connection is kept """
+        self._commError = "the rig missed the heartbeat and stopped the experiment"
+        self.stopExperiment()
+        self._updateConnectionStatus()
 
     def _onRigStatusChanged(self):
         """ shows the status of the rig, stops the experiment if the rig ended it by itself """
