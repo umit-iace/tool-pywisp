@@ -202,6 +202,24 @@ def test_log_colors_of_older_settings_are_ignored(gui):
     assert gui._settings.color('ERROR', 'log').isValid()
 
 
+def test_log_color_with_selection(gui):
+    """ a new message must not recolor the text the user has selected in the log """
+    from PyQt6.QtGui import QTextCursor
+    logging.getLogger("Test").error("error line")
+    errorBlock = gui.logBox.document().lastBlock()
+    cursor = gui.logBox.textCursor()
+    cursor.setPosition(errorBlock.position())
+    cursor.setPosition(errorBlock.position() + 5, QTextCursor.MoveMode.KeepAnchor)
+    gui.logBox.setTextCursor(cursor)
+    assert gui._settings.color('WARNING', 'log') != gui._settings.color('ERROR', 'log')
+    logging.getLogger("Test").warning("warning line")
+
+    it = errorBlock.begin()
+    while not it.atEnd():
+        assert it.fragment().charFormat().foreground().color() == gui._settings.color('ERROR', 'log')
+        it += 1
+
+
 def test_movable_widgets_use_mixin_handlers():
     for cls in (MovablePushButton, MovableSwitch, MovableSlider):
         assert cls.mousePressEvent is MovableWidget.mousePressEvent

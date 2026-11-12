@@ -57,6 +57,8 @@ class PlainTextLogger(logging.Handler):
             # logging an error here would end up in this handler again
             return
         try:
+            # drop a selection of the user first, the color would only be applied to the selection
+            self.cb.moveCursor(QTextCursor.MoveOperation.End)
             if clr.isValid():
                 self.cb.setTextColor(clr)
             else:
