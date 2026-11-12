@@ -756,7 +756,7 @@ def checkFrame(frame):
         return "the id must be an integer in [0, 255]"
     if fid in SYSTEM_FRAME_IDS:
         return (f"the id {fid} is reserved for the system frames "
-                f"({SYSTEM_FRAME_IDS.start}..{SYSTEM_FRAME_IDS.stop - 1}), use another id")
+                f"({min(SYSTEM_FRAME_IDS)}..{max(SYSTEM_FRAME_IDS)}), use another id")
     if not isinstance(frame.get('msg'), (bytes, bytearray)):
         return "the payload 'msg' must be bytes"
     return None

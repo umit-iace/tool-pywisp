@@ -130,7 +130,7 @@ class ExperimentModule(QObject, metaclass=ExperimentModuleMeta):
 
     def getParams(self, *args) -> list[dict]:
         """
-        Data to be sent to the test everytime a setting is changed in the GUI
+        Data to be sent to the test rig every time a setting is changed in the GUI
 
         This function must return a list of data frames to be sent, where each frame is given
         by a dictionary with the following keys:

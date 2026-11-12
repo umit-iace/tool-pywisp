@@ -1,7 +1,7 @@
 
 import logging
 from binascii import crc32
-from enum import IntEnum
+from enum import IntEnum, IntFlag
 from dataclasses import dataclass
 from struct import pack as spack, unpack as sunpack
 
@@ -16,38 +16,59 @@ MAX_MIN_ID = 63
 #: longer frames are dropped there without notice
 MAX_MIN_PAYLOAD = 128
 
-#: frame ids reserved for the system frames (control, status, 3..5 for future use), modules must not use them
-SYSTEM_FRAME_IDS = range(1, 6)
-#: frame id reserved for the control of the experiment
-CONTROL_FRAME_ID = 1
+class SystemFrameId(IntEnum):
+    """ frame ids reserved for the system frames, modules must not use them """
+    #: control of the experiment, see :class:`Control`
+    CONTROL = 1
+    #: status the rig sends (tool-libs `Experiment::enableStatus`), see :class:`RigStatus`
+    STATUS = 2
+    #: reserved for future system frames
+    RESERVED_3 = 3
+    RESERVED_4 = 4
+    RESERVED_5 = 5
 
 
-class Control(IntEnum):
+#: all ids of :class:`SystemFrameId`, for checks like ``fid in SYSTEM_FRAME_IDS`` (plain ints, also before Python 3.12)
+SYSTEM_FRAME_IDS = frozenset(SystemFrameId)
+#: frame id reserved for the control of the experiment, same as :attr:`SystemFrameId.CONTROL`
+CONTROL_FRAME_ID = SystemFrameId.CONTROL
+
+
+class Control(IntFlag):
     """
-    Payload of the control frames (id :data:`CONTROL_FRAME_ID`) sent to the rig.
+    Bits of the first payload byte of the control frames (id :data:`CONTROL_FRAME_ID`) sent to the rig.
+    The rig evaluates only the highest set bit: :attr:`SYNC` before :attr:`HEARTBEAT` before
+    :attr:`START`, e.g. ``START | HEARTBEAT`` (3) is a heartbeat only.
     A control frame received from the rig signals a missed heartbeat.
     """
+    #: bit 0 cleared: stop the experiment
     STOP = 0
+    #: bit 0: start the experiment
     START = 1
+    #: bit 1: keep the running experiment alive
     HEARTBEAT = 2
+    #: bit 2: confirm the received frames with a status frame, followed by a sync id byte, see :func:`syncFrame`
+    SYNC = 4
 
 
 def controlFrame(command):
-    """ returns the frame for the given :class:`Control` command """
-    return {'id': CONTROL_FRAME_ID, 'msg': bytes([Control(command)])}
+    """ returns the frame for the given :class:`Control` command: STOP, START or HEARTBEAT, a sync is a :func:`syncFrame` """
+    if command not in (Control.STOP, Control.START, Control.HEARTBEAT):
+        raise ValueError(f"{command!r} is not a single control command")
+    return {'id': CONTROL_FRAME_ID, 'msg': bytes([command])}
 
 
 def syncFrame(syncId):
     """
     Returns the sync command, sent after parameters changed during a run: the rig confirms the
     frames received since the last control frame with a status frame carrying `syncId`.
-    Bits 0b110: rigs without sync support take it for a heartbeat.
+    The heartbeat bit is set too, so rigs without sync support take it for a heartbeat.
     """
-    return {'id': CONTROL_FRAME_ID, 'msg': bytes([0b110, syncId & 0xff])}
+    return {'id': CONTROL_FRAME_ID, 'msg': bytes([Control.SYNC | Control.HEARTBEAT, syncId & 0xff])}
 
 
-#: frame id reserved for the status the rig sends (tool-libs `Experiment::enableStatus`)
-STATUS_FRAME_ID = 2
+#: frame id reserved for the status the rig sends, same as :attr:`SystemFrameId.STATUS`
+STATUS_FRAME_ID = SystemFrameId.STATUS
 
 
 @dataclass

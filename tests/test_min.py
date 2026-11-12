@@ -4,7 +4,7 @@ import random
 import pytest
 
 from pywisp.min import (CONTROL_FRAME_ID, HDR, STATUS_FRAME_ID, STF, Bytewise, Control, HDRStuf, Packer, Unpacker,
-                        controlFrame)
+                        controlFrame, syncFrame)
 from pywisp.utils import coroutine, pipe
 
 
@@ -70,6 +70,20 @@ def test_control_frames(command, payload):
     assert STATUS_FRAME_ID == 2
 
 
-def test_control_frame_rejects_unknown_command():
+def test_system_frame_ids():
+    from pywisp.min import SYSTEM_FRAME_IDS, SystemFrameId
+    # same ids as tool-libs: 1 control, 2 status (Experiment::STATUS_ID), 3..5 reserved
+    assert sorted(SYSTEM_FRAME_IDS) == [1, 2, 3, 4, 5]
+    assert CONTROL_FRAME_ID is SystemFrameId.CONTROL and STATUS_FRAME_ID is SystemFrameId.STATUS
+    assert 0 not in SYSTEM_FRAME_IDS and 6 not in SYSTEM_FRAME_IDS
+
+
+def test_sync_frame_keeps_the_heartbeat_bit():
+    # rigs without sync support take it for a heartbeat
+    assert syncFrame(258) == {'id': CONTROL_FRAME_ID, 'msg': bytes([0b110, 2])}
+
+
+@pytest.mark.parametrize("command", [7, 3, Control.SYNC, Control.START | Control.HEARTBEAT])
+def test_control_frame_rejects_unknown_command(command):
     with pytest.raises(ValueError):
-        controlFrame(7)
+        controlFrame(command)

@@ -33,36 +33,82 @@ packet loss may occur.
 Frame IDs
 ---------
 
+Some IDs mean different things depending on who sends the frame, so the table lists both directions.
+
 .. list-table::
-    :widths: 50 50
+    :widths: 14 43 43
     :header-rows: 1
 
     * - ID
-      - Meaning
+      - Sent by PyWisp to the rig
+      - Sent by the rig to PyWisp
     * - 1
-      - Experiment Control (:data:`pywisp.min.CONTROL_FRAME_ID`):
-
-        Payload (1 byte) sent to the rig is interpreted as (:class:`pywisp.min.Control`)
-
-        - ``0`` -- STOP experiment
-        - ``1`` -- START experiment
-        - ``2`` -- HEARTBEAT
-
-        A frame with this ID received from the rig signals a missed heartbeat and stops the experiment.
-
+      - Experiment control (:data:`pywisp.min.CONTROL_FRAME_ID`): start, stop, heartbeat and sync, see
+        :ref:`control_frame`
+      - The rig missed the heartbeat and stopped the experiment by itself (payload one byte ``0``). PyWisp stops
+        the experiment in the GUI and keeps the connection, the frame has arrived after all.
     * - 2
-      - Rig status (:data:`pywisp.min.STATUS_FRAME_ID`), sent by the rig, see
-        :ref:`rig_status`
+      - not used
+      - Rig status (:data:`pywisp.min.STATUS_FRAME_ID`), see :ref:`rig_status`
     * - 3 - 5
       - Reserved for future system frames
+      - Reserved for future system frames
     * - 0, 6 - 63
-      - User defined
+      - User defined: parameters of the experiment modules
+        (:meth:`~pywisp.experimentModules.ExperimentModule.getParams` and friends)
+      - User defined: data of the rig, decoded by
+        :meth:`~pywisp.experimentModules.ExperimentModule.handleFrame`
     * - 64 - 255
       - Only over TCP to rigs that are not built on tool-libs (e.g. the B&R example), the frame registry of
         tool-libs dispatches ids 0 - 63 only
+      - Same as for the other direction
+
+.. _control_frame:
+
+Control frame
+-------------
+
+The first payload byte of a control frame sent to the rig is a set of bit flags (:class:`pywisp.min.Control`), not
+a single command:
+
+.. list-table::
+    :widths: 14 14 72
+    :header-rows: 1
+
+    * - Bit
+      - Flag
+      - Meaning
+    * - 0
+      - ``START``
+      - set: start the experiment, cleared (``STOP``, value ``0``): stop it
+    * - 1
+      - ``HEARTBEAT``
+      - keep the running experiment alive, without one within the heartbeat timeout the rig stops it
+    * - 2
+      - ``SYNC``
+      - confirm the frames received since the last control frame with a status frame, the second payload byte
+        is the sync id, see :ref:`rig_status`
+
+The rig acts on the highest set bit only: ``SYNC`` before ``HEARTBEAT`` before ``START``/``STOP``. So ``3``
+(``START | HEARTBEAT``) is a heartbeat and does not start anything. PyWisp sends these payloads:
+
+.. list-table::
+    :widths: 28 72
+    :header-rows: 1
+
+    * - Payload
+      - Sent by
+    * - ``0``
+      - :func:`pywisp.min.controlFrame` with ``Control.STOP``
+    * - ``1``
+      - :func:`pywisp.min.controlFrame` with ``Control.START``
+    * - ``2``
+      - :func:`pywisp.min.controlFrame` with ``Control.HEARTBEAT``
+    * - ``6``, sync id
+      - :func:`pywisp.min.syncFrame`: ``SYNC | HEARTBEAT``, so rigs without sync support take it for a heartbeat
 
 Frames returned by the experiment modules are checked before they are sent. Frames using the reserved system IDs
-1 - 5 (:data:`pywisp.min.SYSTEM_FRAME_IDS`), IDs outside of 0 - 255 or a payload ``msg`` that is not ``bytes`` are
+1 - 5 (:class:`pywisp.min.SystemFrameId`), IDs outside of 0 - 255 or a payload ``msg`` that is not ``bytes`` are
 rejected: when starting an experiment, the start is aborted, later on the frame is dropped. In both cases the problem is logged. Frames exceeding the limits of MIN
 (ID 63, payload 128 bytes, the size of a tool-libs ``Frame``) are dropped by the connection, also logged. Over TCP
 the limit is ``maxPayload`` (80 bytes).

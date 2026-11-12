@@ -216,7 +216,7 @@ its state and the missing status bits, named by the list ``statusFlags`` of the 
 PyWisp computes the same CRC32 over the frames as the rig receives them (:func:`pywisp.min.frameCrc`
 over :meth:`pywisp.connection.Connection.rigFrame`, a TCP rig gets every payload padded to ``maxPayload``).
 
-A sync command (:func:`pywisp.min.syncFrame`, control frame with the bits ``0b110`` and a sync id) lets the rig
+A sync command (:func:`pywisp.min.syncFrame`, control frame with the flags ``SYNC | HEARTBEAT`` and a sync id, see :ref:`control_frame`) lets the rig
 confirm parameters: it answers at once with a status frame that carries the number and CRC32 of the frames received
 since the last control frame, and resets them.
 
