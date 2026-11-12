@@ -19,6 +19,13 @@ class ExperimentException(Exception):
     pass
 
 
+def rigStopReason(reason):
+    """ text for the reason of a stop by the rig (second payload byte of its control frame) """
+    if reason == 0:
+        return "the rig missed the heartbeat and stopped the experiment"
+    return f"the rig stopped the experiment (error code {reason})"
+
+
 class ExperimentModel(QStandardItemModel):
     """
     Model to provide item model that includes an additional name attribute.
@@ -145,7 +152,10 @@ class ExperimentInteractor(QObject):
     expFinished = pyqtSignal()
     expStop = pyqtSignal()
     sendData = pyqtSignal(object)
+    #: the rig missed the heartbeat and stopped the experiment, kept for compatibility, see :attr:`rigStopped`
     missedbeat = pyqtSignal()
+    #: the rig stopped the experiment by itself, with the reason: 0 missed heartbeat, else a rig specific error code
+    rigStopped = pyqtSignal(int)
 
     #: background of a rig value that equals the value (`True`) or not (`False`)
     RIG_COLORS = {True: QColor(92, 184, 92, 110), False: QColor(217, 83, 79, 110)}
@@ -527,9 +537,13 @@ class ExperimentInteractor(QObject):
         :return: data points or None if nothing found
         """
         if frame.id == CONTROL_FRAME_ID:
+            # payload[0] is 0 (stop), the optional payload[1] the reason
+            reason = frame.payload[1] if len(frame.payload) > 1 else 0
             self.stopExperiment(broadcast=False)
-            self._logger.warning("rig missed heartbeat! the experiment has been stopped by the rig")
-            self.missedbeat.emit()
+            self._logger.warning(rigStopReason(reason))
+            if reason == 0:
+                self.missedbeat.emit()
+            self.rigStopped.emit(reason)
             return None
         for mod, name in self._frameHandlers():
             try:

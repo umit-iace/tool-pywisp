@@ -39,6 +39,8 @@ class TcpIpServer: public Comm{
 	static const unsigned long STATUS_PERIOD = 250;
 	/** [ms] the experiment stops without heartbeat for this time, pyWisp's HeartbeatTime must be shorter */
 	static const unsigned long HEARTBEAT_TIMEOUT = 1000;
+	/** [ms] a client that sends nothing for this time is dropped, pyWisp sends a heartbeat every 500 ms while connected */
+	static const unsigned long CLIENT_TIMEOUT = 3000;
 
 	private:
 	const int serverPort;		///< port to be used by the server
@@ -81,8 +83,7 @@ class TcpIpServer: public Comm{
 	bool _started;				///< start received, cleared by started()
 	unsigned long lastHeartbeat;	///< [ms] time of the last heartbeat, sync or start
 	unsigned long lastStatus;	///< [ms] time of the last status frame
-	bool timedOut;				///< heartbeat missed, the connection is dropped after HEARTBEAT_TIMEOUT
-	unsigned long timeoutTime;	///< [ms] time of the missed heartbeat
+	unsigned long lastReceived;	///< [ms] time of the last data of the client, or of its connect
 
 	State read();
 	State write();

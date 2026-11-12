@@ -1,6 +1,7 @@
 """
 Builds the B&R server (``../server/br_server.apj``), starts it in ARsim (or transfers it to a PLC) and runs a TCP
-integration test against it: status frame, start/sync/stop, sync before start, data frames, heartbeat, reconnect.
+integration test against it: status frame, start/sync/stop, sync before start, data frames, heartbeat,
+silent client, reconnect.
 Talks raw TCP (81-byte chunks: 1 id + 80 payload) with pywisp.min for the control/status frames, no GUI.
 
 Build and ARsim need Windows with Automation Studio 4.4 (BR.AS.Build.exe) and PVI (PVITransfer.exe),
@@ -162,7 +163,7 @@ def waitForServer(args, checkArsim):
 # ---------------------------------------------------------------- tests
 
 class Rig:
-    """ one TCP client: receive thread splitting 81-byte chunks, heartbeat thread """
+    """ one TCP client: receive thread splitting 81-byte chunks, heartbeat thread (on from the start as pyWisp) """
 
     def __init__(self, args, connectTimeout=10.0):
         end = time.monotonic() + connectTimeout
@@ -179,13 +180,15 @@ class Rig:
         self.frames = queue.Queue()
         self.closed = threading.Event()
         self._beat = threading.Event()
+        # the server drops a client that sends nothing for CLIENT_TIMEOUT (3 s)
+        self._beat.set()
         self._lock = threading.Lock()
         threading.Thread(target=self._rx, daemon=True).start()
         threading.Thread(target=self._heartbeat, daemon=True).start()
         # the OS accepts the connection at once, the PLC serves it only after it dropped the
-        # previous client (up to heartbeat timeout + 1 s if that one vanished without a FIN)
+        # previous client (up to CLIENT_TIMEOUT 3 s if that one vanished without a FIN)
         t0 = time.monotonic()
-        self.status(timeout=4.0, what="first status after connect")
+        self.status(timeout=5.0, what="first status after connect")
         if (delay := time.monotonic() - t0) > 0.5:
             print(f"    first status {delay:.1f} s after connect")
 
@@ -360,7 +363,19 @@ def testMissedHeartbeat(args):
                      2.5, "missed-heartbeat frame (id 1, payload 0)")
         assert t - t0 > 0.8, f"stopped after {t - t0:.2f} s, before the heartbeat timeout"
         rig.status(lambda s: not s.running, what="idle status after missed heartbeat")
-        assert rig.closed.wait(3.0), "PLC did not drop the client after the missed heartbeat"
+        # pyWisp keeps the connection and goes on with the heartbeat, the server keeps the client
+        rig.heartbeat(True)
+        assert not rig.closed.wait(4.0), "PLC dropped a client that sends heartbeats after the missed heartbeat"
+        rig.status(lambda s: not s.running, what="idle status 4 s after missed heartbeat")
+
+
+def testSilentClientIsDropped(args):
+    """ a client that sends nothing, e.g. vanished without a FIN, is dropped after CLIENT_TIMEOUT (3 s) """
+    with Rig(args) as rig:
+        rig.heartbeat(False)
+        t0 = time.monotonic()
+        assert rig.closed.wait(5.0), "PLC did not drop the silent client"
+        assert time.monotonic() - t0 > 2.5, f"dropped after {time.monotonic() - t0:.2f} s, before the client timeout"
 
 
 def testReconnectAfterAbort(args):
@@ -379,7 +394,7 @@ def testReconnectAfterAbort(args):
 
 
 TESTS = [testIdleStatus, testStartSyncStop, testSyncBeforeStart, testDataFrames, testMissedHeartbeat,
-         testReconnectAfterAbort]
+         testSilentClientIsDropped, testReconnectAfterAbort]
 
 
 def runTests(args):

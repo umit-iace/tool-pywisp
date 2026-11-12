@@ -106,6 +106,9 @@ class Connection(QObject, metaclass=ConnectionMeta):
     # connections closed while connecting keep themselves alive until their thread has ended,
     # destroying a running QThread aborts the process
     _aborting = set()
+    #: [ms] interval of the heartbeat while connected and no experiment runs, 0 sends none, e.g. for a
+    #: rig that does not support heartbeats. During a run the ``HeartbeatTime`` of the experiment applies.
+    heartbeatInterval = 500
     #: frames sent right after the connection has been established, before anything else,
     #: e.g. to tell the rig which role this client takes. A list of dicts with the keys 'id' and
     #: 'msg' (bytes), as returned by the experiment modules. Set it in the subclass:
@@ -136,10 +139,26 @@ class Connection(QObject, metaclass=ConnectionMeta):
         self._logger.error(err)
         self.close()
 
+    def filterFrames(self, frames):
+        """
+        Checks the received frames before they are passed on, e.g. the answer of the rig to
+        :attr:`connectFrames`. May call :meth:`close`, e.g. if the rig refuses the session.
+
+        :param frames: list of the received :class:`~pywisp.min.Frame`
+        :return: the frames to pass on, nothing is passed on for an empty list
+        """
+        return frames
+
     def _onFrames(self, frames):
         """
         pass received frames to the application, runs in the thread of the connection object
         """
+        try:
+            frames = self.filterFrames(frames)
+        except Exception:
+            self._logger.exception("filterFrames failed, the frames are passed on unchanged")
+        if not frames:
+            return
         self.receivedFrames.emit(frames)
         if self.receivers(self.received):
             for frame in frames:

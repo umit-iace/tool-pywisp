@@ -36,8 +36,11 @@ Both tasks run in ``Cyclic#4`` (100 ms), ``ControlLoop`` before ``TcpIpServer``:
 The experiment control works like the ``Experiment`` of tool-libs:
 
 - Without heartbeat for 1 s the experiment stops and the server sends a control frame with payload 0 (missed
-  heartbeat), pyWisp then disconnects. A client that still holds the connection 1 s later is dropped.
-  ``HeartbeatTime`` in ``default.sreg`` must be below 1000 ms.
+  heartbeat), pyWisp stops the experiment and keeps the connection. ``HeartbeatTime`` in ``default.sreg`` must be
+  above 0 and below 1000 ms.
+- The server serves one client at a time and drops a client that sends nothing for 3 s (``CLIENT_TIMEOUT``),
+  idle or running, e.g. one that vanished without closing the connection. pyWisp sends a heartbeat every 500 ms
+  while connected (``heartbeatInterval`` of the connection, must not be 0 for this server).
 - The status frame (``pywisp.min.RigStatus``) is sent every 250 ms (with a 100 ms cycle every 300 ms), at a start
   and at a sync. It carries the number and the CRC32 of the frames received before the start or sync, so pyWisp
   can check that the parameters arrived.

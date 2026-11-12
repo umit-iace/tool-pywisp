@@ -173,16 +173,28 @@ experiment, ``Copy remote source`` in the context menu copies them to the clipbo
 Heartbeat
 ---------
 
-`PyWisp` provides the possibility to automatically stop a rig if the connection
-is interrupted.
-To use this feature, the ``Config`` section of the ``.sreg`` file must include
-the setting
+While connected and no experiment runs, `PyWisp` sends a heartbeat every 500 ms, from opening the connection
+until it is closed. Servers that serve one client at a time, like the B&R example (:doc:`../examples/tcp`), drop a
+client that sends nothing for 3 s. A connection sets the interval with
+:attr:`~pywisp.connection.Connection.heartbeatInterval`, ``0`` sends none, e.g. for a rig that does not support
+heartbeats:
+
+.. code-block:: python
+
+    class Serial(SerialConnection):
+        heartbeatInterval = 0  # the rig does not support heartbeats
+
+A rig can stop the experiment by itself if the heartbeat stops during a run, e.g. because the connection is
+interrupted. The ``Config`` section of the ``.sreg`` file sets the interval of the heartbeat during a run:
 
 .. code-block:: yaml
 
-    HeartbeatTime: 100  # send a heartbeat every 100ms
+    HeartbeatTime: 100  # send a heartbeat every 100ms during a run
 
-It can be disabled by setting the parameter to zero or omitting the entry.
+With zero or without the entry no heartbeat is sent during the run, after it the heartbeat of the connection
+continues. Rigs built on tool-libs without heartbeat timeout ignore heartbeats. The B&R servers stop a run that
+gets no heartbeat for 1 s and drop a silent client after 3 s, so they need both. If the rig misses the heartbeat, it stops the experiment and reports it with a control
+frame (see :ref:`control_frame`): `PyWisp` stops the experiment in the GUI and keeps the connection.
 Note that the embedded code on the rig itself also has to be configured to expect such a packet.
 Refer to the `tool-libs <https://github.com/umit-iace/tool-libs>`_ documentation for details.
 

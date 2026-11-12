@@ -73,6 +73,9 @@ Tests
     the ``Test`` parameters (frame 12) come back in frame 10, whose time starts at 0 and grows by 100 ms;
     warns if the server does not run in real time (``Cyclic#4``)
 ``testMissedHeartbeat``
-    without heartbeats the server stops after 1 s, sends id 1 with payload 0 and drops the client
+    without heartbeats the server stops after 1 s and sends id 1 with payload 0, a client that sends heartbeats
+    again is kept
+``testSilentClientIsDropped``
+    the server drops a client that sends nothing for 3 s
 ``testReconnectAfterAbort``
     after a client vanished during a run, the next client gets an idle status and an aligned stream

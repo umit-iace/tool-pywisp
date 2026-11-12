@@ -39,7 +39,9 @@ class Control(IntFlag):
     Bits of the first payload byte of the control frames (id :data:`CONTROL_FRAME_ID`) sent to the rig.
     The rig evaluates only the highest set bit: :attr:`SYNC` before :attr:`HEARTBEAT` before
     :attr:`START`, e.g. ``START | HEARTBEAT`` (3) is a heartbeat only.
-    A control frame received from the rig signals a missed heartbeat.
+    A control frame received from the rig (first payload byte 0) signals that the rig stopped the experiment by
+    itself, the optional second byte is the reason: missing or 0 the rig missed the heartbeat, else a rig specific
+    error code.
     """
     #: bit 0 cleared: stop the experiment
     STOP = 0

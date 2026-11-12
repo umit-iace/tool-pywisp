@@ -210,6 +210,7 @@ TcpIpServer::State TcpIpServer::read()
 		if (TcpRecv_0.recvlen == 0)
 			return DISCONNECT;
 		this->inBufferLen += TcpRecv_0.recvlen;
+		this->lastReceived = (unsigned long)clock_ms();
 		return RUN;
 	}
 	if (status == ERR_FUB_BUSY)
@@ -320,13 +321,12 @@ void TcpIpServer::sync()
 	if (this->_running && now - this->lastHeartbeat > HEARTBEAT_TIMEOUT)
 	{
 		this->_running = false;
-		this->timedOut = true;
-		this->timeoutTime = now;
 		Frame missed(CONTROL_ID); /* payload 0 */
 		this->handleFrame(missed);
 	}
-	/* pyWisp disconnects on the missed heartbeat, a client that still holds the connection is dead */
-	if (this->timedOut && now - this->timeoutTime > HEARTBEAT_TIMEOUT)
+	/* pyWisp keeps the connection after a missed heartbeat and sends heartbeats while connected,
+	 * a client that sends nothing, idle or running, is dead and blocks the server for others */
+	if (now - this->lastReceived > CLIENT_TIMEOUT)
 	{
 		this->setState(DISCONNECT);
 		return;
@@ -371,7 +371,6 @@ void TcpIpServer::handleControl(const Frame &frame)
 			this->atStart.count = this->rxCount;
 			this->atStart.crc = this->rxCrc ^ 0xFFFFFFFFUL;
 			this->_started = true;
-			this->timedOut = false;
 			this->lastHeartbeat = now;
 		}
 		this->rxCrc = 0xFFFFFFFFUL;
@@ -418,9 +417,8 @@ void TcpIpServer::resetSession()
 	this->rxCrc = 0xFFFFFFFFUL;
 	this->rxCount = 0;
 	this->_running = false;
-	this->timedOut = false;
-	this->timeoutTime = 0;
 	this->lastHeartbeat = 0;
+	this->lastReceived = (unsigned long)clock_ms();
 }
 
 /**

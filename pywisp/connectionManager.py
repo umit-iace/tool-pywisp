@@ -35,6 +35,10 @@ class ConnectionManager(QObject):
     frames answer the sync sent on connect at once. Without an answer within :attr:`answerTimeout`
     the state changes to :attr:`CONNECTED` anyway, :attr:`answered` stays `False` until a frame
     arrives, e.g. during a run of a rig without status frames.
+
+    From opening until :meth:`disconnect` a heartbeat is sent every
+    :attr:`pywisp.connection.Connection.heartbeatInterval` of the connection, during a run every
+    `HeartbeatTime` of the experiment (:meth:`startHeartbeat`), 0 sends none.
     """
     DISCONNECTED = 'disconnected'
     CONNECTING = 'connecting'
@@ -70,6 +74,8 @@ class ConnectionManager(QObject):
     startTimeout = 1000
     #: [ms] time a rig has to send a frame after opening the connection
     answerTimeout = 1000
+    #: [ms] interval of the heartbeat while connected and no run sets another one, servers that allow one
+    #: client at a time (e.g. B&R) drop a client that sends nothing for a while
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -179,6 +185,7 @@ class ConnectionManager(QObject):
         # connectFrames of the connection, rigs take it as heartbeat, so udp rigs learn where to send their status.
         # Rigs with status frames answer it at once, which proves the connection.
         self.write(syncFrame(0))
+        self._setHeartbeatInterval(conn.heartbeatInterval)
         self._answerTimer.start(self.answerTimeout)
 
     def _onAnswerTimeout(self):
@@ -388,14 +395,25 @@ class ConnectionManager(QObject):
             return
         self.syncConfirmed.emit(status.syncId)
 
-    def startHeartbeat(self, interval):
-        """ sends a heartbeat every `interval` ms, 0 disables it """
-        if interval:
-            self._lastHeartbeat = None
+    def _setHeartbeatInterval(self, interval):
+        # the gap check of heartbeat() starts anew with the new interval
+        self._lastHeartbeat = None
+        if interval > 0:
             self.heartbeatTimer.start(int(interval))
+        else:
+            self.heartbeatTimer.stop()
+
+    def startHeartbeat(self, interval):
+        """ sends a heartbeat every `interval` ms during a run, 0 sends none """
+        if self.connection is not None:
+            self._setHeartbeatInterval(interval)
 
     def stopHeartbeat(self):
-        self.heartbeatTimer.stop()
+        """ goes back to the heartbeat of the connection after a run, it ends with :meth:`disconnect` """
+        if self.connection is not None:
+            self._setHeartbeatInterval(self.connection.heartbeatInterval)
+        else:
+            self.heartbeatTimer.stop()
 
     # menu with the selection and the settings of the connections
 

@@ -124,7 +124,7 @@ def test_generic_example(sim, example, qtbot, connection):
         qtbot.waitUntil(lambda: not manager.rigStatus[0].running, timeout=5000)
 
         # without heartbeat, e.g. if pywisp crashed, the rig stops on its own and reports the missed heartbeat
-        manager.stopHeartbeat()
+        manager.heartbeatTimer.stop()
         received.clear()
         manager.write(controlFrame(Control.START))
         qtbot.waitUntil(lambda: manager.rigStatus[0].running, timeout=5000)

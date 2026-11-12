@@ -45,8 +45,9 @@ Some IDs mean different things depending on who sends the frame, so the table li
     * - 1
       - Experiment control (:data:`pywisp.min.CONTROL_FRAME_ID`): start, stop, heartbeat and sync, see
         :ref:`control_frame`
-      - The rig missed the heartbeat and stopped the experiment by itself (payload one byte ``0``). PyWisp stops
-        the experiment in the GUI and keeps the connection, the frame has arrived after all.
+      - The rig stopped the experiment by itself (first payload byte ``0``, the optional second byte is the
+        reason, see :ref:`control_frame`). PyWisp stops the experiment in the GUI and keeps the connection, the
+        frame has arrived after all.
     * - 2
       - not used
       - Rig status (:data:`pywisp.min.STATUS_FRAME_ID`), see :ref:`rig_status`
@@ -83,7 +84,9 @@ a single command:
       - set: start the experiment, cleared (``STOP``, value ``0``): stop it
     * - 1
       - ``HEARTBEAT``
-      - keep the running experiment alive, without one within the heartbeat timeout the rig stops it
+      - keep the running experiment alive, without one within the heartbeat timeout the rig stops it. PyWisp
+        sends it while connected, every :attr:`~pywisp.connection.Connection.heartbeatInterval` (500 ms) while idle
+        and every ``HeartbeatTime`` during a run, ``0`` sends none
     * - 2
       - ``SYNC``
       - confirm the frames received since the last control frame with a status frame, the second payload byte
@@ -106,6 +109,25 @@ The rig acts on the highest set bit only: ``SYNC`` before ``HEARTBEAT`` before `
       - :func:`pywisp.min.controlFrame` with ``Control.HEARTBEAT``
     * - ``6``, sync id
       - :func:`pywisp.min.syncFrame`: ``SYNC | HEARTBEAT``, so rigs without sync support take it for a heartbeat
+
+A control frame sent by the rig reports that the rig stopped the experiment by itself. Its first payload byte is
+``0``, the optional second byte is the reason:
+
+.. list-table::
+    :widths: 28 72
+    :header-rows: 1
+
+    * - Reason
+      - Meaning
+    * - missing or ``0``
+      - the rig missed the heartbeat (tool-libs ``Experiment::setHeartbeatTimeout``, the B&R example server)
+    * - ``1`` - ``255``
+      - the rig stopped the experiment because of an error, the value is a rig specific error code
+
+PyWisp stops the experiment in the GUI, keeps the connection, logs the reason and shows it in the tooltip of the
+connection light ("the rig missed the heartbeat and stopped the experiment" or "the rig stopped the experiment
+(error code n)"). It does not restart the experiment. Applications can connect to
+:attr:`pywisp.experiments.ExperimentInteractor.rigStopped`, which carries the reason.
 
 Frames returned by the experiment modules are checked before they are sent. Frames using the reserved system IDs
 1 - 5 (:class:`pywisp.min.SystemFrameId`), IDs outside of 0 - 255 or a payload ``msg`` that is not ``bytes`` are
@@ -171,6 +193,25 @@ The frames are sent every time the connection is (re)established, also over UDP,
 the rig know where to send its data. Frames without an ``int`` id in 0 - 255 or with a ``msg`` that
 is not ``bytes`` are logged and skipped. pywisp does not wait for an answer, the rig has to answer
 or ignore them.
+
+A connection can check the answer in :meth:`pywisp.connection.Connection.filterFrames`, which gets every batch of
+received frames before they are passed on and returns the frames to pass on. It may close the connection, e.g. if
+the rig refuses the session. Frames it does not return do not count as the answer of the rig, so a connection
+closed while connecting ends as "No connection ... established". Errors in it are logged and the frames are
+passed on unchanged.
+
+.. code-block:: python
+
+    class Connection(connection.UdpConnection):
+        connectFrames = [{'id': 62, 'msg': bytes([1, 1])}]
+
+        def filterFrames(self, frames):
+            # the rig answers with id 62, payload 0: session refused
+            if any(f.id == 62 and f.payload[0] == 0 for f in frames):
+                self._logger.error("the rig refused the session")
+                self.close()
+                return []
+            return frames
 
 Packing a frame
 ---------------

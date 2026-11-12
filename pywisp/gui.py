@@ -35,7 +35,7 @@ from pyqtgraph.dockarea import DockArea
 
 from .config import dumpExperiments, validateExperiments
 from .connectionManager import ConnectionManager
-from .experiments import ExperimentInteractor, ExperimentView
+from .experiments import ExperimentInteractor, ExperimentView, rigStopReason
 from .registry import getRegisteredExperimentModules, getRegisteredVisualizers
 from .measurement import Measurement, addDataPointValue
 from .utils import getResource, setupLogging
@@ -438,7 +438,7 @@ class MainGui(QMainWindow):
         self.runExp.connect(self.exp.runExperiment)
         self.stopExp.connect(self.exp.stopExperiment)
         self.exp.expFinished.connect(self.saveLastMeas)
-        self.exp.missedbeat.connect(self._onMissedHeartbeat)
+        self.exp.rigStopped.connect(self._onRigStopped)
         self.exp.expStop.connect(self.stopExperiment)
 
         self.visualizer = None
@@ -1060,9 +1060,9 @@ class MainGui(QMainWindow):
         if self._runningMeasurement is measurement:
             self._runningMeasurement = None
 
-    def _onMissedHeartbeat(self):
-        """ the rig stopped the experiment, its frame arrived, so the connection is kept """
-        self._commError = "the rig missed the heartbeat and stopped the experiment"
+    def _onRigStopped(self, reason=0):
+        """ the rig stopped the experiment (missed heartbeat or error), its frame arrived, so the connection is kept """
+        self._commError = rigStopReason(reason)
         self.stopExperiment()
         self._updateConnectionStatus()
 

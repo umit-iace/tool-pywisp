@@ -1111,8 +1111,13 @@ def test_plot_manager_export_ends(gui, qtbot, tmp_path, monkeypatch):
     assert (tmp_path / "x.csv").exists()
 
 
-def test_missed_heartbeat_stops_but_keeps_the_connection(gui, qtbot, monkeypatch):
-    """ the rig reports the missed heartbeat with a control frame, that frame arrived, so the connection is fine """
+@pytest.mark.parametrize("payload, text", [
+    (b"\x00", "missed the heartbeat"),
+    (b"\x00\x00", "missed the heartbeat"),
+    (b"\x00\x07", "the rig stopped the experiment (error code 7)"),
+])
+def test_missed_heartbeat_stops_but_keeps_the_connection(gui, qtbot, monkeypatch, payload, text):
+    """ the rig reports the stop with a control frame, the second byte is the reason (0 or missing: heartbeat) """
     manager = gui.connectionManager
     # the socket of the dummy has no peer, sending would close the connection
     monkeypatch.setattr(DummyConnection, "writeData", lambda self, data: None)
@@ -1123,13 +1128,120 @@ def test_missed_heartbeat_stops_but_keeps_the_connection(gui, qtbot, monkeypatch
         manager.answered = True
         startExperiment(gui)
         assert gui.exp.runningExperiment
-        manager.connection.receivedFrames.emit([pw.Frame(pw.CONTROL_FRAME_ID, b"\x00")])
+        with qtbot.waitSignal(gui.exp.rigStopped, timeout=0, raising=False) as stopped:
+            manager.connection.receivedFrames.emit([pw.Frame(pw.CONTROL_FRAME_ID, payload)])
+        assert stopped.args == [payload[1] if len(payload) > 1 else 0]
         assert not gui.exp.runningExperiment
         assert not gui.actStopExperiment.isEnabled() and gui.actStartExperiment.isEnabled()
         assert manager.state == manager.CONNECTED
-        assert gui.connectionLedState == 'yellow' and "missed the heartbeat" in gui.connectionLed.toolTip()
+        assert gui.connectionLedState == 'yellow' and text in gui.connectionLed.toolTip()
+        # the heartbeat goes on, servers like the B&R example drop a silent client
+        assert manager.heartbeatTimer.isActive()
+        assert manager.heartbeatTimer.interval() == DummyConnection.heartbeatInterval
     finally:
         gui.disconnectRig()
+
+
+def test_heartbeat_while_connected(gui, qtbot, monkeypatch):
+    """ idle interval while connected, HeartbeatTime during a run, none when disconnected """
+    manager = gui.connectionManager
+    timer = manager.heartbeatTimer
+    monkeypatch.setattr(DummyConnection, "writeData", lambda self, data: None)
+    startExperiment(gui)
+    gui.stopExperiment()
+    assert not timer.isActive()
+    with mock.patch.object(DummyConnection, "_connect", return_value=True):
+        connectRig(gui, qtbot)
+    try:
+        assert timer.isActive() and timer.interval() == DummyConnection.heartbeatInterval == 500
+        gui.config['HeartbeatTime'] = 100
+        startExperiment(gui)
+        assert timer.isActive() and timer.interval() == 100
+        gui.stopExperiment()
+        assert timer.isActive() and timer.interval() == 500
+        # 0: no heartbeat during the run, the idle heartbeat comes back after it
+        gui.config['HeartbeatTime'] = 0
+        startExperiment(gui)
+        assert not timer.isActive()
+        gui.stopExperiment()
+        assert timer.isActive() and timer.interval() == 500
+    finally:
+        gui.disconnectRig()
+    assert not timer.isActive()
+
+
+def test_connection_without_heartbeat(gui, qtbot, monkeypatch):
+    """ a rig without heartbeat support gets none, neither while idle nor during a run with HeartbeatTime 0 """
+    manager = gui.connectionManager
+    monkeypatch.setattr(DummyConnection, "writeData", lambda self, data: None)
+    monkeypatch.setattr(DummyConnection, "heartbeatInterval", 0)
+    with mock.patch.object(DummyConnection, "_connect", return_value=True):
+        connectRig(gui, qtbot)
+    try:
+        assert manager.state == manager.CONNECTED and not manager.heartbeatTimer.isActive()
+        gui.config['HeartbeatTime'] = 0
+        startExperiment(gui)
+        assert not manager.heartbeatTimer.isActive()
+        gui.stopExperiment()
+        assert not manager.heartbeatTimer.isActive()
+    finally:
+        gui.disconnectRig()
+
+
+def test_heartbeat_starts_with_the_connection(gui, qtbot):
+    """ the heartbeat is sent while still waiting for the answer of the rig """
+    manager = gui.connectionManager
+    with mock.patch.object(DummyConnection, "_connect", return_value=True), \
+            mock.patch.object(DummyConnection, "writeData") as writeData, \
+            mock.patch.object(DummyConnection, "heartbeatInterval", 20):
+        gui.connectRig()
+        try:
+            qtbot.waitUntil(lambda: pw.controlFrame(pw.Control.HEARTBEAT) in
+                            [c.args[0] for c in writeData.call_args_list], timeout=2000)
+            assert manager.state == manager.CONNECTING
+        finally:
+            gui.disconnectRig()
+
+
+def refuseSession(self, frames):
+    """ closes when the rig refuses the session, as a connection with connectFrames can """
+    if any(f.id == 62 and f.payload[:1] == b"\x00" for f in frames):
+        self.close()
+        return []
+    return frames
+
+
+def test_refused_session_ends_the_connection(gui, qtbot, monkeypatch, caplog):
+    """ a refusal in filterFrames while connecting is no answer of the rig, the connection was not established """
+    manager = gui.connectionManager
+    monkeypatch.setattr(DummyConnection, "writeData", lambda self, data: None)
+    monkeypatch.setattr(DummyConnection, "filterFrames", refuseSession)
+    lost = []
+    manager.connectionLost.connect(lambda: lost.append(True))
+    with mock.patch.object(DummyConnection, "_connect", return_value=True):
+        gui.connectRig()
+        # opened, waiting for the answer of the rig
+        qtbot.waitUntil(manager._answerTimer.isActive, timeout=2000)
+        assert manager.state == manager.CONNECTING
+        with caplog.at_level(logging.WARNING):
+            manager.connection._onFrames([pw.Frame(62, b"\x00")])
+            qtbot.waitUntil(lambda: manager.state == manager.DISCONNECTED, timeout=2000)
+    assert not manager.answered and not lost
+    assert f"No connection for {manager.activeConnection} established" in caplog.text
+
+
+def test_filter_frames(gui, caplog):
+    conn = DummyConnection()
+    got = []
+    conn.receivedFrames.connect(got.append)
+    conn.filterFrames = lambda frames: [f for f in frames if f.id != 3]
+    conn._onFrames([pw.Frame(3, b""), pw.Frame(15, b"")])
+    conn._onFrames([pw.Frame(3, b"")])
+    assert [[f.id for f in fs] for fs in got] == [[15]]
+    # a failing filter passes the frames on
+    conn.filterFrames = lambda frames: 1 / 0
+    conn._onFrames([pw.Frame(3, b"")])
+    assert len(got) == 2 and "filterFrames failed" in caplog.text
 
 
 def test_connection_manager_reports_lost_connections(gui, qtbot):
