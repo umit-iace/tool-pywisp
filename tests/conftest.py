@@ -3,8 +3,8 @@ import os
 
 import pytest
 
-# run without a display if none is available
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# always run headless, also if the shell sets a platform (e.g. xcb), so no windows or splash screen pop up
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
 
 @pytest.fixture(autouse=True)
