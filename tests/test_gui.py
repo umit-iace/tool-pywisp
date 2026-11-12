@@ -17,6 +17,7 @@ from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtWidgets import QApplication, QFileDialog
 
 import pywisp as pw
+from pywisp.connectionManager import ConnectionManager
 from pywisp.measurement import elementName
 from pywisp.widgets.remote import MovableMultiButton, MovablePushButton, MovableSlider, MovableSwitch, MovableWidget
 from test_status import statusFrame
@@ -76,7 +77,9 @@ class Dummy(pw.ExperimentModule):
 
 
 @pytest.fixture
-def gui(qtbot, cleanRegistry, tmp_path):
+def gui(qtbot, cleanRegistry, tmp_path, monkeypatch):
+    # the dummy rigs never answer, do not wait long for them
+    monkeypatch.setattr(ConnectionManager, "answerTimeout", 50)
     pw.registerConnection(DummyConnection)
     pw.registerConnection(DummySerial)
     pw.registerExperimentModule(Dummy)
@@ -472,7 +475,11 @@ def test_connection_traffic_light(gui, qtbot):
     with mock.patch.object(DummyConnection, "_connect", return_value=True):
         connectRig(gui, qtbot)
     try:
-        # a rig without status frames is not checked
+        # no frame from the rig yet
+        assert gui.connectionLedState == 'yellow'
+        assert "no answer from the rig yet" in gui.connectionLed.toolTip()
+        # a rig without status frames is not checked further
+        gui.connectionManager._onFrames([pw.Frame(15, b"")])
         assert gui.connectionLedState == 'green'
 
         def status(flags):
@@ -496,6 +503,51 @@ def test_connection_traffic_light(gui, qtbot):
     assert gui.connectionLedState == 'red'
 
 
+def test_connected_once_the_rig_answers(gui, qtbot):
+    """ the state stays connecting until a frame of the rig arrives """
+    manager = gui.connectionManager
+    manager.answerTimeout = 5000
+    with mock.patch.object(DummyConnection, "_connect", return_value=True):
+        gui.connectRig()
+        try:
+            qtbot.waitUntil(lambda: manager._answerTimer.isActive(), timeout=5000)
+            assert manager.state == manager.CONNECTING and gui.connectionLedState == 'yellow'
+            manager.connection.receivedFrames.emit([pw.Frame(15, b"")])
+            assert manager.state == manager.CONNECTED and manager.answered
+            assert gui.connectionLedState == 'green'
+        finally:
+            gui.disconnectRig()
+
+
+def test_closed_before_the_rig_answers(gui, qtbot):
+    """ e.g. udp to a port without a rig, the error shows up when receiving """
+    manager = gui.connectionManager
+    manager.answerTimeout = 5000
+    with mock.patch.object(DummyConnection, "_connect", return_value=True):
+        gui.connectRig()
+        qtbot.waitUntil(lambda: manager._answerTimer.isActive(), timeout=5000)
+        lost = []
+        manager.connectionLost.connect(lambda: lost.append(True))
+        manager.connection.workerError("connection dropped: ConnectionRefusedError")
+    assert manager.state == manager.DISCONNECTED and not lost
+    assert gui.connectionLedState == 'red' and gui.actConnect.isEnabled()
+
+
+def test_connected_without_answer_after_timeout(gui, qtbot):
+    """ rigs without status frames send nothing while idle, they are connected after the timeout """
+    manager = gui.connectionManager
+    with mock.patch.object(DummyConnection, "_connect", return_value=True):
+        connectRig(gui, qtbot)
+    try:
+        assert manager.state == manager.CONNECTED and not manager.answered
+        assert gui.connectionLedState == 'yellow'
+        # e.g. the first data frame of a run
+        manager.connection.receivedFrames.emit([pw.Frame(15, b"")])
+        assert manager.answered and gui.connectionLedState == 'green'
+    finally:
+        gui.disconnectRig()
+
+
 def test_failed_connection(gui, qtbot):
     gui.connComboBox.setCurrentText("DummySerial")
     with mock.patch.object(DummySerial, "_connect", return_value=False):
@@ -517,7 +569,7 @@ def test_connecting_does_not_block_the_gui(gui, qtbot):
 
     with mock.patch.object(DummyConnection, "_connect", slowConnect):
         gui.connectRig()
-        assert gui.connectionLedState == 'red'
+        assert gui.connectionLedState == 'yellow'
         assert gui.connectionLed.toolTip() == "Connecting ..."
         assert not gui.isConnected and not gui.actConnect.isEnabled()
         # abort while the connection is still being established

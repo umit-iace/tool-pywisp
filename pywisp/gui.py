@@ -1093,6 +1093,8 @@ class MainGui(QMainWindow):
         parts, problems = [], []
         name = self.connectionManager.activeConnection
         responding = self.connectionManager.isResponding()
+        if not self.connectionManager.answered:
+            problems.append(f"{name}: no answer from the rig yet")
         if responding is False:
             parts.append(f"{name}: no response")
             problems.append(f"{name}: the rig does not respond")
@@ -1116,7 +1118,7 @@ class MainGui(QMainWindow):
         if state == ConnectionManager.CONNECTING:
             self.actConnect.setEnabled(False)
             self.actDisconnect.setEnabled(True)
-            self._setConnectionLed('red', "Connecting ...")
+            self._setConnectionLed('yellow', "Connecting ...")
             self.statusbarLabel.setText("")
         elif state == ConnectionManager.CONNECTED:
             self.actConnect.setEnabled(False)

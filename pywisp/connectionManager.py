@@ -30,6 +30,11 @@ class ConnectionManager(QObject):
     Rigs that send status frames (tool-libs `Experiment::enableStatus`) are watched: the manager
     reports whether the rig responds and checks that it received all parameters of a start.
     Rigs without status frames are not checked.
+
+    After opening, the state stays :attr:`CONNECTING` until the rig sends a frame, rigs with status
+    frames answer the sync sent on connect at once. Without an answer within :attr:`answerTimeout`
+    the state changes to :attr:`CONNECTED` anyway, :attr:`answered` stays `False` until a frame
+    arrives, e.g. during a run of a rig without status frames.
     """
     DISCONNECTED = 'disconnected'
     CONNECTING = 'connecting'
@@ -63,6 +68,8 @@ class ConnectionManager(QObject):
     statusTimeout = 1.0
     #: [ms] time a rig has to confirm a start
     startTimeout = 1000
+    #: [ms] time a rig has to send a frame after opening the connection
+    answerTimeout = 1000
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -80,6 +87,11 @@ class ConnectionManager(QObject):
         #: instance of the active connection while connecting or connected
         self.connection = None
         self.state = self.DISCONNECTED
+        #: the rig has sent a frame since the connection has been opened
+        self.answered = False
+        self._answerTimer = QTimer(self)
+        self._answerTimer.setSingleShot(True)
+        self._answerTimer.timeout.connect(self._onAnswerTimeout)
 
         self.heartbeatTimer = QTimer(self)
         self.heartbeatTimer.timeout.connect(self.heartbeat)
@@ -163,21 +175,35 @@ class ConnectionManager(QObject):
             self._logger.warning(f"No connection for {name} established! Check your settings!")
             self.disconnect()
             return
-        self._logger.info(f"Connection for {name} established!")
-        self._setState(self.CONNECTED)
         # sync 0 (never used by sync()) resets the frame count of the rig, which may include
-        # connectFrames of the connection, rigs take it as heartbeat, so udp rigs learn where to send their status
+        # connectFrames of the connection, rigs take it as heartbeat, so udp rigs learn where to send their status.
+        # Rigs with status frames answer it at once, which proves the connection.
         self.write(syncFrame(0))
+        self._answerTimer.start(self.answerTimeout)
+
+    def _onAnswerTimeout(self):
+        if self.state != self.CONNECTING:
+            return
+        name = self.activeConnection
+        self._logger.warning(f"Connection for {name} opened, but the rig does not answer "
+                             f"(no rig present or no status frames)")
+        self._setState(self.CONNECTED)
 
     def _onFinished(self):
         """ the connection has been closed, by the manager or by itself """
-        if self.state == self.CONNECTED:
+        if self.state == self.CONNECTING:
+            # e.g. udp reports a refused port only when receiving
+            self._logger.warning(f"No connection for {self.activeConnection} established! Check your settings!")
+            self.disconnect()
+        elif self.state == self.CONNECTED:
             self.connectionLost.emit()
             self.disconnect()
 
     def disconnect(self):
         """ closes the connection, also if it is still being established """
         self.heartbeatTimer.stop()
+        self._answerTimer.stop()
+        self.answered = False
         self.cancelStartCheck()
         self.cancelSyncChecks()
         self.rigStatus = None
@@ -223,6 +249,15 @@ class ConnectionManager(QObject):
 
     def _onFrames(self, frames):
         """ takes the status frames out, passes the others on """
+        if frames and not self.answered and self.connection is not None:
+            self.answered = True
+            self._answerTimer.stop()
+            if self.state == self.CONNECTING:
+                self._logger.info(f"Connection for {self.activeConnection} established!")
+                self._setState(self.CONNECTED)
+            else:
+                # the led shows that the rig did not answer yet
+                self.rigStatusChanged.emit()
         data = []
         for frame in frames:
             if frame.id != STATUS_FRAME_ID:
