@@ -2,12 +2,77 @@
  *  @brief Implementation of the TcpIpServer Class
  */
 #include "TcpIpServer.h"
+#include <string.h>
 
-#define LINGER_ON (1)
+/** writes the lowest n bytes of v little endian to p, as the status frame of tool-libs */
+static void putLE(unsigned char *p, unsigned long v, int n)
+{
+	for (int i = 0; i < n; ++i)
+		p[i] = (unsigned char)(v >> (8 * i));
+}
 
-/**
-*	@brief disable all function blocks
-*/
+TcpIpServer::TcpIpServer(int port) : serverPort(port), linger_opt(init_linger_opt()), state(_state)
+{
+	this->serverID = 0;
+	this->clientID = 0;
+	this->_state = INIT;
+	this->initStep = 0;
+	this->connectStep = 0;
+	this->lastStatus = 0;
+	this->statusFlags = 0;
+	memset(this->clientIp, 0, sizeof(this->clientIp));
+	memset(&this->atStart, 0, sizeof(this->atStart));
+	memset(&this->atSync, 0, sizeof(this->atSync));
+	this->_started = false;
+	this->transp = 0;
+	this->resetSession();
+}
+
+void TcpIpServer::setState(TcpIpServer::State s)
+{
+	this->_state = s;
+}
+
+TcpIpServer::State TcpIpServer::run(void)
+{
+	switch (this->state)
+	{
+	case TcpIpServer::INIT:
+		/** start server and wait for client*/
+		this->init();
+		break;
+	case TcpIpServer::WAIT:
+		this->connect();
+		break;
+	case TcpIpServer::RUN:
+		/** read from and write to client */
+		this->sync();
+		break;
+	case TcpIpServer::DISCONNECT:
+		/** end connection*/
+		this->disconnect();
+		break;
+	case TcpIpServer::STOP:
+	case TcpIpServer::ERROR:
+		/** close all sockets and start again */
+		if (this->close())
+		{
+			this->deinit();
+			this->setState(INIT);
+		}
+		break;
+	default:
+		break;
+	}
+
+	return this->state;
+}
+
+bool TcpIpServer::isRun(void)
+{
+	return this->state == RUN;
+}
+
 void TcpIpServer::deinit()
 {
 	TcpClose_0.enable = false;
@@ -22,313 +87,385 @@ void TcpIpServer::deinit()
 	TcpRecv(&TcpRecv_0);
 	TcpSend_0.enable = false;
 	TcpSend(&TcpSend_0);
-	tcp_step = 0;
+	this->initStep = 0;
+	this->connectStep = 0;
 }
 
 /**
-*	@brief initialize server
-*/
+ *	@brief initialize server
+ */
 void TcpIpServer::init()
 {
-	this->_status = BUSY;
-	static const struct tcpLINGER_typ linger_opt = {LINGER_ON, 0};			
-	switch(tcp_step) {
-		case 0:
-			deinit();
-			this->currentOutBuf = 0;
-			tcp_step = 1;
-			break;
-		case 1:
-			/* Open TCP Socket */
-			TcpOpen_0.pIfAddr = 0;
-			TcpOpen_0.port = this->serverPort;
-			TcpOpen_0.options = tcpOPT_REUSEADDR;
-			TcpOpen_0.enable = true;
-			TcpOpen(&TcpOpen_0);
-			if (TcpOpen_0.status == ERR_OK) {
-				this->serverID = TcpOpen_0.ident;
-				tcp_step = 2;
-			} else if (TcpOpen_0.status == ERR_FUB_BUSY) {
-				// intentionally blank
-			} else {
-				tcp_step = 0;
-				this->_status = ERROR;
-			}
-			break;
-		case 2:
-			/* set server options */
-			/* these ensure that the connection gets closed directly, without waiting for timeouts */
-			/* see BuR AsTCP Help files for more information */
-				
-			TcpIoctl_0.ident = this->serverID;
-			TcpIoctl_0.ioctl = tcpSO_LINGER_SET;
-			TcpIoctl_0.pData = (unsigned long) &linger_opt;
-			TcpIoctl_0.datalen = sizeof(linger_opt);
-			TcpIoctl_0.enable = true;
-			TcpIoctl(&TcpIoctl_0);
-			if (TcpIoctl_0.status == ERR_OK) {
-				tcp_step = 3;
-			} else if (TcpIoctl_0.status == ERR_FUB_BUSY) {
-				// intentionally blank
-			} else {
-				tcp_step = 0;
-				this->_status = ERROR;
-			}
-			break;
-		case 3:
-			/* start server and wait for client */
-			TcpServer_0.ident = this->serverID;
-			TcpServer_0.backlog = 1;
-			TcpServer_0.pIpAddr = (unsigned long) this->clientIp;
-			TcpServer_0.enable = true;
-			TcpServer(&TcpServer_0);
-			if (TcpServer_0.status == ERR_OK) {
-				this->clientID = TcpServer_0.identclnt;
-				tcp_step = 4;
-			} else if (TcpServer_0.status == ERR_FUB_BUSY) {
-				//intentionally blank
-			} else {
-				tcp_step = 0;
-				this->_status = ERROR;
-			}
-			break;
-		case 4:
-			/* set same options for client */
-			TcpIoctl_0.ident = this->clientID;
-			TcpIoctl_0.ioctl = tcpSO_LINGER_SET;
-			TcpIoctl_0.pData = (unsigned long) &linger_opt;
-			TcpIoctl_0.datalen = sizeof(linger_opt);
-			TcpIoctl_0.enable = true;
-			TcpIoctl(&TcpIoctl_0);
-			if (TcpIoctl_0.status == ERR_OK) {
-				this->_status = READY;
-				tcp_step = 0;
-			} else if (TcpIoctl_0.status == ERR_FUB_BUSY) {
-				// intentionally blank
-			} else {
-				tcp_step = 0;
-				this->_status = ERROR;
-			}
-			break;
-		default:
-			break;
+	switch (this->initStep)
+	{
+	case 0:
+		this->clientID = 0;
+		/* Open TCP Socket */
+		TcpOpen_0.pIfAddr = 0;
+		TcpOpen_0.port = this->serverPort;
+		TcpOpen_0.options = tcpOPT_REUSEADDR;
+		TcpOpen_0.enable = true;
+		TcpOpen(&TcpOpen_0);
+		if (TcpOpen_0.status == ERR_OK)
+		{
+			this->serverID = TcpOpen_0.ident;
+			this->initStep = 1;
+		}
+		else if (TcpOpen_0.status != ERR_FUB_BUSY)
+		{
+			this->setState(ERROR);
+		}
+		break;
+	case 1:
+		/* set server options */
+		/* these ensure that the connection gets closed directly, without waiting for timeouts */
+		/* see BuR AsTCP Help files for more information */
+		TcpIoctl_0.ident = this->serverID;
+		TcpIoctl_0.ioctl = tcpSO_LINGER_SET;
+		TcpIoctl_0.pData = (unsigned long)&this->linger_opt;
+		TcpIoctl_0.datalen = sizeof(this->linger_opt);
+		TcpIoctl_0.enable = true;
+		TcpIoctl(&TcpIoctl_0);
+		if (TcpIoctl_0.status == ERR_OK)
+		{
+			this->initStep = 0;
+			this->setState(WAIT);
+		}
+		else if (TcpIoctl_0.status != ERR_FUB_BUSY)
+		{
+			this->setState(ERROR);
+		}
+		break;
+	default:
+		this->initStep = 0;
+		break;
+	}
+}
+
+void TcpIpServer::connect(void)
+{
+	switch (this->connectStep)
+	{
+	case 0:
+		/* start server and wait for client */
+		TcpServer_0.ident = this->serverID;
+		TcpServer_0.backlog = 1;
+		TcpServer_0.pIpAddr = (unsigned long)this->clientIp;
+		TcpServer_0.enable = true;
+		TcpServer(&TcpServer_0);
+		if (TcpServer_0.status == ERR_OK)
+		{
+			this->clientID = TcpServer_0.identclnt;
+			this->connectStep = 1;
+		}
+		else if (TcpServer_0.status != ERR_FUB_BUSY)
+		{
+			this->setState(ERROR);
+		}
+		break;
+	case 1:
+		/* set same options for client */
+		TcpIoctl_0.ident = this->clientID;
+		TcpIoctl_0.ioctl = tcpSO_LINGER_SET;
+		TcpIoctl_0.pData = (unsigned long)&this->linger_opt;
+		TcpIoctl_0.datalen = sizeof(this->linger_opt);
+		TcpIoctl_0.enable = true;
+		TcpIoctl(&TcpIoctl_0);
+		if (TcpIoctl_0.status == ERR_OK)
+		{
+			this->connectStep = 0;
+			/* nothing of an earlier client must reach the new one */
+			this->resetSession();
+			this->setState(RUN);
+		}
+		else if (TcpIoctl_0.status != ERR_FUB_BUSY)
+		{
+			this->connectStep = 0;
+			this->setState(ERROR);
+		}
+		break;
+	default:
+		this->connectStep = 0;
+		break;
 	}
 }
 
 /**
  * @brief reads incoming data from client
- * data gets saved to inBuffer, the data length is written to inBufferLen
+ * data gets appended to inBuffer, a partial frame of the last call stays at its front
  */
-TcpIpServer::Status TcpIpServer::read()
+TcpIpServer::State TcpIpServer::read()
 {
 	TcpRecv_0.ident = this->clientID;
-	TcpRecv_0.pData = (unsigned long) this->inBuffer;
-	TcpRecv_0.datamax = sizeof(this->inBuffer);
+	TcpRecv_0.pData = (unsigned long)(this->inBuffer + this->inBufferLen);
+	TcpRecv_0.datamax = sizeof(this->inBuffer) - this->inBufferLen;
 	TcpRecv_0.flags = 0;
 	TcpRecv_0.enable = true;
 	TcpRecv(&TcpRecv_0);
-	if (TcpRecv_0.status == ERR_OK)
+	/* if instead of switch: the B&R status codes are extern constants, not usable as case labels */
+	const unsigned short status = TcpRecv_0.status;
+	if (status == ERR_OK)
 	{
-		this->inBufferLen = TcpRecv_0.recvlen;
-		if (this->inBufferLen == 0)
-		{
-			/* client already disconnected */
-			return STOP;
-		}
-		else
-			return READY;
+		/* 0 bytes: client already disconnected */
+		if (TcpRecv_0.recvlen == 0)
+			return DISCONNECT;
+		this->inBufferLen += TcpRecv_0.recvlen;
+		this->lastReceived = (unsigned long)clock_ms();
+		return RUN;
 	}
-	else if (TcpRecv_0.status == ERR_FUB_BUSY)
-		;
-	else if (TcpRecv_0.status == tcpERR_NO_DATA)
-	{
-		/* no data received */
-		this->inBufferLen = 0;
-		return READY;
-	}
-	else if (TcpRecv_0.status == tcpERR_NOT_CONNECTED)
-	{
-		/* connection closed */
-		return STOP;
-	}
-	else
-	{       
-		return ERROR;
-	}
-	return BUSY;
+	if (status == ERR_FUB_BUSY)
+		return BUSY;
+	if (status == tcpERR_NO_DATA)
+		return RUN;
+	if (status == tcpERR_NOT_CONNECTED)
+		return DISCONNECT;
+	return ERROR;
 }
 
 /**
  * @brief write data from the current outBuffer to the client
  */
-TcpIpServer::Status TcpIpServer::write()
+TcpIpServer::State TcpIpServer::write()
 {
-	static short leftover = 0;
+	if (!this->leftover)
+	{
+		if (this->outBufferLen[currentOutBuf] == 0)
+		{
+			if (this->outBufferLen[!currentOutBuf] == 0)
+				return RUN; /* nothing to send */
+			currentOutBuf = !currentOutBuf;
+		}
+		TcpSend_0.pData = (unsigned long)this->outBuffer[currentOutBuf];
+		TcpSend_0.datalen = this->outBufferLen[currentOutBuf];
+	}
 	TcpSend_0.ident = this->clientID;
 	TcpSend_0.flags = 0;
 	TcpSend_0.enable = true;
-	if (!leftover) {
-		TcpSend_0.pData = (unsigned long) this->outBuffer[currentOutBuf];
-		TcpSend_0.datalen = this->outBufferLen[currentOutBuf];
-	}
 	TcpSend(&TcpSend_0);
-	switch (TcpSend_0.status) {
-		case tcpERR_NOT_CONNECTED:
-			// connection closed
-			return STOP;
-		case ERR_OK:
-			if (leftover)
-				leftover = 0;
-			this->outBufferLen[currentOutBuf] = 0;
-			currentOutBuf = !currentOutBuf;
-			return READY;
-		case tcpERR_SENTLEN:
-			leftover = 1;
-			TcpSend_0.pData += TcpSend_0.sentlen;
-			TcpSend_0.datalen -= TcpSend_0.sentlen;
-			// fallthrough
-		case ERR_FUB_BUSY:
-			// fallthrough
-		case tcpERR_WOULDBLOCK:
-			return BUSY;
-		default:
-			return ERROR;
+	const unsigned short status = TcpSend_0.status;
+	if (status == tcpERR_NOT_CONNECTED)
+		return DISCONNECT;
+	if (status == ERR_OK)
+	{
+		this->leftover = false;
+		this->outBufferLen[currentOutBuf] = 0;
+		currentOutBuf = !currentOutBuf;
+		return RUN;
 	}
+	if (status == tcpERR_SENTLEN)
+	{
+		this->leftover = true;
+		TcpSend_0.pData += TcpSend_0.sentlen;
+		TcpSend_0.datalen -= TcpSend_0.sentlen;
+		return BUSY;
+	}
+	if (status == ERR_FUB_BUSY || status == tcpERR_WOULDBLOCK)
+		return BUSY;
+	return ERROR;
 }
 
 /**
  * @brief writes outgoing frames to the currently unused outBuffer
  */
-void TcpIpServer::handleFrame(Frame frame)
+void TcpIpServer::handleFrame(const Frame &frame)
 {
 	unsigned char b = !this->currentOutBuf;
 	/* prefer dropping frames to dying due to buffer overflows */
-	if (this->outBufferLen[b] >= 255 * (MAX_PAYLOAD + 1))
+	if (this->outBufferLen[b] + MAX_PAYLOAD + 1 > sizeof(this->outBuffer[b]))
 		return;
 	this->outBuffer[b][this->outBufferLen[b]++] = frame.data.id;
-	for (int i = 0; i < MAX_PAYLOAD; ++i) {
-		this->outBuffer[b][this->outBufferLen[b]++] = frame.data.payload[i];
-	}
+	memcpy(this->outBuffer[b] + this->outBufferLen[b], frame.data.payload, MAX_PAYLOAD);
+	this->outBufferLen[b] += MAX_PAYLOAD;
 }
-	
+
 /**
  * @brief reads and writes data from and to client
  */
 void TcpIpServer::sync()
 {
-	this->_status = BUSY;
-	switch (tcp_step) {
-		case 0:
-			/* read from client */
-			this->_status_sub = read();
-			switch (this->_status_sub) {
-				case READY:
-					if (this->inBufferLen > 0) {
-						unsigned char *pointer = this->inBuffer;
-						while (pointer - this->inBuffer < (signed long)this->inBufferLen) {
-							Frame frame(pointer++[0]);
-							for (int i = 0; i < MAX_PAYLOAD; ++i)
-								frame.data.payload[i] = *pointer++;
-							this->transp->handleFrame(frame);
-						}
-						this->inBufferLen = 0;
-					}
-					/* send data if available */
-					if (this->outBufferLen[this->currentOutBuf] ||
-                        this->outBufferLen[!this->currentOutBuf]) {
-						tcp_step = 1;
-					} else {
-						tcp_step = 0;
-						_status = READY;
-					}
-					break;
-				case BUSY:
-					// intentionally blank
-					break;
-				case STOP:
-					tcp_step = 0;
-					_status = STOP;
-					break;
-				default:			
-					tcp_step = 0;
-					_status = ERROR;
-					break;			
-			}
-			break;
-		case 1:
-			/* send data to client */
-			_status_sub = write();
-			switch (_status_sub) {
-				case READY:
-					tcp_step = 0;
-					_status = READY;
-					break;	
-				case BUSY:
-					// intentionally blank
-					break;
-				case STOP:
-					tcp_step = 0;
-					_status = STOP;
-					break;
-				default:
-					tcp_step = 0;
-					_status = ERROR;
-					break;
-			}
-			break;
-		default:
-			break;
+	/* read from client */
+	State s = read();
+	if (s == DISCONNECT || s == ERROR)
+	{
+		this->setState(s);
+		return;
+	}
+	/* pass on complete frames, keep a partial one for the next call */
+	unsigned int pos = 0;
+	while (pos + MAX_PAYLOAD + 1 <= this->inBufferLen)
+	{
+		Frame frame(this->inBuffer[pos]);
+		memcpy(frame.data.payload, this->inBuffer + pos + 1, MAX_PAYLOAD);
+		if (frame.data.id == CONTROL_ID)
+		{
+			this->handleControl(frame);
+		}
+		else
+		{
+			/* CRC32 over id, length and payload as pywisp.min.frameCrc */
+			const unsigned char len = MAX_PAYLOAD;
+			this->rxCrc = crc32(this->rxCrc, &frame.data.id, 1);
+			this->rxCrc = crc32(this->rxCrc, &len, 1);
+			this->rxCrc = crc32(this->rxCrc, frame.data.payload, MAX_PAYLOAD);
+			this->rxCount++;
+			if (this->transp)
+				this->transp->handleFrame(frame);
+		}
+		pos += MAX_PAYLOAD + 1;
+	}
+	this->inBufferLen -= pos;
+	memmove(this->inBuffer, this->inBuffer + pos, this->inBufferLen);
+
+	/* heartbeat: stop the experiment and tell pyWisp, as tool-libs Experiment::setHeartbeatTimeout */
+	unsigned long now = (unsigned long)clock_ms();
+	if (this->_running && now - this->lastHeartbeat > HEARTBEAT_TIMEOUT)
+	{
+		this->_running = false;
+		Frame missed(CONTROL_ID); /* payload 0 */
+		this->handleFrame(missed);
+	}
+	/* pyWisp keeps the connection after a missed heartbeat and sends heartbeats while connected,
+	 * a client that sends nothing, idle or running, is dead and blocks the server for others */
+	if (now - this->lastReceived > CLIENT_TIMEOUT)
+	{
+		this->setState(DISCONNECT);
+		return;
+	}
+	if (now - this->lastStatus >= STATUS_PERIOD)
+		this->sendStatus();
+
+	/* send data to client */
+	s = write();
+	if (s == DISCONNECT || s == ERROR)
+		this->setState(s);
+}
+
+/**
+ * @brief decodes a control frame of pyWisp (pywisp.min.Control), as tool-libs Experiment::handleFrame:
+ * bit 0 start/stop, bit 1 heartbeat, bit 2 (with bit 1) sync followed by the sync id
+ */
+void TcpIpServer::handleControl(const Frame &frame)
+{
+	const unsigned char cmd = frame.data.payload[0];
+	unsigned long now = (unsigned long)clock_ms();
+	if (cmd & 0x04)
+	{
+		/* sync: confirm the frames since the last control frame at once */
+		this->atSync.seq = frame.data.payload[1];
+		this->atSync.count = this->rxCount;
+		this->atSync.crc = this->rxCrc ^ 0xFFFFFFFFUL;
+		this->rxCrc = 0xFFFFFFFFUL;
+		this->rxCount = 0;
+		this->lastHeartbeat = now;
+		this->sendStatus();
+	}
+	else if (cmd & 0x02)
+	{
+		this->lastHeartbeat = now;
+	}
+	else
+	{
+		if (cmd & 0x01)
+		{
+			this->atStart.seq++;
+			this->atStart.count = this->rxCount;
+			this->atStart.crc = this->rxCrc ^ 0xFFFFFFFFUL;
+			this->_started = true;
+			this->lastHeartbeat = now;
+		}
+		this->rxCrc = 0xFFFFFFFFUL;
+		this->rxCount = 0;
+		this->_running = (cmd & 0x01) != 0;
+		/* pyWisp waits for the status to confirm the start */
+		if (this->_running)
+			this->sendStatus();
 	}
 }
 
 /**
- * @brief closes sockets upon client disconnect
+ * @brief queues the status frame (pywisp.min.RigStatus, version 1, little endian)
  */
-void TcpIpServer::closeSockets()
+void TcpIpServer::sendStatus()
 {
-	_status = BUSY;
-	switch (tcp_step)
-	{
-		case 0:
-			/* close client socket */
-			TcpClose_0.ident = this->clientID;
-			TcpClose_0.how = 0;
-			TcpClose_0.enable = true;
-			TcpClose(&TcpClose_0);
-			if (TcpClose_0.status == ERR_OK)
-			{
-				tcp_step = 1;
-			}
-			else if (TcpClose_0.status == ERR_FUB_BUSY)
-				;
-			else
-			{
-				tcp_step = 255;
-				_status = ERROR;
-			}
-			break;
-		case 1:
-			/* end server */
-			TcpClose_0.ident = this->serverID;
-			TcpClose_0.how = 0;
-			TcpClose_0.enable = true;
-			TcpClose(&TcpClose_0);
-			if (TcpClose_0.status == ERR_OK)
-			{
-				_status = READY;
-				tcp_step = 0;
-			}
-			else if (TcpClose_0.status == ERR_FUB_BUSY)
-				;
-			else
-			{
-				tcp_step = 255;
-				_status = ERROR;
-			}
-			break;
-		default:
-			break;
-	}  
+	Frame f(STATUS_ID);
+	unsigned char *p = f.data.payload;
+	unsigned long now = (unsigned long)clock_ms();
+	p[0] = 1;
+	p[1] = this->_running ? 1 : 0;
+	p[2] = this->statusFlags;
+	p[3] = this->atStart.seq;
+	putLE(p + 4, this->atStart.count, 2);
+	putLE(p + 6, this->atStart.crc, 4);
+	putLE(p + 10, now, 4);
+	p[14] = this->atSync.seq;
+	putLE(p + 15, this->atSync.count, 2);
+	putLE(p + 17, this->atSync.crc, 4);
+	this->handleFrame(f);
+	this->lastStatus = now;
+}
+
+/**
+ * @brief forgets everything of the last client, stops the experiment
+ */
+void TcpIpServer::resetSession()
+{
+	this->outBufferLen[0] = 0;
+	this->outBufferLen[1] = 0;
+	this->currentOutBuf = 0;
+	this->leftover = false;
+	this->inBufferLen = 0;
+	this->rxCrc = 0xFFFFFFFFUL;
+	this->rxCount = 0;
+	this->_running = false;
+	this->lastHeartbeat = 0;
+	this->lastReceived = (unsigned long)clock_ms();
+}
+
+/**
+ * @brief closes a socket, asynchronous: call while it returns ERR_FUB_BUSY, ident is 0 afterwards
+ */
+unsigned short TcpIpServer::closeSocket(unsigned long &ident)
+{
+	if (!ident)
+		return ERR_OK;
+	TcpClose_0.ident = ident;
+	TcpClose_0.how = 0;
+	TcpClose_0.enable = true;
+	TcpClose(&TcpClose_0);
+	/* an error leaves nothing to close either */
+	if (TcpClose_0.status != ERR_FUB_BUSY)
+		ident = 0;
+	return TcpClose_0.status;
+}
+
+/**
+ * @brief closes the client socket upon client disconnect
+ */
+void TcpIpServer::disconnect()
+{
+	unsigned short status = this->closeSocket(this->clientID);
+	if (status == ERR_FUB_BUSY)
+		return;
+	this->resetSession();
+	/* on errors the server socket is opened again */
+	this->setState(status == ERR_OK ? WAIT : ERROR);
+}
+
+bool TcpIpServer::close()
+{
+	if (this->closeSocket(this->clientID) == ERR_FUB_BUSY)
+		return false;
+	if (this->closeSocket(this->serverID) == ERR_FUB_BUSY)
+		return false;
+	this->resetSession();
+	return true;
+}
+
+bool TcpIpServer::started()
+{
+	bool s = this->_started;
+	this->_started = false;
+	return s;
 }
 
 /**
@@ -337,4 +474,16 @@ void TcpIpServer::closeSockets()
 void TcpIpServer::registerListener(Comm *t)
 {
 	this->transp = t;
+}
+
+unsigned long TcpIpServer::crc32(unsigned long crc, const unsigned char *data, unsigned int len)
+{
+	/* bitwise, reflected polynomial 0xEDB88320: 82 bytes per frame are cheap enough */
+	for (unsigned int i = 0; i < len; ++i)
+	{
+		crc ^= data[i];
+		for (int k = 0; k < 8; ++k)
+			crc = (crc >> 1) ^ (0xEDB88320UL & (0UL - (crc & 1UL)));
+	}
+	return crc;
 }

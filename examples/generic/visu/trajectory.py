@@ -4,21 +4,20 @@ from collections import OrderedDict
 from pywisp.experimentModules import *
 from pywisp.utils import packArrayToFrame, flatten
 
-from connection import Connection
+import numpy as np
 
 
 class Trajectory(ExperimentModule):
     dataPoints = [
-        'T: y',
-        'T: dy',
+        'T',
     ]
+    dataPointElements = {'T': ['y', 'dy']}
+
     publicSettings = OrderedDict([
         ("Type", 0),
         ("times", [0]),
         ("values", [0])
     ])
-
-    connection = Connection.__name__
 
     def __init__(self):
         ExperimentModule.__init__(self)
@@ -36,9 +35,14 @@ class Trajectory(ExperimentModule):
         return dataPoints
 
     def handleFrame(self, frame):
-        if frame.id != 25: return None
-        data = struct.unpack(f'<L{len(self.dataPoints)}d', frame.payload)
-        return {
-            'Time': data[0],
-            'DataPoints': dict(zip(self.dataPoints, data[1:]))
-        }
+        dataPoints = {}
+        fid = frame.id
+        if fid == 25:
+            # unpack_from: over Tcp the payload is padded to 80 bytes
+            data = struct.unpack_from('<L2d', frame.payload)
+            dataPoints['Time'] = data[0]
+            dataPoints['DataPoints'] = {'T': np.array(data[1:3])}
+        else:
+            dataPoints = None
+
+        return dataPoints

@@ -7,63 +7,32 @@
 
 /**< amount of memory to be allocated for heap storage must be specified for
      every ANSI C++ program with the bur_heap_size variable */
-unsigned long bur_heap_size = 0xFFFFF; 
-
-int counterClose = 0;
+unsigned long bur_heap_size = 0x1000; /* nothing is allocated with new */
 
 /** TcpIpServer instance */
-TcpIpServer Server(50007); 
+TcpIpServer Server(50007);
 
 /** Transport instance */
 Transport transport;
 
 void _INIT ProgramInit(void)
 {
-	mainState = 0;
-	counterClose = 0;
 	Server.registerListener(&transport);
 	transport.registerServer(&Server);
 	Server.deinit();
 }
 
+/** runs in Cyclic#4 (100 ms) after ControlLoop */
 void _CYCLIC ProgramCyclic(void)
 {
-	switch (mainState)
-	{
-		case 0:
-			/** start server and wait for client*/
-			Server.init();
-			if (Server.status == TcpIpServer::READY)
-				mainState = 1;
-			else if ((Server.status == TcpIpServer::STOP) || (Server.status == TcpIpServer::ERROR))
-				mainState = 255;
-			break;
-		case 1:
-			/** read from and write to client */
-			Server.sync();
-			if (Server.status == TcpIpServer::READY)
-				mainState = 1;
-			else if ((Server.status == TcpIpServer::STOP) || (Server.status == TcpIpServer::ERROR))
-				mainState = 10;
-			break;
-		case 10:
-			/** end connection*/
-			Server.closeSockets();
-			if (Server.status == TcpIpServer::READY)
-				mainState = 11;
-			break;
-		case 11:
-			/** wait 5 seconds, then restart server */
-			if (counterClose++ > 50)
-			{
-				counterClose = 0;
-				mainState = 0;
-			}
-			break;
-		default:
-			break;
-	}
-	/** send data every 100ms */
+	state = Server.run();
+	if (!Server.isRun())
+		transport.reset();
+	/* start, stop, missed heartbeat and disconnect are handled by the server */
+	if (Server.started())
+		benchData.lTime = 0;
+	expData.bActivateExperiment = Server.running();
+	/** send data every cycle (100 ms) */
 	if (expData.bActivateExperiment) {
 		transport.sendData();
 		benchData.lTime += 100;
@@ -72,5 +41,7 @@ void _CYCLIC ProgramCyclic(void)
 
 void _EXIT ProgramExit(void)
 {
-    Server.closeSockets();
+	/* TcpClose is asynchronous: close the sockets before the task is removed (bounded, no endless loop) */
+	for (unsigned long i = 0; i < 100000 && !Server.close(); ++i)
+		;
 }

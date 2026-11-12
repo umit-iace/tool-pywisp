@@ -22,33 +22,30 @@ void Transport::sendData() {
 	trajFrame.pack(benchData.lTime);
 	trajFrame.pack(trajData.dOutput);
 	tcp->handleFrame(trajFrame);
+
+	Frame seriesFrame(15);
+	seriesFrame.pack(benchData.lTime);
+	seriesFrame.pack(trajData.dSeriesOutput);
+	tcp->handleFrame(seriesFrame);
 }
 
 /*
- * @brief handles all frames arriving at the testbench
+ * @brief handles all frames arriving at the testbench, the control frames (id 1) are handled by the TcpIpServer
  */
-void Transport::handleFrame(Frame frame)
+void Transport::handleFrame(const Frame &frame)
 {
 	switch (frame.data.id) {
-		case 1:
-			unpackExp(frame);
-			break;
 		case 12:
 			unpackBenchData(frame);
 			break;
 		case 13:
 			unpackTrajRampData(frame);
 			break;
+		case 14:
+			unpackTrajSeriesData(frame);
+			break;
 		default:;
 	}
-}
-
-/**
- * @brief unpacks experiment activation status and resets experiment time
- */
-void Transport::unpackExp(Frame frame) {
-	frame.unPack(expData.bActivateExperiment);
-	benchData.lTime = 0;
 }
 
 void Transport::unpackBenchData(Frame frame) {
@@ -63,6 +60,36 @@ void Transport::unpackTrajRampData(Frame frame) {
 	frame.unPack(trajData.lStartTime);
 	frame.unPack(trajData.dEndValue);
 	frame.unPack(trajData.lEndTime);
+}
+
+/**
+ * @brief receives the series as pywisp.utils.packArrayToFrame(14, data, 80, 8, 2) sends it: the first frame holds
+ * the number of values (unsigned short) and up to 9 doubles, the following ones up to 10 doubles each.
+ * The values are all times [ms], then all values. The series is used once it is complete.
+ */
+void Transport::unpackTrajSeriesData(Frame frame) {
+	const unsigned short maxCount = sizeof(trajData.adSeries) / sizeof(trajData.adSeries[0]);
+	unsigned int n = MAX_PAYLOAD / 8;
+	if (seriesRecv >= seriesCount) {
+		frame.unPack(seriesCount);
+		seriesRecv = 0;
+		trajData.uiSeriesPoints = 0;
+		n = (MAX_PAYLOAD - 2) / 8;
+	}
+	for (unsigned int i = 0; i < n && seriesRecv < seriesCount; ++i, ++seriesRecv) {
+		double d = 0;
+		frame.unPack(d);
+		/* values of a series that is too long are dropped, it is not used */
+		if (seriesRecv < maxCount)
+			trajData.adSeries[seriesRecv] = d;
+	}
+	if (seriesRecv >= seriesCount && seriesCount <= maxCount)
+		trajData.uiSeriesPoints = seriesCount / 2;
+}
+
+void Transport::reset() {
+	seriesCount = 0;
+	seriesRecv = 0;
 }
 
 /**

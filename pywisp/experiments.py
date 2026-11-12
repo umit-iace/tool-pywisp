@@ -3,11 +3,14 @@ import ast
 import logging
 from collections import OrderedDict
 
-from PyQt5.QtCore import Qt, QSize, pyqtSignal, QObject
-from PyQt5.QtGui import QStandardItemModel, QStandardItem
-from PyQt5.QtWidgets import QItemDelegate, QTreeView
+from PyQt6.QtCore import Qt, QSize, pyqtSignal, QObject
+from PyQt6.QtGui import QBrush, QColor, QStandardItemModel, QStandardItem
+from PyQt6.QtWidgets import QItemDelegate, QTreeView
 
+from .config import RESERVED_KEYS as NON_MODULE_KEYS
 from .experimentModules import ExperimentModuleException
+from .measurement import elementName
+from .min import CONTROL_FRAME_ID, SYSTEM_FRAME_IDS, Control, controlFrame
 from .registry import *
 import copy as cp
 
@@ -16,14 +19,35 @@ class ExperimentException(Exception):
     pass
 
 
+def rigStopReason(reason):
+    """ text for the reason of a stop by the rig (second payload byte of its control frame) """
+    if reason == 0:
+        return "the rig missed the heartbeat and stopped the experiment"
+    return f"the rig stopped the experiment (error code {reason})"
+
+
 class ExperimentModel(QStandardItemModel):
     """
-    Model to provide item model that includes an additional name attribute
+    Model to provide item model that includes an additional name attribute.
+
+    It only displays the settings of the :class:`ExperimentInteractor`, values edited
+    by the user are reported with :attr:`settingEdited`.
     """
+    #: module, setting and new value of a setting edited in the view
+    settingEdited = pyqtSignal(str, str, object)
 
     def __init__(self, parent=None):
         QStandardItemModel.__init__(self, parent)
         self._name = None
+
+    def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
+        ok = super().setData(index, value, role)
+        if role == Qt.ItemDataRole.EditRole and index.column() == 1 and index.parent().isValid():
+            module = self.itemFromIndex(index.parent()).data(PropertyItem.RawDataRole)
+            key = self.itemFromIndex(index.siblingAtColumn(0)).data(PropertyItem.RawDataRole)
+            # the item keeps its old value if the text cannot be parsed
+            self.settingEdited.emit(module, key, self.itemFromIndex(index).data(PropertyItem.RawDataRole))
+        return ok
 
     def setName(self, name):
         self._name = name
@@ -33,13 +57,13 @@ class ExperimentModel(QStandardItemModel):
 
     def flags(self, index):
         if index.column() == 1:
-            return Qt.ItemIsEditable | Qt.ItemIsEnabled
+            return Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsEnabled
         else:
-            return Qt.ItemIsEnabled
+            return Qt.ItemFlag.ItemIsEnabled
 
 
 class PropertyItem(QStandardItem):
-    RawDataRole = Qt.UserRole + 1
+    RawDataRole = Qt.ItemDataRole.UserRole + 1
 
     def __init__(self, data):
         QStandardItem.__init__(self)
@@ -48,13 +72,13 @@ class PropertyItem(QStandardItem):
         self._text = self._getText(data)
 
     def type(self):
-        return QStandardItem.UserType
+        return QStandardItem.ItemType.UserType
 
     def _getText(self, data):
         return str(data)
 
     def setData(self, Any, role=None, *args, **kwargs):
-        if role == Qt.EditRole:
+        if role == Qt.ItemDataRole.EditRole:
             try:
                 self._data = ast.literal_eval(Any)
             except (SyntaxError, ValueError) as e:
@@ -70,9 +94,9 @@ class PropertyItem(QStandardItem):
             raise NotImplementedError
 
     def data(self, role=None, *args, **kwargs):
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
             return self._text
-        elif role == Qt.EditRole:
+        elif role == Qt.ItemDataRole.EditRole:
             if isinstance(self._data, str):
                 return "'" + self._text + "'"
             else:
@@ -128,19 +152,47 @@ class ExperimentInteractor(QObject):
     expFinished = pyqtSignal()
     expStop = pyqtSignal()
     sendData = pyqtSignal(object)
+    #: the rig missed the heartbeat and stopped the experiment, kept for compatibility, see :attr:`rigStopped`
     missedbeat = pyqtSignal()
+    #: the rig stopped the experiment by itself, with the reason: 0 missed heartbeat, else a rig specific error code
+    rigStopped = pyqtSignal(int)
+
+    #: background of a rig value that equals the value (`True`) or not (`False`)
+    RIG_COLORS = {True: QColor(92, 184, 92, 110), False: QColor(217, 83, 79, 110)}
 
     def __init__(self, targetView, parent=None):
         QObject.__init__(self, parent)
         self._logger = logging.getLogger(self.__class__.__name__)
         self.targetView = targetView
         self.dataPoints = None
+        self.dataPointElements = {}
         self.runningExperiment = False
         # create model
         self.targetModel = ExperimentModel(self)
         self.targetModel.itemChanged.connect(self.itemChanged)
+        self.targetModel.settingEdited.connect(self._onSettingEdited)
+        # settings of the modules of the applied experiment, the model only displays them
+        self._settings = OrderedDict()
+        # value items of the model by (module, setting)
+        self._settingItems = {}
         # parameter change settings
         self.modSets = {}
+        # instances of the modules of the applied experiment
+        self._instances = {}
+        # name of the active connection, passed to the modules as their `connection` attribute
+        self.connection = None
+        # modules that handle incoming frames, None until first needed
+        self._frameHandlerCache = None
+        # number of failed handleFrame calls per module
+        self._frameErrors = {}
+        #: settings sent by the last parameter function, {module: settings}, see :meth:`confirmSettings`
+        self.lastSent = {}
+        #: settings confirmed by the rig, {module: settings}, `None` if unknown
+        self.rigSettings = None
+        # the rig confirms parameters, its values are shown with colors
+        self._trackRig = False
+        # rig items of the model by (module, setting)
+        self._rigItems = {}
 
     def _addSettings(self, moduleName, parent):
         """
@@ -151,9 +203,9 @@ class ExperimentInteractor(QObject):
         settings = self._readSettings(moduleName)
 
         for key, val in settings.items():
-            setting_name = PropertyItem(key)
-            setting_value = PropertyItem(val)
-            parent.appendRow([setting_name, setting_value])
+            settingName = PropertyItem(key)
+            settingValue = PropertyItem(val)
+            parent.appendRow([settingName, settingValue, QStandardItem()])
 
     def _readSettings(self, moduleName):
         """
@@ -161,8 +213,7 @@ class ExperimentInteractor(QObject):
         :param moduleName: the given experiment module name
         :return: settings of module or raise an exception if module is unknown
         """
-        modules = getRegisteredExperimentModules()
-        return modules[moduleName].publicSettings
+        return self._getModule(moduleName).publicSettings
 
     def _readDataPoints(self, moduleName):
         """
@@ -170,8 +221,43 @@ class ExperimentInteractor(QObject):
         :param moduleName: the given experiment module name
         :return: data points of module or raise an exception if module is unknown
         """
-        modules = getRegisteredExperimentModules()
-        return modules[moduleName].dataPoints
+        return self._getModule(moduleName).dataPoints
+
+    @staticmethod
+    def _getModule(moduleName):
+        """
+        Looks up a registered experiment module by name.
+        :raises ExperimentException: if the module is unknown
+        """
+        try:
+            return getRegisteredExperimentModules()[moduleName]
+        except KeyError:
+            raise ExperimentException(f"Experiment module '{moduleName}' is not registered!") from None
+
+    def _getInstance(self, moduleName):
+        """
+        Returns the instance of a module of the applied experiment, it is created on first use.
+        :raises ExperimentModuleException: if the module cannot be instantiated
+        """
+        instance = self._instances.get(moduleName)
+        if instance is None:
+            cls = self._getModule(moduleName)
+            try:
+                instance = cls()
+            except Exception as e:
+                raise ExperimentModuleException(f"Cannot create experiment module '{moduleName}': {e!r}") from e
+            instance.connection = self.connection
+            self._instances[moduleName] = instance
+        return instance
+
+    def setConnection(self, name):
+        """
+        Sets the name of the active connection, also in all module instances.
+        :param name: name of the connection class
+        """
+        self.connection = name
+        for instance in self._instances.values():
+            instance.connection = name
 
     def itemChanged(self, item):
         """
@@ -243,20 +329,20 @@ class ExperimentInteractor(QObject):
         :return: `True` if successful, `False` if errors occurred.
         """
         self.dataPoints = []
+        declaredElements = {}
+        self._instances = {}
+        self._frameHandlerCache = None
+        self._settings = OrderedDict()
+        self._settingItems = {}
+        self._rigItems = {}
         self.targetModel.clear()
         # insert header
-        self.targetModel.setHorizontalHeaderLabels(['Property', 'Value'])
+        self.targetModel.setHorizontalHeaderLabels(['Property', 'Value', 'Rig'])
         # insert main items
         for key, value in exp.items():
             if key == 'Name':
                 self.targetModel.setName(value)
-                continue
-
-            if key == 'Config':
-                continue
-            if key == 'Remote':
-                continue
-            if key == 'Visu':
+            if key in NON_MODULE_KEYS:
                 continue
 
             name = PropertyItem(key)
@@ -272,22 +358,21 @@ class ExperimentInteractor(QObject):
                 moduleName = parent.data(role=PropertyItem.RawDataRole)
                 self._addSettings(moduleName, parent)
                 self.dataPoints += self._readDataPoints(moduleName)
-            except ExperimentException as e:
+                for dp, names in self._getModule(moduleName).dataPointElements.items():
+                    if isinstance(names, str):
+                        raise ExperimentException(f"dataPointElements of '{moduleName}': the names of '{dp}' "
+                                                  f"must be a list, not the string {names!r}")
+                    if dp in declaredElements:
+                        raise ExperimentException(f"dataPointElements: '{dp}' is declared by more than one module")
+                    declaredElements[dp] = names
+                self._getInstance(moduleName)
+            except (ExperimentException, ExperimentModuleException) as e:
                 self._logger.error(e)
                 return False
+        self.dataPointElements = self._resolveElementNames(declaredElements)
 
         for moduleName, moduleValue in exp.items():
-            if moduleName == 'Name':
-                continue
-
-            if moduleName == 'Config':
-                continue
-            if moduleName == 'Remote':
-                continue
-            if moduleName == 'Visu':
-                continue
-
-            if not moduleValue:
+            if moduleName in NON_MODULE_KEYS or not moduleValue:
                 continue
 
             for valKey, valVal in moduleValue.items():
@@ -299,13 +384,94 @@ class ExperimentInteractor(QObject):
                         self.targetModel.setData(valueIdx, valVal, role=PropertyItem.RawDataRole)
                         break
                 else:
-                    self._logger.warning("_applyExperiment(): Setting: '{0}' not "
-                                         "available for Module: '{1}'".format(
-                        valKey, moduleName))
+                    self._logger.warning(f"_applyExperiment(): Setting: '{valKey}' not "
+                                         f"available for Module: '{moduleName}'")
+
+        for row in range(self.targetModel.rowCount()):
+            moduleItem = self.targetModel.item(row, 0)
+            moduleName = moduleItem.data(role=PropertyItem.RawDataRole)
+            self._settings[moduleName] = self.getSettings(moduleItem)
+            for child in range(moduleItem.rowCount()):
+                key = moduleItem.child(child, 0).data(role=PropertyItem.RawDataRole)
+                self._settingItems[(moduleName, key)] = moduleItem.child(child, 1)
+                self._rigItems[(moduleName, key)] = moduleItem.child(child, 2)
+        self._updateRigItems()
+
+        for mod, _, settings in self.activeModules():
+            mod.settings = OrderedDict(settings)
 
         self.targetView.setModel(self.targetModel)
 
         return True
+
+    def setParameter(self, module, parameter, value):
+        """
+        Sets a setting of a module of the applied experiment, it is sent with the next parameter update.
+        :return: `True` if the module has the setting
+        """
+        settings = self._settings.get(module)
+        if settings is None or parameter not in settings:
+            self._logger.warning(f"Setting '{parameter}' not available for Module '{module}'")
+            return False
+        settings[parameter] = value
+        item = self._settingItems[(module, parameter)]
+        item.setData(value, role=PropertyItem.RawDataRole)
+        self.targetModel.dataChanged.emit(item.index(), item.index())
+        self._updateRigItem(module, parameter)
+        return True
+
+    def _onSettingEdited(self, module, parameter, value):
+        """ takes over a value the user has edited in the view """
+        if module in self._settings:
+            self._settings[module][parameter] = value
+            self._updateRigItem(module, parameter)
+
+    def trackRig(self, enabled):
+        """
+        Shows the rig values with their background, green if they equal the values, else red.
+        Only for rigs that confirm the parameters, otherwise the rig values are not shown.
+        """
+        self._trackRig = enabled
+        self._updateRigItems()
+
+    def confirmSettings(self, snapshot):
+        """
+        Takes over settings confirmed by the rig.
+        :param snapshot: confirmed settings {module: settings}, e.g. :attr:`lastSent`
+        :return: list of the (module, setting, value) that changed on the rig
+        """
+        if self.rigSettings is None:
+            self.rigSettings = {}
+        changes = []
+        for module, settings in snapshot.items():
+            rig = self.rigSettings.setdefault(module, {})
+            for key, value in settings.items():
+                if key not in rig or rig[key] != value:
+                    changes.append((module, key, value))
+                rig[key] = value
+        self._updateRigItems()
+        return changes
+
+    def clearRigSettings(self):
+        """ forgets the rig values, e.g. after a disconnect or a restart of the rig """
+        self.rigSettings = None
+        self._updateRigItems()
+
+    def _updateRigItems(self):
+        for module, key in self._rigItems:
+            self._updateRigItem(module, key)
+
+    def _updateRigItem(self, module, key):
+        item = self._rigItems.get((module, key))
+        if item is None:
+            return
+        rig = (self.rigSettings or {}).get(module, {})
+        known = self._trackRig and key in rig
+        item.setText(str(rig[key]) if known else "")
+        brush = None
+        if self._trackRig:
+            brush = QBrush(self.RIG_COLORS[known and rig[key] == self._settings[module][key]])
+        item.setData(brush, Qt.ItemDataRole.BackgroundRole)
 
     def _editExperiment(self, exp):
         """
@@ -314,33 +480,48 @@ class ExperimentInteractor(QObject):
         :return: `True` if successful, `False` if errors occurred.
         """
         for moduleName, moduleValue in exp.items():
-            if moduleName == 'Name':
+            if moduleName in NON_MODULE_KEYS or not moduleValue:
                 continue
-
-            if moduleName == 'Config':
-                continue
-            if moduleName == 'Remote':
-                continue
-            if moduleName == 'Visu':
-                continue
-
-            if not moduleValue:
-                continue
-
             for valKey, valVal in moduleValue.items():
-                modules = self.targetModel.findItems(moduleName)[0]
-
-                for row in range(modules.rowCount()):
-                    if self.targetModel.data(modules.child(row, 0).index()) == valKey:
-                        valueIdx = self.targetModel.index(row, 1, self.targetModel.indexFromItem(modules))
-                        self.targetModel.setData(valueIdx, valVal, role=PropertyItem.RawDataRole)
-                        self.targetModel.dataChanged.emit(valueIdx, valueIdx)
-                        break
-                else:
-                    self._logger.warning("_applyExperiment(): Setting: '{0}' not "
-                                         "available for Module: '{1}'".format(valKey, moduleName))
+                self.setParameter(moduleName, valKey, valVal)
 
         return True
+
+    def _resolveElementNames(self, declared):
+        """
+        Checks the element names declared in `dataPointElements` of the modules, an invalid name
+        is logged and replaced by the default name of the element.
+        :return: element names by data point
+        """
+        def isDefaultName(name):
+            return any(name.startswith(dp + '.') and name[len(dp) + 1:].isdigit() for dp in self.dataPoints)
+
+        used = set(self.dataPoints)
+        resolved = {}
+        for dp, names in declared.items():
+            if dp not in self.dataPoints:
+                self._logger.error(f"dataPointElements: '{dp}' is not a data point")
+                continue
+            resolved[dp] = []
+            for idx, name in enumerate(names):
+                default = elementName(dp, idx)
+                key = elementName(dp, 0, [name])
+                # the keys must be unique buffer keys, also with respect to default names of other elements
+                if not isinstance(name, str) or key != default and (key in used or isDefaultName(key)):
+                    self._logger.error(f"dataPointElements: invalid or duplicate name {name!r} for element "
+                                       f"{idx + 1} of '{dp}', using '{default}'")
+                    # the number gives the default name
+                    name, key = str(idx + 1), default
+                used.add(key)
+                resolved[dp].append(name)
+        return resolved
+
+    def getDataPointElements(self):
+        """
+        Returns the element names of the array data points of the experiment.
+        :return: dict mapping data point names to the names of their elements
+        """
+        return self.dataPointElements
 
     def getDataPoints(self):
         """
@@ -349,95 +530,184 @@ class ExperimentInteractor(QObject):
         """
         return self.dataPoints
 
-    def handleFrame(self, frame, connection):
+    def handleFrame(self, frame):
         """
         Returns the corresponding data points of a frame of the test rig.
         :param frame: data from the test rig
-        :param connection: connection of the frame
         :return: data points or None if nothing found
         """
-        if frame.id == 1:
+        if frame.id == CONTROL_FRAME_ID:
+            # payload[0] is 0 (stop), the optional payload[1] the reason
+            reason = frame.payload[1] if len(frame.payload) > 1 else 0
             self.stopExperiment(broadcast=False)
-            self._logger.warn("rig missed heartbeat! disconnecting...")
-            self.missedbeat.emit()
+            self._logger.warning(rigStopReason(reason))
+            if reason == 0:
+                self.missedbeat.emit()
+            self.rigStopped.emit(reason)
             return None
-        for mod, _, _ in self.activeModules():
-            if mod.connection != connection:
+        for mod, name in self._frameHandlers():
+            try:
+                dataPoints = mod.handleFrame(frame)
+            except Exception:
+                self._reportFrameError(name, frame)
                 continue
-            dataPoints = mod.handleFrame(mod,frame)
             if dataPoints:
                 return dataPoints
 
         return None
 
+    def _frameHandlers(self):
+        """
+        Returns the modules handling frames.
+        The result is cached, since this is called for every received frame.
+        """
+        if self._frameHandlerCache is None:
+            self._frameHandlerCache = list(self._activeModuleInstances())
+        return self._frameHandlerCache
+
+    def _reportFrameError(self, name, frame):
+        """
+        Logs a failing `handleFrame` call. Only the first error of a module is logged with
+        its traceback, otherwise a broken module would flood the log at the frame rate.
+        """
+        cnt = self._frameErrors.get(name, 0) + 1
+        self._frameErrors[name] = cnt
+        if cnt == 1:
+            self._logger.exception(f"Module '{name}' failed to handle frame {frame.id}, "
+                                   f"further errors of this module are suppressed")
+
+    def _logFrameErrorSummary(self):
+        for name, cnt in self._frameErrors.items():
+            self._logger.error(f"Module '{name}' failed to handle {cnt} frame(s)")
+        self._frameErrors = {}
+
+    def _collectParams(self, mod, name, funcName, settings, abort=False):
+        """
+        Calls a parameter function of a module and returns the valid frames.
+        Errors in user code are logged instead of crashing the gui.
+        :param settings: current settings of the module, also stored in its `settings` attribute
+        :param abort: re-raise the error as `ExperimentModuleException`
+        """
+        mod.settings = OrderedDict(settings)
+        try:
+            params = getattr(mod, funcName)(list(settings.values()))
+        except Exception as e:
+            if abort:
+                raise ExperimentModuleException(f"{name}.{funcName}() failed: {e!r}") from e
+            self._logger.exception(f"{name}.{funcName}() failed")
+            self._collectFailed = True
+            return []
+
+        frames = []
+        if not params:
+            params = []
+        elif not isinstance(params, list):
+            params = [params]
+        for frame in params:
+            problem = checkFrame(frame)
+            if problem is None:
+                frames.append(frame)
+                continue
+            msg = f"{name}.{funcName}() returned an invalid frame {frame!r}: {problem}"
+            if abort:
+                raise ExperimentModuleException(msg)
+            self._logger.error(msg + ", dropping it")
+            self._collectFailed = True
+        return frames
+
+    def _collectSent(self, mod, name, settings, data):
+        """
+        Adds the parameter frames of a module to `data`. Modules with dropped frames stay out of
+        :attr:`lastSent`, others would be taken for confirmed values.
+        """
+        self._collectFailed = False
+        data.extend(self._collectParams(mod, name, 'getParams', settings))
+        # a module without frames has nothing to confirm, its settings count as on the rig
+        if not self._collectFailed:
+            self.lastSent[name] = cp.deepcopy(settings)
+
     def updateSendParameter(self, module, parameter, value):
         if module in self.modSets:
             self.modSets[module][parameter] = value
 
-    def runExperiment(self):
+    def prepareExperiment(self):
         """
-        Sends all start parameters of all modules that are registered in the target model to start an experiment and
-        adds and frame with id 1 and payload 1 as general start command.
+        Sends the start parameters and parameters of all modules of the applied experiment,
+        :meth:`runExperiment` starts it afterwards. The sent settings are stored in :attr:`lastSent`.
+
+        :return: the sent frames, for the rig to confirm, see :meth:`ConnectionManager.sync`,
+            `None` if the experiment cannot be started
         """
         data = []
-        self.runningExperiment = True
+        self.lastSent = {}
         try:
             for mod, name, settings in self.activeModules():
 
                 self.modSets[name] = cp.copy(settings)
-                vals = list(settings.values())
 
-                startParams = mod.getStartParams(mod,vals)
-                data.extend(self.paramsToConnData(startParams, mod.connection))
-
-                params = mod.getParams(mod,vals)
-                data.extend(self.paramsToConnData(params, mod.connection))
+                frames = self._collectParams(mod, name, 'getStartParams', settings, abort=True)
+                frames += self._collectParams(mod, name, 'getParams', settings, abort=True)
+                data.extend(frames)
+                # a module without frames has nothing to confirm, its settings count as on the rig
+                self.lastSent[name] = cp.deepcopy(settings)
 
         except ExperimentModuleException as eme:
             self._logger.error(eme)
-            self.runningExperiment = False
+            self.lastSent = {}
             self.expFinished.emit()
             self.expStop.emit()
-            return
+            return None
 
-        # start experiment
-        payload = bytes([1])
-
-        data.append({'id': 1,
-                     'msg': payload})
         for _data in data:
             self.sendData.emit(_data)
+        return self._expected(data)
+
+    def runExperiment(self):
+        """ sends the general start command (control frame), after :meth:`prepareExperiment` """
+        self.runningExperiment = True
+        self._frameErrors = {}
+        self.sendData.emit(controlFrame(Control.START))
+
+    @staticmethod
+    def _expected(data):
+        """ the sent frames, control frames excluded """
+        return [_data for _data in data if _data['id'] != CONTROL_FRAME_ID]
 
     def sendChangedParameterExperiment(self):
         """
         Sends changed parameters of all modules that are registered in the target model to an experiment.
+
+        :return: the sent frames, for the rig to confirm, see
+            :meth:`ConnectionManager.sync`, `None` if nothing was sent
         """
         data = []
+        self.lastSent = {}
         for mod, name, settings in self.activeModules():
 
-            if self.modSets[name] == settings:
+            if self.modSets.get(name) == settings:
                 continue
             self.modSets[name] = cp.copy(settings)
-            vals = list(settings.values())
-            params = mod.getParams(mod,vals)
-            data.extend(self.paramsToConnData(params, mod.connection))
+            self._collectSent(mod, name, settings, data)
 
         for _data in data:
             self.sendData.emit(_data)
+        return self._expected(data) if data else None
 
     def sendParameterExperiment(self):
         """
         Sends all parameters of all modules that are registered in the target model to an experiment.
+
+        :return: as :meth:`sendChangedParameterExperiment`
         """
         data = []
+        self.lastSent = {}
         for mod, name, settings in self.activeModules():
 
-            vals = list(settings.values())
-            params = mod.getParams(mod,vals)
-            data.extend(self.paramsToConnData(params, mod.connection))
+            self._collectSent(mod, name, settings, data)
 
         for _data in data:
             self.sendData.emit(_data)
+        return self._expected(data) if data else None
 
     def stopExperiment(self, broadcast=True):
         """
@@ -452,20 +722,15 @@ class ExperimentInteractor(QObject):
         self.runningExperiment = False
         for mod, name, settings in self.activeModules():
 
-            vals = list(settings.values())
-
-            stopParams = mod.getStopParams(mod,vals)
-            data.extend(self.paramsToConnData(stopParams, mod.connection))
+            data.extend(self._collectParams(mod, name, 'getStopParams', settings))
 
         # stop experiment
         if broadcast:
-            payload = bytes([0])
-
-            data.append({'id': 1,
-                         'msg': payload})
+            data.append(controlFrame(Control.STOP))
             for _data in data:
                 self.sendData.emit(_data)
 
+        self._logFrameErrorSummary()
         self.expFinished.emit()
 
     def getExperiment(self):
@@ -480,22 +745,32 @@ class ExperimentInteractor(QObject):
 
         return exp
 
-    def activeModules(self):
+    def _activeModuleInstances(self):
+        """ like :meth:`activeModules`, but without reading the settings from the model """
         for row in range(self.targetModel.rowCount()):
-            index = self.targetModel.index(row, 0)
-            parent = index.model().itemFromIndex(index)
-            settings = self.getSettings(parent)
-            name = parent.data(role=PropertyItem.RawDataRole)
-            mod = getRegisteredExperimentModules()[name]
-            yield mod, name, settings
+            name = self.targetModel.item(row, 0).data(role=PropertyItem.RawDataRole)
+            yield self._getInstance(name), name
 
-    def paramsToConnData(self, params, conn):
-            if not params:
-                return []
-            data = []
-            if not isinstance(params, list):
-                params = [params]
-            for p in params:
-                p['connection'] = conn
-                data.append(p)
-            return data
+    def activeModules(self):
+        """ yields instance, name and a copy of the settings of every module of the applied experiment """
+        for name, settings in self._settings.items():
+            yield self._getInstance(name), name, OrderedDict(settings)
+
+
+def checkFrame(frame):
+    """
+    Checks a frame returned by an experiment module.
+
+    :return: description of the problem or `None` if the frame is valid
+    """
+    if not isinstance(frame, dict):
+        return "frames must be dicts with the keys 'id' and 'msg'"
+    fid = frame.get('id')
+    if not isinstance(fid, int) or isinstance(fid, bool) or not 0 <= fid <= 255:
+        return "the id must be an integer in [0, 255]"
+    if fid in SYSTEM_FRAME_IDS:
+        return (f"the id {fid} is reserved for the system frames "
+                f"({min(SYSTEM_FRAME_IDS)}..{max(SYSTEM_FRAME_IDS)}), use another id")
+    if not isinstance(frame.get('msg'), (bytes, bytearray)):
+        return "the payload 'msg' must be bytes"
+    return None
