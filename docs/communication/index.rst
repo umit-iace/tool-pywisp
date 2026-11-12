@@ -345,3 +345,29 @@ as columns ``Module.setting`` between ``time`` and the data points, each value v
         csv["CSV columns: time, Module.setting ..., data points<br/>settings forward filled,<br/>array points expanded to name.1, name.2 ..."]
         confirmed --> log --> params --> exporter
         buffers --> exporter --> csv
+
+.. _rig_log:
+
+Rig log
+-------
+
+A rig that calls ``e.enableLog(out, mask)`` of the tool-libs ``Experiment`` sends its log messages with the reserved
+id 3 (:data:`pywisp.min.LOG_FRAME_ID`), only when a message is logged, never cyclically. ``mask`` selects the levels
+with ``Logger::bit``, messages of other levels stay local:
+
+.. code-block:: cpp
+
+    e.enableStatus(out);
+    // INFO, WARN and ERROR go to pywisp, the cyclic k.log.print (NONE) stays on the console
+    e.enableLog(out, Logger::bit(Logger::INFO) | Logger::bit(Logger::WARN) | Logger::bit(Logger::ERROR));
+
+    k.log.info("trajectory type set to %s\n", name);
+    k.log.error("unknown trajectory type %u\n", t);
+
+Messages of ``k.log`` and of the experiment (``started``, ``stopped``, ``timed out!``) are sent. The payload is
+``[hdr][text...]``: bits 0..6 of ``hdr`` are the level (0 ``NONE``, 1 ``INFO``, 2 ``WARN``, 3 ``ERROR``), bit 7
+(:data:`pywisp.min.LOG_MORE`) says that another part follows, the text is raw UTF-8 without prefix and colors, at most
+127 bytes per frame. PyWisp takes these frames out before the experiment modules see them, joins the parts and logs
+the message with the logger ``Rig`` (levels :data:`pywisp.min.RIG_LOG_LEVELS`, unknown ones as ``WARNING``). The log
+window shows it like ``12:00:00 - Rig - WARNING - ...`` in the color of the level. Messages longer than
+``ConnectionManager.maxLogSize`` (1024 bytes) are dropped with a warning.

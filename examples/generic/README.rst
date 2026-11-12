@@ -63,6 +63,15 @@ Simulation
   CSV export writes them as columns ``Module.setting`` (e.g. ``DoublePendulum.Config``) after ``time``.
   ``tests/test_example_generic.py`` checks this over UDP and TCP.
 
+* Log messages of the rig
+
+  ``Model::init`` (``inc/model.h``) enables the log frames with
+  ``e.enableLog(out, Logger::bit(Logger::INFO) | Logger::bit(Logger::WARN) | Logger::bit(Logger::ERROR))``:
+  messages of ``k.log`` and of the experiment (e.g. ``started``) with a level in the mask are also sent to PyWisp,
+  which shows them in the log window under the name ``Rig`` with their level, e.g. after setting the trajectory type
+  ``12:00:00 - Rig - INFO - trajectory type set to LIN``. The messages are sent only when they are logged, the
+  cyclic ``k.log.print`` of the simulation (level ``NONE``, not in the mask) stays on the console.
+
 
 STM
 ---

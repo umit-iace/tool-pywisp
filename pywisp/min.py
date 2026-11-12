@@ -22,8 +22,9 @@ class SystemFrameId(IntEnum):
     CONTROL = 1
     #: status the rig sends (tool-libs `Experiment::enableStatus`), see :class:`RigStatus`
     STATUS = 2
+    #: log message the rig sends when one is triggered (tool-libs `Experiment::enableLog`), see :data:`LOG_MORE`
+    LOG = 3
     #: reserved for future system frames
-    RESERVED_3 = 3
     RESERVED_4 = 4
     RESERVED_5 = 5
 
@@ -71,6 +72,14 @@ def syncFrame(syncId):
 
 #: frame id reserved for the status the rig sends, same as :attr:`SystemFrameId.STATUS`
 STATUS_FRAME_ID = SystemFrameId.STATUS
+
+#: frame id of the log messages of the rig, same as :attr:`SystemFrameId.LOG`. Payload ``[hdr][text...]``,
+#: hdr bits 0..6 the level (key of :data:`RIG_LOG_LEVELS`), bit 7 :data:`LOG_MORE`, text raw UTF-8
+LOG_FRAME_ID = SystemFrameId.LOG
+#: bit of the log header: another part of the message follows
+LOG_MORE = 0x80
+#: python log level of the rig log levels (tool-libs `Logger::Lvl` NONE, INFO, WARN, ERROR), unknown ones are WARNING
+RIG_LOG_LEVELS = {0: logging.INFO, 1: logging.INFO, 2: logging.WARNING, 3: logging.ERROR}
 
 
 @dataclass

@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
+import logging
 import struct
 
 import pytest
 
-from pywisp.min import STATUS_FRAME_ID, Frame, RigStatus, controlFrame, Control, frameCrc
+from pywisp.min import LOG_FRAME_ID, LOG_MORE, STATUS_FRAME_ID, Frame, RigStatus, controlFrame, Control, frameCrc
 
 
 def statusFrame(running=False, flags=0, seq=0, count=0, crc=0, uptime=1000, sync=None):
@@ -166,3 +167,45 @@ def test_tcp_rig_receives_padded_frames(manager, qtbot):
     manager.expectStart(frames)
     with qtbot.waitSignal(manager.startConfirmed, timeout=500):
         manager._onFrames([statusFrame(True, seq=5, count=count, crc=crc)])
+
+
+def logFrame(level, text, more=False):
+    return Frame(LOG_FRAME_ID, bytes([level | (LOG_MORE if more else 0)]) + text.encode())
+
+
+def rigRecords(caplog):
+    return [(r.levelno, r.getMessage()) for r in caplog.records if r.name == "Rig"]
+
+
+@pytest.mark.parametrize("level, pyLevel", [(0, logging.INFO), (1, logging.INFO), (2, logging.WARNING),
+                                            (3, logging.ERROR), (42, logging.WARNING)])
+def test_log_frame(manager, caplog, level, pyLevel):
+    caplog.set_level(logging.INFO)
+    received = []
+    manager.framesReceived.connect(received.extend)
+    manager._onFrames([logFrame(level, "hällo\n"), Frame(15, b'data')])
+    assert rigRecords(caplog) == [(pyLevel, "hällo")]
+    assert [f.id for f in received] == [15]
+
+
+def test_log_frame_parts_are_joined(manager, caplog):
+    caplog.set_level(logging.INFO)
+    manager._onFrames([logFrame(2, "first ", more=True)])
+    assert rigRecords(caplog) == []
+    manager._onFrames([Frame(LOG_FRAME_ID, b''), logFrame(2, "second")])
+    assert rigRecords(caplog) == [(logging.WARNING, "first second")]
+
+
+def test_log_frame_tcp_padding_is_stripped(manager, caplog):
+    caplog.set_level(logging.INFO)
+    pad = bytes(40)
+    manager._onFrames([Frame(LOG_FRAME_ID, bytes([1 | LOG_MORE]) + b"a" + pad),
+                       Frame(LOG_FRAME_ID, bytes([1]) + b"b" + pad)])
+    assert rigRecords(caplog) == [(logging.INFO, "ab")]
+
+
+def test_log_frame_too_long_is_dropped(manager, caplog):
+    caplog.set_level(logging.INFO)
+    manager._onFrames([logFrame(1, "x" * 127, more=True)] * 9 + [logFrame(1, "end"), logFrame(1, "next")])
+    assert rigRecords(caplog) == [(logging.INFO, "next")]
+    assert "dropped" in caplog.text

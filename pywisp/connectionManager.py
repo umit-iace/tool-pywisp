@@ -11,7 +11,7 @@ from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 from PyQt6.QtGui import QActionGroup
 
 from .connection import Connection, SerialConnection
-from .min import STATUS_FRAME_ID, Control, RigStatus, controlFrame, frameCrc, syncFrame
+from .min import LOG_FRAME_ID, LOG_MORE, RIG_LOG_LEVELS, STATUS_FRAME_ID, Control, RigStatus, controlFrame, frameCrc, syncFrame
 from .registry import getRegisteredConnections
 from .settings import Settings
 from .widgets.dialogs import ConnectionSettingsDialog
@@ -74,6 +74,8 @@ class ConnectionManager(QObject):
     startTimeout = 1000
     #: [ms] time a rig has to send a frame after opening the connection
     answerTimeout = 1000
+    #: [B] longest log message of the rig, longer ones are dropped
+    maxLogSize = 1024
     #: [ms] interval of the heartbeat while connected and no run sets another one, servers that allow one
     #: client at a time (e.g. B&R) drop a client that sends nothing for a while
 
@@ -119,6 +121,8 @@ class ConnectionManager(QObject):
         # pending sync checks by sync id: (expected count, crc, deadline)
         self._pendingSyncs = {}
         self._syncId = 0
+        # parts of a log message of the rig that has more parts to follow
+        self._logParts = []
 
     @property
     def isConnected(self):
@@ -215,6 +219,7 @@ class ConnectionManager(QObject):
         self.cancelSyncChecks()
         self.rigStatus = None
         self._staleReported = False
+        self._logParts = []
         # the state is changed first, so a connection closing itself is not reported as lost
         self._setState(self.DISCONNECTED)
         conn, self.connection = self.connection, None
@@ -255,7 +260,7 @@ class ConnectionManager(QObject):
     # status of the rig
 
     def _onFrames(self, frames):
-        """ takes the status frames out, passes the others on """
+        """ takes the status and log frames out, passes the others on """
         if frames and not self.answered and self.connection is not None:
             self.answered = True
             self._answerTimer.stop()
@@ -267,6 +272,9 @@ class ConnectionManager(QObject):
                 self.rigStatusChanged.emit()
         data = []
         for frame in frames:
+            if frame.id == LOG_FRAME_ID:
+                self._onLog(bytes(frame.payload))
+                continue
             if frame.id != STATUS_FRAME_ID:
                 data.append(frame)
                 continue
@@ -277,6 +285,28 @@ class ConnectionManager(QObject):
             self._onStatus(status)
         if data:
             self.framesReceived.emit(data)
+
+    def _onLog(self, payload):
+        """ log frame of the rig: ``[hdr][text...]``, joins the parts and logs the message as logger `Rig` """
+        if not payload:
+            return
+        more = payload[0] & LOG_MORE
+        if self._logParts is None:
+            # rest of a dropped message
+            if not more:
+                self._logParts = []
+            return
+        # tcp pads every payload to maxPayload, the text ends at the first NUL
+        self._logParts.append(payload[1:].split(b"\0", 1)[0])
+        if sum(len(p) for p in self._logParts) > self.maxLogSize:
+            self._logger.warning(f"log message of the rig longer than {self.maxLogSize} B dropped")
+            self._logParts = None if more else []
+            return
+        if more:
+            return
+        text = b"".join(self._logParts).decode("utf-8", errors="replace").rstrip()
+        self._logParts = []
+        logging.getLogger("Rig").log(RIG_LOG_LEVELS.get(payload[0] & ~LOG_MORE, logging.WARNING), text)
 
     def _onStatus(self, status):
         last = self.rigStatus

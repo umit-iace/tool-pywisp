@@ -6,6 +6,7 @@ version of :data:`pywisp.TOOL_LIBS_VERSION`, over both connections of the exampl
 Set ``TOOL_LIBS_SOURCE_DIR`` to a local tool-libs checkout to build against it instead of
 fetching it, e.g. ``TOOL_LIBS_SOURCE_DIR=../tool-libs uv run pytest tests/test_example_generic.py``.
 """
+import logging
 import os
 import shutil
 import socket
@@ -19,7 +20,7 @@ import pytest
 from PyQt6.QtCore import Qt
 
 import pywisp as pw
-from pywisp.min import CONTROL_FRAME_ID, Control, controlFrame
+from pywisp.min import CONTROL_FRAME_ID, LOG_FRAME_ID, Control, controlFrame
 
 START = controlFrame(Control.START)
 
@@ -82,8 +83,12 @@ def test_tool_libs_version_is_used():
 
 
 @pytest.mark.parametrize("connection", ["Udp", "Tcp"])
-def test_generic_example(sim, example, qtbot, connection):
+def test_generic_example(sim, example, qtbot, connection, caplog):
     from pywisp.connectionManager import ConnectionManager
+    caplog.set_level(logging.INFO)
+
+    def rigLog(text):
+        return any(r.name == "Rig" and text in r.getMessage() for r in caplog.records)
     pendulum, traj = example
     manager = ConnectionManager()
     assert manager.setActiveConnection(connection)
@@ -107,6 +112,9 @@ def test_generic_example(sim, example, qtbot, connection):
                 for f in frames:
                     manager.write(f)
                 manager.write(controlFrame(Control.START))
+        # log frames of the rig (Experiment::enableLog in inc/model.h) end up in the logger Rig
+        qtbot.waitUntil(lambda: rigLog("trajectory type set to LIN") and rigLog("started"), timeout=5000)
+        assert all(f.id != LOG_FRAME_ID for f in received)
 
         def trajData():
             return [traj.handleFrame(f) for f in received if f.id == 25]

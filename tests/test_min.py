@@ -72,9 +72,11 @@ def test_control_frames(command, payload):
 
 def test_system_frame_ids():
     from pywisp.min import SYSTEM_FRAME_IDS, SystemFrameId
-    # same ids as tool-libs: 1 control, 2 status (Experiment::STATUS_ID), 3..5 reserved
+    from pywisp.min import LOG_FRAME_ID
+    # same ids as tool-libs: 1 control, 2 status (Experiment::STATUS_ID), 3 log (Experiment::LOG_ID), 4..5 reserved
     assert sorted(SYSTEM_FRAME_IDS) == [1, 2, 3, 4, 5]
     assert CONTROL_FRAME_ID is SystemFrameId.CONTROL and STATUS_FRAME_ID is SystemFrameId.STATUS
+    assert LOG_FRAME_ID is SystemFrameId.LOG and LOG_FRAME_ID == 3
     assert 0 not in SYSTEM_FRAME_IDS and 6 not in SYSTEM_FRAME_IDS
 
 

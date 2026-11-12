@@ -51,7 +51,12 @@ Some IDs mean different things depending on who sends the frame, so the table li
     * - 2
       - not used
       - Rig status (:data:`pywisp.min.STATUS_FRAME_ID`), see :ref:`rig_status`
-    * - 3 - 5
+    * - 3
+      - not used
+      - Rig log (:data:`pywisp.min.LOG_FRAME_ID`), sent when the rig logs a message: payload ``[hdr][text...]``,
+        ``hdr`` bits 0..6 the level (0 none, 1 info, 2 warn, 3 error), bit 7 another part follows, the text raw
+        UTF-8 (at most 127 bytes per frame), see :ref:`rig_log`
+    * - 4 - 5
       - Reserved for future system frames
       - Reserved for future system frames
     * - 0, 6 - 63
