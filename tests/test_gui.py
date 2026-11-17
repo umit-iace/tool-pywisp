@@ -1096,15 +1096,16 @@ def test_array_data_points(gui, monkeypatch, names):
 
 
 def test_plot_manager_export_ends(gui, qtbot, tmp_path, monkeypatch):
+    from pywisp.widgets.dialogs import ExportDialog
     from pywisp.widgets.fileselector import FileSelector
     pm = gui.plotManager
     startExperiment(gui)
     gui.updateData([frame(1000, 1.0)])
     gui.stopExperiment()
     monkeypatch.setattr(FileSelector, 'getSaveFileName', lambda self: str(tmp_path / "x.csv"))
-    pm.dataPointNameTree.topLevelItem(0).setSelected(True)
+    monkeypatch.setattr(ExportDialog, 'getDataPoints', staticmethod(lambda shown, parent=None: [shown[0][0]]))
     with qtbot.waitSignal(pm.exportDone, timeout=60000) as blocker:
-        pm.exportDataPointFromTree()
+        gui.actExport.trigger()
     assert blocker.args == [True]
     assert pm.exporter is None
     assert gui.statusbarLabel.text() == "Export successful."

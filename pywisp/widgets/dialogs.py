@@ -5,14 +5,14 @@ Dialogs for settings and the configuration of remote widgets.
 from PyQt6.QtCore import Qt, QRegularExpression
 from PyQt6.QtGui import QIcon, QIntValidator, QKeySequence, QRegularExpressionValidator
 import serial.tools.list_ports
-from PyQt6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QLayout, \
-    QLineEdit, QPushButton, QStackedWidget, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QLayout, \
+    QLineEdit, QPushButton, QSizePolicy, QStackedWidget, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 
 from ..connection import SerialConnection, SocketConnection
 from ..utils import getResource
 from .remote import REMOTE_WIDGETS
 
-__all__ = ["ConnectionSettingsDialog", "DataIntDialog", "DataTcpIpDialog", "RemoteWidgetEdit", "ShortcutCreator"]
+__all__ = ["ConnectionSettingsDialog", "DataIntDialog", "DataTcpIpDialog", "ExportDialog", "RemoteWidgetEdit", "ShortcutCreator"]
 
 
 IP_RANGE = "(?:[0-1]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])"
@@ -84,6 +84,86 @@ class DataIntDialog(QDialog):
         data = dialog._getData()
 
         return data, result == QDialog.DialogCode.Accepted
+
+class ExportDialog(QDialog):
+    """
+    Selection of the data points to export, array data points have a checkable child per element.
+    The checkbox "All" checks or unchecks all data points.
+
+    :param shown: data points as ``[(name, [element names])]``
+    """
+
+    def __init__(self, shown, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Export")
+        self.setWindowIcon(QIcon(getResource("icon.svg")))
+        self.resize(450, 500)
+        layout = QHBoxLayout(self)
+
+        self.tree = QTreeWidget(self)
+        self.tree.setHeaderLabels(["DataPoint"])
+        for name, elements in shown:
+            item = self._addItem(self.tree, name)
+            for element in elements:
+                self._addItem(item, element)
+        self.tree.itemChanged.connect(self._updateAllCheckBox)
+        layout.addWidget(self.tree)
+
+        sideLayout = QVBoxLayout()
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            Qt.Orientation.Vertical, self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        # a vertical button box stretches, which would push "All" down
+        buttons.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        sideLayout.addWidget(buttons)
+        self.allCheckBox = QCheckBox("All", self)
+        self.allCheckBox.clicked.connect(lambda: self._checkAll())
+        sideLayout.addWidget(self.allCheckBox)
+        sideLayout.addStretch()
+        layout.addLayout(sideLayout)
+
+    @staticmethod
+    def _addItem(parent, text):
+        item = QTreeWidgetItem(parent, [text])
+        # auto tristate: checking a parent checks its children, the parent shows their state
+        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsAutoTristate)
+        item.setCheckState(0, Qt.CheckState.Unchecked)
+        return item
+
+    def _topLevelItems(self):
+        return [self.tree.topLevelItem(i) for i in range(self.tree.topLevelItemCount())]
+
+    def _checkAll(self):
+        # a click checks all, unless all are checked, the partial state is never set by a click
+        allChecked = all(item.checkState(0) == Qt.CheckState.Checked for item in self._topLevelItems())
+        state = Qt.CheckState.Unchecked if allChecked else Qt.CheckState.Checked
+        for item in self._topLevelItems():
+            item.setCheckState(0, state)
+
+    def _updateAllCheckBox(self):
+        states = {item.checkState(0) for item in self._topLevelItems()}
+        self.allCheckBox.setCheckState(states.pop() if len(states) == 1 else Qt.CheckState.PartiallyChecked)
+        self.allCheckBox.setTristate(self.allCheckBox.checkState() == Qt.CheckState.PartiallyChecked)
+
+    def checkedDataPoints(self):
+        """ names of the checked buffers, the elements of an array data point or the data point itself """
+        names = []
+        for item in self._topLevelItems():
+            for it in [item.child(j) for j in range(item.childCount())] or [item]:
+                if it.checkState(0) == Qt.CheckState.Checked:
+                    names.append(it.text(0))
+        return names
+
+    @staticmethod
+    def getDataPoints(shown, parent=None):
+        """ checked buffer names or `None` if cancelled """
+        dialog = ExportDialog(shown, parent)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialog.checkedDataPoints()
+
 
 class DataTcpIpDialog(QDialog):
     """

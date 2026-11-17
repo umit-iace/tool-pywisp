@@ -10,7 +10,8 @@ from pywisp.config import validateExperiments
 from pywisp.connection import SerialConnection, UdpConnection
 from pywisp.experimentModules import ExperimentModule
 from pywisp.settings import Settings
-from pywisp.widgets.dialogs import ConnectionSettingsDialog, DataIntDialog, DataTcpIpDialog, RemoteWidgetEdit, ShortcutCreator
+from pywisp.widgets.dialogs import ConnectionSettingsDialog, DataIntDialog, DataTcpIpDialog, ExportDialog, \
+    RemoteWidgetEdit, ShortcutCreator
 from pywisp.widgets.fileselector import FileSelector
 from pywisp.widgets.remote import REMOTE_WIDGETS
 
@@ -259,6 +260,37 @@ def test_escape_in_shortcut_field_keeps_dialog_open(qtbot):
     QTest.keyClick(dialog.shortcutField, Qt.Key.Key_Escape)
     assert dialog.isVisible()
     assert dialog._getData()['shortcut'] == 'Esc'
+
+
+def test_export_dialog(qtbot):
+    dialog = ExportDialog([('array', ['array[0]', 'array[1]']), ('scalar', []), ('other', [])])
+    qtbot.addWidget(dialog)
+    assert dialog.checkedDataPoints() == []
+    dialog.tree.topLevelItem(0).setCheckState(0, Qt.CheckState.Checked)
+    dialog.tree.topLevelItem(1).setCheckState(0, Qt.CheckState.Checked)
+    assert dialog.checkedDataPoints() == ['array[0]', 'array[1]', 'scalar']
+
+
+def test_export_dialog_all(qtbot):
+    dialog = ExportDialog([('array', ['array[0]', 'array[1]']), ('scalar', [])])
+    qtbot.addWidget(dialog)
+    allNames = ['array[0]', 'array[1]', 'scalar']
+    dialog.allCheckBox.click()
+    assert dialog.checkedDataPoints() == allNames
+    dialog.tree.topLevelItem(0).child(1).setCheckState(0, Qt.CheckState.Unchecked)
+    assert dialog.allCheckBox.checkState() == Qt.CheckState.PartiallyChecked
+    assert dialog.checkedDataPoints() == ['array[0]', 'scalar']
+    dialog.allCheckBox.click()
+    assert dialog.checkedDataPoints() == allNames
+    assert dialog.allCheckBox.checkState() == Qt.CheckState.Checked
+    dialog.allCheckBox.click()
+    assert dialog.checkedDataPoints() == []
+    assert dialog.allCheckBox.checkState() == Qt.CheckState.Unchecked
+
+
+def test_export_dialog_cancelled(monkeypatch):
+    monkeypatch.setattr(ExportDialog, 'exec', lambda self: QDialog.DialogCode.Rejected)
+    assert ExportDialog.getDataPoints([('scalar', [])]) is None
 
 
 class TestFileSelector:

@@ -13,6 +13,7 @@ from pyqtgraph.dockarea import Dock
 from ..buffer import DataPointBuffer, ElementBuffer
 from ..export import Exporter
 from .common import TreeWidgetStyledItemDelegate
+from .dialogs import ExportDialog
 from .plotchart import PlotChart
 
 __all__ = ["PlotManager"]
@@ -93,12 +94,6 @@ class PlotManager(QWidget):
         )
         self.dataPointLeftButton.clicked.connect(self.removeDataPointFromTree)
         buttonsLayout.addWidget(self.dataPointLeftButton)
-        self.dataPointExportButton = QPushButton(chr(0x25BC), self)
-        self.dataPointExportButton.setToolTip(
-            "Export the selected data set from the left to a csv or png file."
-        )
-        self.dataPointExportButton.clicked.connect(self.exportDataPointFromTree)
-        buttonsLayout.addWidget(self.dataPointExportButton)
         self.dataPointPlotAddButton = QPushButton("+", self)
         self.dataPointPlotAddButton.setToolTip(
             "Create a new plot window."
@@ -114,6 +109,8 @@ class PlotManager(QWidget):
         )
         self.dataPointPlotRemoveButton.clicked.connect(self.removeSelectedPlotTreeItems)
         buttonsLayout.addWidget(self.dataPointPlotRemoveButton)
+        # stretch above and below centers the buttons vertically
+        buttonsLayout.addStretch()
         buttonsWidget.setLayout(buttonsLayout)
         layout.addWidget(buttonsWidget)
 
@@ -290,19 +287,22 @@ class PlotManager(QWidget):
 
         self.updatePlotChart(toplevelItem)
 
-    def exportDataPointFromTree(self):
+    def exportDataPoints(self):
+        """ asks for the data points to export with :class:`ExportDialog`, then for the file """
         if self.exporter is not None:
             self._logger.error("There is already an export job running")
-            return
-
-        expLabels = self.selectedDataPoints()
-        if not expLabels:
-            self._logger.error("Can't export data set: no data set selected.")
             return
 
         measurement = self._currentMeasurement()
         if measurement is None:
             self._logger.error("Nothing to export!")
+            return
+
+        expLabels = ExportDialog.getDataPoints(self._shownDataPoints or [], self)
+        if expLabels is None:
+            return
+        if not expLabels:
+            self._logger.error("Can't export data set: no data set selected.")
             return
         dataPointBuffers = measurement.dataPointBuffers
 

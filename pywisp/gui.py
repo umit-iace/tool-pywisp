@@ -248,6 +248,9 @@ class MainGui(QMainWindow):
         self.actStopExperiment.setShortcut(QKeySequence("F6"))
         self.actStopExperiment.triggered.connect(self.stopExperiment)
 
+        self.actExport = QAction("&Export", self)
+        self.actExport.setToolTip("Export data points to a file")
+
         self.visComboBox = QComboBox()
 
         # selection of the active connection, synced with the radio buttons of the connections menu
@@ -284,6 +287,7 @@ class MainGui(QMainWindow):
         self.plotManager.coords.connect(self.updateCoordInfo)
         self.plotManager.allPlotsClosed.connect(self.disableCoord)
         self.plotManager.exportDone.connect(self.exportDone)
+        self.actExport.triggered.connect(self.plotManager.exportDataPoints)
         self.dataDock.addWidget(self.plotManager)
 
         # init logger for logging box
@@ -398,6 +402,13 @@ class MainGui(QMainWindow):
         self.toolbarExp.addSeparator()
         self.toolbarExp.addWidget(self.expButton)
         self.toolbarExp.addSeparator()
+        self.exportButton = QToolButton()
+        self.exportButton.setDefaultAction(self.actExport)
+        self.exportButton.setIconSize(iconSize)
+        self.exportButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.exportButton.setAutoRaise(True)
+        self.toolbarExp.addWidget(self.exportButton)
+        self.toolbarExp.addSeparator()
         vSpacer = QWidget()
         vSpacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.toolbarExp.addWidget(vSpacer)
@@ -410,7 +421,7 @@ class MainGui(QMainWindow):
         self._themedIcons = {self.actStartExperiment: ("play.png", green), self.actStopExperiment: ("stop.png", red),
                              self.actConnect: ("connected.png", green),
                              self.actDisconnect: ("disconnected.png", red),
-                             self.actToggleTheme: ("theme.svg", None)}
+                             self.actToggleTheme: ("theme.svg", None), self.actExport: ("export.svg", None)}
 
         self._currentExpListItem = None
         self._currentLastMeasItem = None
