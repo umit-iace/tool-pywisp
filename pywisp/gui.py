@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import json
 import logging
 import os
 import shutil
@@ -30,9 +29,8 @@ except ImportError:
 from PyQt6.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QCoreApplication
 from PyQt6.QtGui import QAction, QActionGroup, QBrush, QFontDatabase, QGuiApplication, QIcon, QKeySequence, QPalette, QPixmap
 from PyQt6.QtWidgets import QAbstractItemView, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QSizePolicy, QSplashScreen, QStatusBar, QTextEdit, QStyle, QStyleOptionToolButton, QStylePainter, QToolBar, QToolButton, \
-    QSplitter, QVBoxLayout, QWidget
+    QDockWidget, QTabWidget, QVBoxLayout, QWidget
 from PyQt6.QtWidgets import QMessageBox
-from pyqtgraph.dockarea import DockArea
 
 from .config import dumpExperiments, validateExperiments
 from .connectionManager import ConnectionManager
@@ -40,7 +38,7 @@ from .experiments import ExperimentInteractor, ExperimentView, rigStopReason
 from .registry import getRegisteredExperimentModules, getRegisteredVisualizers
 from .measurement import Measurement, addDataPointValue
 from .utils import getResource, setupLogging
-from .widgets.common import PlainTextLogger, PinnedDock
+from .widgets.common import PlainTextLogger
 from .widgets.dialogs import DataIntDialog
 from .widgets.remotepanel import RemotePanel
 
@@ -190,42 +188,48 @@ class MainGui(QMainWindow):
             lambda: self.guiTimeLabel.setText(timeString(time.time() - self.guiStartTime))
         )
 
-        # the docking area allows to rearrange the user interface at runtime
-        self.area = DockArea()
-        self.setCentralWidget(self.area)
+        # the docks can be rearranged at runtime, the plots and the animation in the plot area in the center,
+        # the other docks around it
+        self.plotArea = QMainWindow()
+        for window in (self, self.plotArea):
+            window.setDockOptions(QMainWindow.DockOption.AllowTabbedDocks | QMainWindow.DockOption.AllowNestedDocks
+                                  | QMainWindow.DockOption.AnimatedDocks)
+            window.setTabPosition(Qt.DockWidgetArea.AllDockWidgetAreas, QTabWidget.TabPosition.North)
+        self.setCentralWidget(self.plotArea)
+        # the log spans the whole width
+        self.setCorner(Qt.Corner.BottomLeftCorner, Qt.DockWidgetArea.BottomDockWidgetArea)
+        self.setCorner(Qt.Corner.BottomRightCorner, Qt.DockWidgetArea.BottomDockWidgetArea)
 
-        # create docks
-        self.experimentDock = PinnedDock("Experiments")
-        self.lastMeasDock = PinnedDock("Last Measurements")
-        self.propertyDock = PinnedDock("Parameters")
-        # half the height of the other docks, the log spans the whole width
-        self.logDock = PinnedDock("Log", size=(10, 5))
-        self.dataDock = PinnedDock("Data")
-        self.animationDock = PinnedDock("Animation", size=(20, 10))
-        self.remoteDock = PinnedDock("Remote")
+        self.experimentDock = self._createDock("Experiments", self)
+        self.lastMeasDock = self._createDock("Last Measurements", self)
+        self.propertyDock = self._createDock("Parameters", self)
+        self.remoteDock = self._createDock("Remote", self)
+        self.logDock = self._createDock("Log", self)
+        self.animationDock = self._createDock("Animation", self.plotArea)
+        self.dataPointDock = self._createDock("Data", self.plotArea)
 
-        # arrange docks
-        self.area.addDock(self.animationDock, "right")
-        self.area.addDock(self.experimentDock, "left", self.animationDock)
-        self.area.addDock(self.lastMeasDock, "below", self.experimentDock)
-        self.area.addDock(self.propertyDock, "bottom", self.experimentDock)
-        self.area.addDock(self.dataDock, "bottom", self.propertyDock)
-        self.area.addDock(self.remoteDock, "bottom", self.propertyDock)
-        self.area.addDock(self.logDock, "bottom")
-        self.experimentDock.raiseDock()
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.experimentDock)
+        # split before tabbing, a dock split from a tabbed one would become a tab as well
+        self.splitDockWidget(self.experimentDock, self.propertyDock, Qt.Orientation.Vertical)
+        self.splitDockWidget(self.propertyDock, self.remoteDock, Qt.Orientation.Vertical)
+        self.tabifyDockWidget(self.experimentDock, self.lastMeasDock)
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.logDock)
+        self.experimentDock.raise_()
+        self.plotArea.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.animationDock)
+        self.plotArea.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dataPointDock)
 
         # property dock
         self.targetView = ExperimentView(self)
         self.targetView.expanded.connect(self.targetViewChanged)
         self.targetView.collapsed.connect(self.targetViewChanged)
 
-        self.propertyDock.addWidget(self.targetView)
+        self.propertyDock.setWidget(self.targetView)
 
         # animation dock
         self.animationWidget = QWidget()
         self.animationLayout = QVBoxLayout()
         self.animationFrame = None
-        self.animationDock.addWidget(self.animationWidget)
+        self.animationDock.setWidget(self.animationWidget)
 
         # experiment dock
         self.experimentList = QListWidget(self)
@@ -233,7 +237,7 @@ class MainGui(QMainWindow):
         # experiments are applied by a double click, the applied one is shown in bold and
         # the running one with a background, a selection would hide both
         self.experimentList.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        self.experimentDock.addWidget(self.experimentList)
+        self.experimentDock.setWidget(self.experimentList)
         self.experimentList.itemDoubleClicked.connect(self.experimentDoubleClicked)
         self._currentExperimentIndex = None
         self._currentExperimentName = None
@@ -269,7 +273,7 @@ class MainGui(QMainWindow):
         self.lastMeasList = QListWidget(self)
         self.lastMeasList.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.lastMeasList.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        self.lastMeasDock.addWidget(self.lastMeasList)
+        self.lastMeasDock.setWidget(self.lastMeasList)
         self.lastMeasList.itemDoubleClicked.connect(self.loadLastMeas)
         # all recorded measurements, each list item holds its measurement as user data
         self.measurements = []
@@ -280,10 +284,10 @@ class MainGui(QMainWindow):
         self.logBox.setReadOnly(True)
         self.logBox.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         self.logBox.ensureCursorVisible()
-        self.logDock.addWidget(self.logBox)
+        self.logDock.setWidget(self.logBox)
 
-        # data dock
-        self.plotManager = PlotManager(self.area, self.animationDock, self._settings,
+        # plot area
+        self.plotManager = PlotManager(self.plotArea, self.animationDock, self.dataPointDock, self._settings,
                                        currentMeasurement=self._currentMeasurement,
                                        dataPointNames=lambda: self.exp.getDataPoints(),
                                        plotConfig=lambda: self.config)
@@ -291,7 +295,7 @@ class MainGui(QMainWindow):
         self.plotManager.allPlotsClosed.connect(self.disableCoord)
         self.plotManager.exportDone.connect(self.exportDone)
         self.actExport.triggered.connect(self.plotManager.exportDataPoints)
-        self.dataDock.addWidget(self.plotManager)
+        self.dataPointDock.setWidget(self.plotManager)
 
         # init logger for logging box
         self.textLogger = PlainTextLogger(self._settings,
@@ -382,6 +386,7 @@ class MainGui(QMainWindow):
 
         # toolbar
         self.toolbarExp = QToolBar("Experiment")
+        self.toolbarExp.setObjectName("Experiment")
         self.toolbarExp.setContextMenuPolicy(Qt.ContextMenuPolicy.PreventContextMenu)
         self.toolbarExp.setMovable(False)
         self.toolbarExp.setIconSize(iconSize)
@@ -439,9 +444,11 @@ class MainGui(QMainWindow):
 
         loadExpFromFileSuccess = self.loadExpFromFile(fileName)
 
-        self.standardDockState = self.area.saveState()
-        self._dockSizesApplied = False
-        # restoring sets the stretch factors, which keep the proportions when the window is resized
+        # sized when the window is shown
+        self.standardDockState = (self.saveState(), self.plotArea.saveState())
+        self._standardSizesPending = False
+        # the view of the pyqtgraph docks of older versions cannot be restored
+        self._settings.remove("view/dock_state")
         self.loadStandardDockState()
 
         self.exp = ExperimentInteractor(self.targetView, self)
@@ -450,7 +457,7 @@ class MainGui(QMainWindow):
         self.remotePanel = RemotePanel(self.exp)
         self.remotePanel.parametersChanged.connect(self._sendRemoteParameters)
         self.remotePanel.saveRequested.connect(lambda: self.saveExperiments())
-        self.remoteDock.addWidget(self.remotePanel)
+        self.remoteDock.setWidget(self.remotePanel)
         self.exp.sendData.connect(self.connectionManager.write)
         self.exp.setConnection(self.connectionManager.activeConnection)
         self.connectionManager.activeConnectionChanged.connect(self.exp.setConnection)
@@ -914,7 +921,7 @@ class MainGui(QMainWindow):
         if issubclass(vis, MplVisualizer):
             self.visualizer = vis(self.animationWidget,
                                   self.animationLayout)
-            self.animationDock.addWidget(self.animationWidget)
+            self.animationDock.setWidget(self.animationWidget)
         elif issubclass(vis, VtkVisualizer):
             if vtkAvailable:
                 # vtk window
@@ -923,7 +930,7 @@ class MainGui(QMainWindow):
                     self.vtkWidget = QVTKRenderWindowInteractor(self.animationFrame)
                 self.animationLayout.addWidget(self.vtkWidget)
                 self.animationFrame.setLayout(self.animationLayout)
-                self.animationDock.addWidget(self.animationFrame)
+                self.animationDock.setWidget(self.animationFrame)
                 self.vtkRenderer = vtkRenderer()
                 self.vtkWidget.GetRenderWindow().AddRenderer(self.vtkRenderer)
                 self.visualizer = vis(self.vtkRenderer)
@@ -1000,29 +1007,6 @@ class MainGui(QMainWindow):
             self._currentExperimentName = self._experiments[index]['Name']
             self.targetViewChanged()
         return sucess
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        if not self._dockSizesApplied:
-            # the splitters get their real size only now, before they would split the space by their minimum sizes
-            self._dockSizesApplied = True
-            QTimer.singleShot(0, self._applyDockSizes)
-
-    def _applyDockSizes(self):
-        """
-        Sizes the splitters of the dock area by their stretch factors, which hold the proportions of the restored
-        state. Qt splits the space by the minimum sizes otherwise, since the restored splitters had no size yet.
-        """
-        for container in self.area.findAll()[0]:
-            if not isinstance(container, QSplitter):
-                continue
-            horizontal = container.orientation() == Qt.Orientation.Horizontal
-            stretches = [container.widget(i).sizePolicy().horizontalStretch() if horizontal
-                         else container.widget(i).sizePolicy().verticalStretch() for i in range(container.count())]
-            # setSizes only keeps the proportions if the sizes add up to the available space
-            space = sum(container.sizes())
-            if sum(stretches) and space:
-                container.setSizes([round(space * stretch / sum(stretches)) for stretch in stretches])
 
     def closeEvent(self, QCloseEvent):
         """
@@ -1245,24 +1229,72 @@ class MainGui(QMainWindow):
 
         self.plotManager.updateCharts(self._currentDataPointBuffers)
 
+    def _createDock(self, title, window):
+        """ a dock of the given main window that cannot be closed, the title names it in the saved view """
+        dock = QDockWidget(title, window)
+        dock.setObjectName(title)
+        dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable
+                         | QDockWidget.DockWidgetFeature.DockWidgetFloatable)
+        return dock
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._standardSizesPending:
+            # the docks can only be sized once the window has its size
+            self._standardSizesPending = False
+            QTimer.singleShot(0, self._applyStandardSizes)
+
+    def _applyStandardSizes(self):
+        """
+        the sizes of the standard view: the left docks two ninths of the width and of equal height, the log a
+        twelfth of the height, the data points three sixteenths of the plot area
+        """
+        width, height = self.width(), self.height()
+        self.resizeDocks([self.experimentDock], [width * 2 // 9], Qt.Orientation.Horizontal)
+        self.resizeDocks([self.experimentDock, self.propertyDock, self.remoteDock, self.logDock],
+                         [height // 3] * 3 + [height // 12], Qt.Orientation.Vertical)
+        # the plot area gets its new width only with the next layout pass, a method is not called once deleted
+        QTimer.singleShot(0, self._applyPlotAreaSizes)
+
+    def _applyPlotAreaSizes(self):
+        width = self.plotArea.width()
+        self.plotArea.resizeDocks([self.animationDock, self.dataPointDock], [width * 13 // 16, width * 3 // 16],
+                                  Qt.Orientation.Horizontal)
+
+    def _restoreStandardView(self):
+        self.restoreState(self.standardDockState[0])
+        self.plotArea.restoreState(self.standardDockState[1])
+        self.plotManager.tabPlots()
+        if self.isVisible():
+            self._applyStandardSizes()
+        else:
+            self._standardSizesPending = True
+
     def loadStandardDockState(self):
         """
-        Loads the dock configuration saved by the user, or the standard one if there is none
+        Loads the view saved by the user, or the standard one if there is none
         """
-        self.plotManager.closeAllPlots()
-        state = self._settings.value("view/dock_state")
-        if state:
-            try:
-                # docks the state names but that do not exist (anymore) are skipped
-                self.area.restoreState(self._stretchable(json.loads(state)), missing="ignore")
-                QTimer.singleShot(0, self._applyDockSizes)
-                return
-            except Exception:
-                self._logger.warning("The saved view could not be restored, the standard view is used")
-        self.area.restoreState(self._stretchable(self.standardDockState))
-        QTimer.singleShot(0, self._applyDockSizes)
+        mainState = self._settings.value("view/main_state")
+        plotState = self._settings.value("view/plot_state")
+        if mainState is None or plotState is None:
+            self._restoreStandardView()
+        elif not (self.restoreState(mainState) and self.plotArea.restoreState(plotState)):
+            self._logger.warning("The saved view could not be restored, the standard view is used")
+            self._restoreStandardView()
+        # views of older versions do not have the "+" tab next to the data dock
+        self.plotManager.placeAddTab()
 
-    @classmethod
+    def saveDockState(self):
+        """ saves the arrangement of the docks as the default view of the user """
+        self._settings.setValue("view/main_state", self.saveState())
+        self._settings.setValue("view/plot_state", self.plotArea.saveState())
+
+    def resetDockState(self):
+        """ removes the default view of the user and restores the standard one """
+        self._settings.remove("view/main_state")
+        self._settings.remove("view/plot_state")
+        self._restoreStandardView()
+        self.plotManager.placeAddTab()
     def _stretchable(cls, state):
         """
         Scales the splitter sizes of a dock area state to at most 255. pyqtgraph also uses the sizes as stretch
@@ -1281,42 +1313,6 @@ class MainGui(QMainWindow):
         return {**state, "main": state["main"] and scale(state["main"]),
                 "float": [({**area, "main": area["main"] and scale(area["main"])}, geo)
                           for area, geo in state["float"]]}
-
-    def saveDockState(self):
-        """ saves the current dock configuration without the plots as the default view of the user """
-        state = self.area.saveState()
-        state["main"] = self._withoutPlots(state["main"])
-        # floating windows that only held plots are dropped
-        state["float"] = [({**area, "main": main}, geo) for area, geo in state["float"]
-                          if (main := self._withoutPlots(area["main"])) is not None]
-        self._settings.setValue("view/dock_state", json.dumps(state))
-
-    def _withoutPlots(self, state):
-        """
-        Removes the plot docks from a dock area state, together with their sizes and empty containers,
-        since plots do not exist when the state is restored
-        """
-        if state is None:
-            return None
-        typ, contents, props = state
-        if typ == "dock":
-            return state if contents in self.plotManager.nonPlottingDocks else None
-        kept = [(i, child) for i, child in enumerate(map(self._withoutPlots, contents)) if child is not None]
-        if not kept:
-            return None
-        indices = [i for i, _ in kept]
-        props = dict(props)
-        if "sizes" in props:
-            props["sizes"] = [props["sizes"][i] for i in indices]
-        if "index" in props:
-            # the shown tab stays shown, if it was a plot the first one is shown
-            props["index"] = indices.index(props["index"]) if props["index"] in indices else 0
-        return typ, [child for _, child in kept], props
-
-    def resetDockState(self):
-        """ removes the default view of the user and restores the standard one """
-        self._settings.remove("view/dock_state")
-        self.loadStandardDockState()
 
     def saveLastMeas(self):
         """

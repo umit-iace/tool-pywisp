@@ -206,6 +206,20 @@ console output with level ``INFO``, unless the application has configured loggin
 ``logging.basicConfig()``. Scripts that do not create the GUI can call :func:`pywisp.setupLogging` to get the same
 output.
 
+Plots and View
+~~~~~~~~~~~~~~
+
+The plots are shown in the plot area in the center of the GUI, as tabs next to the animation. The ``+`` tab next to
+the ``Data`` dock adds a plot, a double click on its tab renames it, and its close button removes it. The ``Data``
+dock lists the data points of the experiment. A checked data point is shown in the current plot, that is the plot
+that was shown or clicked last, its name is shown above the list. Checking a data point without a plot adds one. A
+right click on a checked data point changes the color of its curve or its interpolation, linear or zero-order hold.
+
+All docks can be moved: dragged onto another dock they become tabs, dragged to its side they are shown next to it,
+e.g. to show plots above each other. Plots and the animation stay in the plot area, the other docks around it.
+``View > Save view as default`` stores the arrangement for the user, it is restored at the next start and by
+``View > Load default view``. ``View > Reset default view`` returns to the standard view.
+
 Plot Configuration
 ~~~~~~~~~~~~~~~~~~
 

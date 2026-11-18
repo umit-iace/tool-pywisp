@@ -7,9 +7,8 @@ import logging
 from PyQt6.QtCore import QObject, Qt, QRect, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QIntValidator, QPainter, QPen, QTextCharFormat, QTextCursor
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QStyle, QStyledItemDelegate, QWidget, QWidgetAction
-from pyqtgraph.dockarea import Dock
 
-__all__ = ["PlainTextLogger", "PinnedDock", "ContextLineEditAction", "TreeWidgetStyledItemDelegate"]
+__all__ = ["PlainTextLogger", "ContextLineEditAction", "TreeWidgetStyledItemDelegate"]
 
 
 class _LogBridge(QObject):
@@ -70,12 +69,6 @@ class PlainTextLogger(logging.Handler):
             # the target widget has already been deleted on the C++ side
             self.cb = None
             logging.getLogger().removeHandler(self)
-
-
-class PinnedDock(Dock):
-    def __init__(self, *args, **kwargs):
-        super(PinnedDock, self).__init__(*args, **kwargs)
-        self.label.mouseDoubleClickEvent = lambda event: event.ignore()
 
 
 class ContextLineEditAction(QWidgetAction):

@@ -3,7 +3,7 @@ import logging
 import math
 import numpy as np
 from PyQt6.QtCore import QTimer, pyqtSignal
-from PyQt6.QtGui import QAction, QPixmap
+from PyQt6.QtGui import QAction, QColor, QPixmap
 from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QMenu, QVBoxLayout
 from pyqtgraph import PlotWidget, TextItem, mkPen
 from ..export import plotDataPoints
@@ -22,6 +22,8 @@ class PlotChart(PlotWidget):
         self._logger = logging.getLogger(self.__class__.__name__)
         self.title = title
         self.plotCurves = {}
+        # colors chosen by the user, the other curves take the palette color of their position
+        self.curveColors = {}
         # complete data of the curves, the curves itself only show the moving window
         self.buffers = {}
 
@@ -100,7 +102,7 @@ class PlotChart(PlotWidget):
         Args:
             dataPoint(DataPointBuffer): Data point which contains the data be added
         """
-        color = self.settings.color(len(self.plotCurves))
+        color = self.curveColors.get(name) or self.settings.color(len(self.plotCurves))
         self.buffers[name] = data
         # add the actual curve
         self.plotCurves[name] = self.plot(name=name,
@@ -116,10 +118,32 @@ class PlotChart(PlotWidget):
         if curve is None:
             return
         self.getPlotItem().removeItem(curve)
-        # update colors of remaining curves
-        for ix, curve in enumerate(self.plotCurves.values()):
-            color = self.settings.color( ix )
-            curve.setPen(mkPen(color))
+        # the remaining curves move up, so do their palette colors
+        for curveName, curve in self.plotCurves.items():
+            curve.setPen(mkPen(self.curveColor(curveName)))
+
+    def curveColor(self, name):
+        """ the color of the curve with the given name """
+        if name in self.curveColors:
+            return self.curveColors[name]
+        return self.settings.color(list(self.plotCurves).index(name))
+
+    def setCurveColor(self, name, color):
+        self.curveColors[name] = QColor(color)
+        self.plotCurves[name].setPen(mkPen(self.curveColors[name]))
+
+    def curveStepMode(self, name):
+        return self.plotCurves[name].opts['stepMode']
+
+    def setCurveStepMode(self, name, mode):
+        """
+        :param mode: `None` interpolates linearly between the points, `"left"` holds each value until the next
+            point (zero-order hold)
+        """
+        curve = self.plotCurves[name]
+        # setData keeps the option, the next updates of the data are drawn the same way
+        curve.opts['stepMode'] = mode
+        curve.updateItems(styleUpdate=False)
 
     def setAutoRange(self):
         self.autoRange()

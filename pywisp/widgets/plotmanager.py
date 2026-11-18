@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-The content of the data dock: the data points of the experiment, the plots made of them and
-their docks, and the export of data points.
+The plots of the plot area and the data point tree that fills them, and the export of data points.
 """
 import logging
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QAbstractItemView, QHBoxLayout, QInputDialog, QLabel, QMessageBox, \
-    QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
-from pyqtgraph.dockarea import Dock
+from PyQt6.QtCore import QEvent, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QActionGroup, QColor, QIcon, QPixmap
+from PyQt6.QtWidgets import QColorDialog, QDockWidget, QInputDialog, QMenu, QTabBar, QTreeWidget, \
+    QTreeWidgetItem, QVBoxLayout, QWidget
 
 from ..buffer import DataPointBuffer, ElementBuffer
 from ..export import Exporter
@@ -18,7 +17,7 @@ from .plotchart import PlotChart
 
 __all__ = ["PlotManager"]
 
-# the selection of the plot tree is drawn by TreeWidgetStyledItemDelegate
+# the selection of the tree is drawn by TreeWidgetStyledItemDelegate
 TREE_STYLE_SHEET = """
     QTreeView {
         selection-background-color: transparent;
@@ -28,23 +27,40 @@ TREE_STYLE_SHEET = """
     QTreeView::item:hover:selected { }
 """
 
+#: title of the tab that adds a plot
+ADD_TAB = "+"
+
+#: interpolation between the points of a curve, the value is the pyqtgraph step mode
+INTERPOLATIONS = {"Linear": None, "Zero-order hold": "left"}
+
+
+class PlotDock(QDockWidget):
+    """ dock of a plot, the plot is deleted when the dock is closed """
+    closed = pyqtSignal()
+
+    def closeEvent(self, event):
+        super().closeEvent(event)
+        self.closed.emit()
+
 
 class PlotManager(QWidget):
     """
-    Lists the data points of the experiment and the plots made of them. Every plot is shown
-    in a dock of the dock area, it shows the data of the current measurement.
+    The data points of the experiment as a tree with checkboxes and the plots of the plot area.
+    A checked data point is shown in the current plot, the plot that was shown or clicked last.
     """
     #: coordinates of the mouse in a plot
     coords = pyqtSignal(str)
-    #: the last plot dock has been closed
+    #: the last plot has been closed
     allPlotsClosed = pyqtSignal()
     #: an export has ended, `True` if successful
     exportDone = pyqtSignal(bool)
 
-    def __init__(self, area, anchorDock, settings, currentMeasurement, dataPointNames, plotConfig, parent=None):
+    def __init__(self, plotArea, anchorDock, dataDock, settings, currentMeasurement, dataPointNames, plotConfig,
+                 parent=None):
         """
-        :param area: dock area the plot docks are added to
-        :param anchorDock: the first plot dock is placed below this dock
+        :param plotArea: main window the plot docks are added to
+        :param anchorDock: dock of the plot area the first plot is tabbed with
+        :param dataDock: dock of the plot area that shows this widget, the "+" tab is kept next to it
         :param settings: :class:`pywisp.settings.Settings` with the plot colors
         :param currentMeasurement: function returning the measurement shown in the gui or `None`
         :param dataPointNames: function returning the names of the data points of the experiment
@@ -52,77 +68,53 @@ class PlotManager(QWidget):
         """
         super().__init__(parent)
         self._logger = logging.getLogger(self.__class__.__name__)
-        self.area = area
+        self.plotArea = plotArea
         self.anchorDock = anchorDock
+        self.dataDock = dataDock
         self._settings = settings
         self._currentMeasurement = currentMeasurement
         self._dataPointNames = dataPointNames
         self._plotConfig = plotConfig
-        # the docks of the area that are not plots, their names cannot be used for plots
-        self.nonPlottingDocks = list(self.area.findAll()[1].keys())
+        # charts and docks by the object name of the dock, which stays when a plot is renamed
         self.plotCharts = {}
+        self.plotDocks = {}
+        self.currentPlot = None
         self.exporter = None
         # names shown in the data point tree: [(name, [element names])]
         self._shownDataPoints = None
-
-        layout = QHBoxLayout()
+        # set while the tree is synchronized with the current plot, the changes are not user input
+        self._syncing = False
 
         # data points, array data points have a child item per element
-        self.dataPointNameTree = QTreeWidget()
-        self.dataPointNameTree.setItemDelegate(TreeWidgetStyledItemDelegate(self.dataPointNameTree))
-        self.dataPointNameTree.setStyleSheet(TREE_STYLE_SHEET)
-        self.dataPointNameTree.setHeaderLabels(["DataPoint"])
-        self.dataPointNameTree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-        layout.addWidget(self.dataPointNameTree)
+        self.dataPointTree = QTreeWidget()
+        self.dataPointTree.setItemDelegate(TreeWidgetStyledItemDelegate(self.dataPointTree))
+        self.dataPointTree.setStyleSheet(TREE_STYLE_SHEET)
+        self.dataPointTree.setSelectionMode(QTreeWidget.SelectionMode.NoSelection)
+        self.dataPointTree.itemChanged.connect(self._onItemChanged)
+        self.dataPointTree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.dataPointTree.customContextMenuRequested.connect(
+            lambda pos: self._showContextMenu(self.dataPointTree.itemAt(pos),
+                                              self.dataPointTree.viewport().mapToGlobal(pos)))
 
-        buttonsWidget = QWidget()
-        buttonsLayout = QVBoxLayout()
-        buttonsLayout.addStretch()
-        buttonsLayout.setSpacing(5)
-        self.dataPointRightButton = QPushButton(chr(0x226b), self)
-        self.dataPointRightButton.setToolTip(
-            "Add the selected data set from the left to the selected plot "
-            "on the right.")
-        self.dataPointRightButton.clicked.connect(self.addDataPointToTree)
-        dataPointLabel = QLabel('DataPoint', self)
-        dataPointLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        buttonsLayout.addWidget(dataPointLabel)
-        buttonsLayout.addWidget(self.dataPointRightButton)
-        self.dataPointLeftButton = QPushButton(chr(0x03A7), self)
-        self.dataPointLeftButton.setToolTip(
-            "Remove the selected data set from the plot on the right."
-        )
-        self.dataPointLeftButton.clicked.connect(self.removeDataPointFromTree)
-        buttonsLayout.addWidget(self.dataPointLeftButton)
-        self.dataPointPlotAddButton = QPushButton("+", self)
-        self.dataPointPlotAddButton.setToolTip(
-            "Create a new plot window."
-        )
-        self.dataPointPlotAddButton.clicked.connect(lambda: self.addPlotTreeItem())
-        plotLabel = QLabel('Plots', self)
-        plotLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        buttonsLayout.addWidget(plotLabel)
-        buttonsLayout.addWidget(self.dataPointPlotAddButton)
-        self.dataPointPlotRemoveButton = QPushButton("-", self)
-        self.dataPointPlotRemoveButton.setToolTip(
-            "Delete the selected plot window."
-        )
-        self.dataPointPlotRemoveButton.clicked.connect(self.removeSelectedPlotTreeItems)
-        buttonsLayout.addWidget(self.dataPointPlotRemoveButton)
-        # stretch above and below centers the buttons vertically
-        buttonsLayout.addStretch()
-        buttonsWidget.setLayout(buttonsLayout)
-        layout.addWidget(buttonsWidget)
-
-        self.dataPointTreeWidget = QTreeWidget()
-        self.dataPointTreeWidget.setItemDelegate(TreeWidgetStyledItemDelegate(self.dataPointTreeWidget))
-        self.dataPointTreeWidget.setStyleSheet(TREE_STYLE_SHEET)
-        self.dataPointTreeWidget.setHeaderLabels(["PlotTitle", "DataPoint"])
-        self.dataPointTreeWidget.itemDoubleClicked.connect(self.plotVectorClicked)
-        self.dataPointTreeWidget.setExpandsOnDoubleClick(False)
-        layout.addWidget(self.dataPointTreeWidget)
-
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.dataPointTree)
         self.setLayout(layout)
+        self._updateHeader()
+
+        # the tab bars of the plot area are created by Qt when docks are tabbed, a double click renames a plot
+        self.plotArea.installEventFilter(self)
+
+        # a click on the "+" tab next to the data dock adds a plot, the tab itself is never shown
+        self.addTabDock = QDockWidget(ADD_TAB, self.plotArea)
+        self.addTabDock.setObjectName(ADD_TAB)
+        self.addTabDock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
+        self.addTabDock.setWidget(QWidget())
+        self.addTabDock.visibilityChanged.connect(lambda visible: visible and QTimer.singleShot(0, self._leaveAddTab))
+        # the data dock may be moved or a view restored, the tab follows it
+        self.dataDock.dockLocationChanged.connect(lambda _: QTimer.singleShot(0, self.placeAddTab))
+        self.dataDock.topLevelChanged.connect(lambda _: QTimer.singleShot(0, self.placeAddTab))
+        self.placeAddTab()
 
     def updateDataPoints(self, dataPointNames):
         """
@@ -141,35 +133,217 @@ class PlotManager(QWidget):
             return
         self._shownDataPoints = shown
 
-        tree = self.dataPointNameTree
-        selected = {item.text(0) for item in tree.selectedItems()}
+        # an array data point checked before its elements were known is shown by its elements, the curve of
+        # the whole array cannot be drawn
+        for chart in self.plotCharts.values():
+            for name, elements in shown:
+                if elements and name in chart.plotCurves:
+                    chart.removeCurve(name)
+                    for element in elements:
+                        if element not in chart.plotCurves:
+                            chart.addCurve(element, buffers[element])
+
+        tree = self.dataPointTree
         expanded = {tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())
                     if tree.topLevelItem(i).isExpanded()}
+        self._syncing = True
         tree.clear()
         for name, elements in shown:
             item = QTreeWidgetItem([name])
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsAutoTristate)
             tree.addTopLevelItem(item)
-            item.addChildren([QTreeWidgetItem([element]) for element in elements])
+            for element in elements:
+                child = QTreeWidgetItem([element])
+                child.setFlags(child.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                item.addChild(child)
             item.setExpanded(name in expanded)
-            for it in [item] + [item.child(i) for i in range(item.childCount())]:
-                it.setSelected(it.text(0) in selected)
+        self._syncing = False
+        self._syncTree()
 
-    def selectedDataPoints(self):
+    def _leafItems(self):
+        """ the items of the tree that stand for a curve: data points and the elements of array data points """
+        tree = self.dataPointTree
+        for i in range(tree.topLevelItemCount()):
+            item = tree.topLevelItem(i)
+            yield from [item.child(j) for j in range(item.childCount())] or [item]
+
+    def _syncTree(self):
+        """ checks the data points shown in the current plot and shows their colors """
+        chart = self.plotCharts.get(self.currentPlot)
+        self._syncing = True
+        for item in self._leafItems():
+            name = item.text(0)
+            shown = chart is not None and name in chart.plotCurves
+            item.setCheckState(0, Qt.CheckState.Checked if shown else Qt.CheckState.Unchecked)
+            item.setIcon(0, _colorIcon(chart.curveColor(name)) if shown else QIcon())
+        self._syncing = False
+
+    def _onItemChanged(self, item, column):
+        # a data point with elements is checked through them
+        if self._syncing or item.childCount():
+            return
+        name = item.text(0)
+        checked = item.checkState(0) == Qt.CheckState.Checked
+        if self.currentPlot is None:
+            if not checked:
+                return
+            self.addPlot()
+        chart = self.plotCharts[self.currentPlot]
+        if checked and name not in chart.plotCurves:
+            # elements of an array data point may not have arrived yet, the curve gets their data later
+            chart.addCurve(name, self.currentBuffers().get(name, DataPointBuffer()))
+        elif not checked and name in chart.plotCurves:
+            chart.removeCurve(name)
+        self._syncTree()
+
+    def _contextMenu(self, item):
+        """ menu to change the color and the interpolation of the curve of the item in the current plot """
+        name = item.text(0)
+        chart = self.plotCharts.get(self.currentPlot)
+        shown = chart is not None and name in chart.plotCurves
+        menu = QMenu(self)
+        actColor = menu.addAction("&Color ...")
+        actColor.setEnabled(shown)
+        actColor.triggered.connect(lambda: self._chooseColor(chart, name))
+        interpolationMenu = menu.addMenu("&Interpolation")
+        interpolationMenu.setEnabled(shown)
+        group = QActionGroup(interpolationMenu)
+        for label, mode in INTERPOLATIONS.items():
+            act = interpolationMenu.addAction(label)
+            act.setCheckable(True)
+            act.setChecked(shown and chart.curveStepMode(name) == mode)
+            act.triggered.connect(lambda _, mode=mode: chart.setCurveStepMode(name, mode))
+            group.addAction(act)
+        return menu
+
+    def _showContextMenu(self, item, globalPos):
+        # a data point with elements has no curve of its own
+        if item is None or item.childCount():
+            return
+        self._contextMenu(item).exec(globalPos)
+
+    def _chooseColor(self, chart, name):
+        color = QColorDialog.getColor(chart.curveColor(name), self, f"Color of '{name}'")
+        if color.isValid():
+            chart.setCurveColor(name, color)
+            self._syncTree()
+
+    def _updateHeader(self):
+        title = self.plotDocks[self.currentPlot].windowTitle() if self.currentPlot else "no plot"
+        self.dataPointTree.setHeaderLabels([f"Shown in: {title}"])
+
+    def setCurrentPlot(self, name):
+        """ makes the plot with the given object name the one the checked data points are shown in """
+        if name == self.currentPlot or name not in self.plotCharts:
+            return
+        self.currentPlot = name
+        self._updateHeader()
+        self._syncTree()
+
+    def addPlot(self):
         """
-        Names of the buffers selected in the data point tree, an array data point stands
-        for all of its elements.
+        Adds an empty plot to the plot area, at its saved place or as a tab next to the current plot,
+        and makes it the current plot
+        :return: object name of the plot
         """
-        names = []
-        for item in self.dataPointNameTree.selectedItems():
-            for name in [item.child(i).text(0) for i in range(item.childCount())] or [item.text(0)]:
-                if name not in names:
-                    names.append(name)
-        return names
+        index = 0
+        while f"plot_{index:03d}" in self.plotDocks:
+            index += 1
+        name = f"plot_{index:03d}"
+
+        chart = PlotChart(name, self._plotConfig())
+        chart.coords.connect(self.coords)
+        chart.scene().sigMouseClicked.connect(lambda _: self.setCurrentPlot(name))
+        dock = PlotDock(name, self.plotArea)
+        dock.setObjectName(name)
+        dock.setWidget(chart)
+        dock.closed.connect(lambda: self._removePlot(name))
+        dock.visibilityChanged.connect(lambda visible: visible and self.setCurrentPlot(name))
+        self.plotCharts[name] = chart
+        self.plotDocks[name] = dock
+
+        if not self.plotArea.restoreDockWidget(dock):
+            self.plotArea.tabifyDockWidget(self.plotDocks.get(self.currentPlot, self.anchorDock), dock)
+        dock.show()
+        dock.raise_()
+        self.setCurrentPlot(name)
+        return name
+
+    def placeAddTab(self):
+        """ tabs the "+" tab with the data dock, hidden while the data dock floats """
+        if self.dataDock.isFloating():
+            self.addTabDock.hide()
+            return
+        if self.dataDock not in self.plotArea.tabifiedDockWidgets(self.addTabDock):
+            self.plotArea.tabifyDockWidget(self.dataDock, self.addTabDock)
+            self.dataDock.raise_()
+        self.addTabDock.show()
+
+    def tabPlots(self):
+        """ shows the plots as tabs next to the anchor dock, e.g. in the standard view, which has no plots """
+        for dock in self.plotDocks.values():
+            self.plotArea.tabifyDockWidget(self.anchorDock, dock)
+        if self.currentPlot is not None:
+            self.plotDocks[self.currentPlot].raise_()
+
+    def _leaveAddTab(self):
+        """ shows the data dock if Qt has made the "+" tab the shown one, e.g. after restoring a view """
+        if not self.addTabDock.visibleRegion().isEmpty():
+            self.dataDock.raise_()
+
+    def _removePlot(self, name):
+        dock = self.plotDocks.pop(name, None)
+        if dock is None:
+            return
+        self.plotCharts.pop(name, None)
+        self.plotArea.removeDockWidget(dock)
+        # until it is deleted, the dock would take the saved place of a new plot with its name
+        dock.setObjectName("")
+        dock.deleteLater()
+        if self.currentPlot == name:
+            # the current plot is chosen again when another plot is shown or clicked
+            self.currentPlot = next(reversed(self.plotDocks), None)
+            self._updateHeader()
+            self._syncTree()
+        if not self.plotDocks:
+            self.allPlotsClosed.emit()
+
+    def renamePlot(self, name):
+        """ asks for a new title of the plot with the given object name """
+        dock = self.plotDocks[name]
+        title, ok = QInputDialog.getText(self, "Rename plot", "Title of the plot:", text=dock.windowTitle())
+        title = title.strip()
+        if not (ok and title) or title == dock.windowTitle():
+            return
+        if title == ADD_TAB or title in {d.windowTitle() for d in self.plotDocks.values()}:
+            self._logger.error(f"A plot with the title '{title}' exists")
+            return
+        dock.setWindowTitle(title)
+        self.plotCharts[name].title = title
+        self._updateHeader()
+
+    def eventFilter(self, obj, event):
+        if obj is self.plotArea and event.type() == QEvent.Type.ChildPolished \
+                and isinstance(event.child(), QTabBar):
+            event.child().installEventFilter(self)
+        elif isinstance(obj, QTabBar) and event.type() == QEvent.Type.MouseButtonPress \
+                and event.button() == Qt.MouseButton.LeftButton \
+                and obj.tabText(obj.tabAt(event.position().toPoint())) == ADD_TAB:
+            self.addPlot()
+            return True
+        elif isinstance(obj, QTabBar) and event.type() == QEvent.Type.MouseButtonDblClick:
+            title = obj.tabText(obj.tabAt(event.position().toPoint()))
+            for name, dock in self.plotDocks.items():
+                if dock.windowTitle() == title:
+                    self.renamePlot(name)
+                    return True
+        return super().eventFilter(obj, event)
 
     def showData(self, dataPointBuffers):
         """ shows the given data in all plots, e.g. of another measurement """
-        for i in range(self.dataPointTreeWidget.topLevelItemCount()):
-            self.updatePlot(self.dataPointTreeWidget.topLevelItem(i), dataPointBuffers)
+        for chart in self.plotCharts.values():
+            chart.cache.clear()
+            chart.updateCurves(dataPointBuffers)
 
     def updateCharts(self, dataPointBuffers):
         """ adds new data to all plots """
@@ -177,9 +351,8 @@ class PlotManager(QWidget):
             chart.updateCurves(dataPointBuffers)
 
     def closeAllPlots(self):
-        """ closes all plot docks """
-        self.plotCharts.clear()
-        for dock in self.findAllPlotDocks():
+        """ closes all plots """
+        for dock in list(self.plotDocks.values()):
             dock.close()
 
     def waitForExport(self):
@@ -193,99 +366,6 @@ class PlotManager(QWidget):
         if measurement is None:
             return {name: DataPointBuffer() for name in self._dataPointNames()}
         return measurement.dataPointBuffers
-
-    def addPlotTreeItem(self, default=False):
-        existingNames = {self.dataPointTreeWidget.topLevelItem(index).text(0)
-                         for index in range(self.dataPointTreeWidget.topLevelItemCount())}
-        index = 0
-        while f"plot_{index:03d}" in existingNames:
-            index += 1
-        text = f"plot_{index:03d}"
-        if not default:
-            name, ok = QInputDialog.getText(self,
-                                            "Select a plot title",
-                                            "Name of the new plot:",
-                                            text=text)
-            if not (ok and name):
-                return
-        else:
-            name = text
-
-        similarItems = self.dataPointTreeWidget.findItems(name, Qt.MatchFlag.MatchExactly)
-        if similarItems:
-            self._logger.error(f"Name '{name}' exists.")
-            return
-
-        topLevelItem = QTreeWidgetItem()
-        topLevelItem.setText(0, name)
-        self.dataPointTreeWidget.addTopLevelItem(topLevelItem)
-        topLevelItem.setExpanded(True)
-
-        for index in range(self.dataPointTreeWidget.topLevelItemCount()):
-            self.dataPointTreeWidget.topLevelItem(index).setSelected(False)
-            for childIndex in range(self.dataPointTreeWidget.topLevelItem(index).childCount()):
-                self.dataPointTreeWidget.topLevelItem(index).child(childIndex).setSelected(False)
-        topLevelItem.setSelected(True)
-
-    def removeSelectedPlotTreeItems(self):
-        items = self.dataPointTreeWidget.selectedItems()
-        if not items:
-            self._logger.error("Cannot delete plot: No plot selected.")
-            return
-
-        for item in items:
-            self.removePlotTreeItem(item)
-
-    def removePlotTreeItem(self, item):
-        # get the  top item
-        while item.parent():
-            item = item.parent()
-
-        text = "The labeled plot '" + item.text(0) + "' will be deleted!"
-        buttonReply = QMessageBox.warning(self, "Plot delete", text,
-                                          QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
-        if buttonReply == QMessageBox.StandardButton.Ok:
-            openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-            if item.text(0) in openDocks:
-                self.area.docks[item.text(0)].close()
-
-            self.dataPointTreeWidget.takeTopLevelItem(self.dataPointTreeWidget.indexOfTopLevelItem(item))
-
-    def addDataPointToTree(self):
-        selectedDataPoints = self.selectedDataPoints()
-        if not selectedDataPoints:
-            self._logger.error("Cannot add datapoint: No datapoint selected.")
-            return
-
-        toplevelItems = self.dataPointTreeWidget.selectedItems()
-        if not toplevelItems:
-            if self.dataPointTreeWidget.topLevelItemCount() < 2:
-                if self.dataPointTreeWidget.topLevelItemCount() < 1:
-                    self.addPlotTreeItem(default=True)
-                toplevelItem = self.dataPointTreeWidget.topLevelItem(0)
-            else:
-                self._logger.error("Cannot add dataset: No dataset selected.")
-                return
-        else:
-            toplevelItem = toplevelItems[0]
-
-        while toplevelItem.parent():
-            toplevelItem = toplevelItem.parent()
-
-        topLevelItemList = []
-        for i in range(toplevelItem.childCount()):
-            topLevelItemList.append(toplevelItem.child(i).text(1))
-
-        for dataPoint in selectedDataPoints:
-            if dataPoint not in topLevelItemList:
-                child = QTreeWidgetItem()
-                child.setText(1, dataPoint)
-                toplevelItem.addChild(child)
-
-        for i in range(toplevelItem.childCount()):
-            toplevelItem.child(i).setBackground(0, self._settings.color(i))
-
-        self.updatePlotChart(toplevelItem)
 
     def exportDataPoints(self):
         """ asks for the data points to export with :class:`ExportDialog`, then for the file """
@@ -321,130 +401,8 @@ class PlotManager(QWidget):
         self.exporter = None
         self.exportDone.emit(success)
 
-    def removeDataPointFromTree(self):
-        items = self.dataPointTreeWidget.selectedItems()
-        if not items:
-            self._logger.error("Cannot delete dataset: No dataset selected.")
-            return
 
-        toplevelItem = items[0]
-        while toplevelItem.parent():
-            toplevelItem = toplevelItem.parent()
-
-        toplevelItem.takeChild(toplevelItem.indexOfChild(self.dataPointTreeWidget.selectedItems()[0]))
-
-        for i in range(toplevelItem.childCount()):
-            toplevelItem.child(i).setBackground(0, self._settings.color(i))
-
-        self.updatePlotChart(toplevelItem)
-
-    def _reservedTitle(self, title):
-        if title in self.nonPlottingDocks:
-            self._logger.error(f"Title '{title}' not allowed for a plot window since "
-                               "it would shadow one of the reserved names")
-            return True
-        return False
-
-    def updatePlotChart(self, item):
-        title = item.text(0)
-
-        measurement = self._currentMeasurement()
-        if measurement is None:
-            self._logger.warning("No Measurement to plot!")
-            return
-        dataPointBuffers = measurement.dataPointBuffers
-
-        # check if a top level item has been clicked
-        if not item.parent():
-            if self._reservedTitle(title):
-                return
-
-            # check if plot has already been opened
-            openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-            if title in openDocks:
-                chart = self.plotCharts[title]
-
-                # check if all items are present as curves
-                reqLabels = []
-                for idx in range(item.childCount()):
-                    curveLabel = item.child(idx).text(1)
-                    reqLabels.append(curveLabel)
-                    # elements of an array data point may not have arrived yet
-                    if curveLabel not in chart.plotCurves.keys() and curveLabel in dataPointBuffers:
-                        chart.addCurve(curveLabel, dataPointBuffers[curveLabel])
-
-                # clear all curves that are no longer required by items
-                for lbl in [lbl for lbl in chart.plotCurves.keys() if lbl not in reqLabels]:
-                    chart.removeCurve(lbl)
-
-    def plotVectorClicked(self, item):
-        # ignore non-top level items
-        if item.parent():
-            return
-
-        title = item.text(0)
-        if self._reservedTitle(title):
-            return
-
-        # check if plot has already been opened
-        openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-        if title in openDocks:
-            dock = self.area.docks.get(title)
-            if dock is not None:
-                dock.raiseDock()
-        else:
-            self.plotDataVector(item)
-
-    def updatePlot(self, item, dataPointBuffers):
-        title = item.text(0)
-        if title in self.plotCharts:
-            self.plotCharts[title].cache.clear()
-            self.plotCharts[title].updateCurves(dataPointBuffers)
-
-    def plotDataVector(self, item):
-        title = str(item.text(0))
-        if title in self.plotCharts.keys():
-            self._logger.error(f"Plot chart name '{title}' is already taken.")
-            return
-
-        # create chart
-        chart = PlotChart(title, self._plotConfig())
-        chart.coords.connect(self.coords)
-        self.plotCharts[title] = chart
-
-        # add curves
-        dataPointBuffers = self.currentBuffers()
-        for idx in range(item.childCount()):
-            for key, value in dataPointBuffers.items():
-                if key == item.child(idx).text(1):
-                    chart.addCurve(key, value)
-
-        # create dock container and add it to dock area
-        dock = Dock(title, closable=True)
-        dock.addWidget(chart)
-        dock.sigClosed.connect(self.closedDock)
-
-        plotWidgets = self.findAllPlotDocks()
-        if plotWidgets:
-            self.area.addDock(dock, "above", plotWidgets[0])
-        else:
-            self.area.addDock(dock, "bottom", self.anchorDock)
-
-    def closedDock(self):
-        """
-        Gets called when a dock was closed, if it was a plot dock remove the corresponding PlotChart object
-        form the list
-        """
-        openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-        for lbl in [lbl for lbl in self.plotCharts.keys() if lbl not in openDocks]:
-            self.plotCharts.pop(lbl, None)
-
-        if len(openDocks) == 0:
-            self.allPlotsClosed.emit()
-
-    def findAllPlotDocks(self):
-        """
-        Finds all docks with plots inside
-        :return: list of docks with plots
-        """
-        return [dock for title, dock in self.area.findAll()[1].items() if title not in self.nonPlottingDocks]
+def _colorIcon(color):
+    pixmap = QPixmap(12, 12)
+    pixmap.fill(QColor(color))
+    return QIcon(pixmap)

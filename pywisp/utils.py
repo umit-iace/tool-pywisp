@@ -181,7 +181,6 @@ _MOVED = {
     'MovableSwitch': 'pywisp.widgets.remote',
     'MovableMultiButton': 'pywisp.widgets.remote',
     'PlainTextLogger': 'pywisp.widgets.common',
-    'PinnedDock': 'pywisp.widgets.common',
     'ContextLineEditAction': 'pywisp.widgets.common',
     'TreeWidgetStyledItemDelegate': 'pywisp.widgets.common',
 }

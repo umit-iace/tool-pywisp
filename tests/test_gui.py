@@ -3,7 +3,6 @@ import struct
 from collections import OrderedDict
 from unittest import mock
 
-import json
 import logging
 import os
 import stat
@@ -162,7 +161,8 @@ def test_theme_toggle(themeGui):
     assert gui._settings.value("theme/name") == 'Dark'
     assert window() < 100
     assert gui.actToggleTheme.toolTip() == "Switch to light mode"
-    # also the content of the docks, it is below a style sheet
+    # also the content of the docks, Qt passes the palette on with events
+    QApplication.processEvents()
     assert gui.logBox.palette().color(QPalette.ColorRole.Base) == QApplication.palette().color(QPalette.ColorRole.Base)
 
     # the toggle returns to the last theme of the other kind
@@ -1010,35 +1010,138 @@ def test_push_button_reset_value(gui):
     updateSend.assert_called_once_with('Dummy', 'gain', '0.5')
 
 
+def treeItem(pm, name):
+    return pm.dataPointTree.findItems(name, Qt.MatchFlag.MatchExactly | Qt.MatchFlag.MatchRecursive)[0]
+
+
 def test_plot_manager_shows_measurement(gui, qtbot):
     pm = gui.plotManager
     startExperiment(gui)
     gui.updateData([frame(1000, 1.0), frame(2000, 2.0)])
-    tree = pm.dataPointNameTree
+    tree = pm.dataPointTree
     assert [tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())] == ['x']
+    assert pm.currentPlot is None and tree.headerItem().text(0) == "Shown in: no plot"
 
-    # without a plot, a default plot is created for the selected data point
-    tree.topLevelItem(0).setSelected(True)
-    pm.addDataPointToTree()
-    plot = pm.dataPointTreeWidget.topLevelItem(0)
-    assert plot.text(0) == 'plot_000' and plot.child(0).text(1) == 'x'
-
-    pm.plotVectorClicked(plot)
-    assert [d.title() for d in pm.findAllPlotDocks()] == ['plot_000']
+    # without a plot, checking a data point creates one
+    item = treeItem(pm, 'x')
+    item.setCheckState(0, Qt.CheckState.Checked)
+    assert list(pm.plotDocks) == ['plot_000'] and pm.currentPlot == 'plot_000'
+    assert gui.plotArea.tabifiedDockWidgets(gui.animationDock) == [pm.plotDocks['plot_000']]
+    assert tree.headerItem().text(0) == "Shown in: plot_000" and not item.icon(0).isNull()
     gui.updateDataPlots()
     x, y = pm.plotCharts['plot_000'].plotCurves['x'].getData()
     assert list(x) == [1.0, 2.0] and list(y) == [1.0, 2.0]
     gui.stopExperiment()
 
-    # reserved names of the gui docks cannot be used for plots
-    pm.addPlotTreeItem(default=True)
-    pm.dataPointTreeWidget.topLevelItem(1).setText(0, 'Log')
-    pm.plotVectorClicked(pm.dataPointTreeWidget.topLevelItem(1))
-    assert [d.title() for d in pm.findAllPlotDocks()] == ['plot_000']
+    # a new plot is the current one, the checkboxes follow the current plot
+    assert pm.addPlot() == 'plot_001'
+    assert item.checkState(0) == Qt.CheckState.Unchecked and item.icon(0).isNull()
+    pm.setCurrentPlot('plot_000')
+    assert item.checkState(0) == Qt.CheckState.Checked
+    item.setCheckState(0, Qt.CheckState.Unchecked)
+    assert pm.plotCharts['plot_000'].plotCurves == {}
 
+    # closing the current plot makes another one current
+    pm.plotDocks['plot_000'].close()
+    assert list(pm.plotDocks) == ['plot_001'] and pm.currentPlot == 'plot_001'
     with qtbot.waitSignal(pm.allPlotsClosed, timeout=2000):
         pm.closeAllPlots()
-    assert pm.plotCharts == {} and pm.findAllPlotDocks() == []
+    assert pm.plotCharts == {} and pm.plotDocks == {} and pm.currentPlot is None
+
+
+def test_curve_color_and_interpolation(gui, monkeypatch):
+    from PyQt6.QtGui import QColor
+    from pywisp.widgets import plotmanager
+    pm = gui.plotManager
+    startExperiment(gui)
+    gui.updateData([frame(1000, 1.0)])
+    gui.stopExperiment()
+    item = treeItem(pm, 'x')
+
+    # without a curve in the current plot there is nothing to change
+    menu = pm._contextMenu(item)
+    assert not menu.actions()[0].isEnabled() and not menu.actions()[1].isEnabled()
+
+    item.setCheckState(0, Qt.CheckState.Checked)
+    chart = pm.plotCharts[pm.currentPlot]
+    monkeypatch.setattr(plotmanager.QColorDialog, 'getColor', lambda *args: QColor('#123456'))
+    pm._contextMenu(item).actions()[0].trigger()
+    assert chart.plotCurves['x'].opts['pen'].color().name() == '#123456'
+    assert item.icon(0).pixmap(12).toImage().pixelColor(6, 6).name() == '#123456'
+
+    def interpolations():
+        return pm._contextMenu(item).actions()[1].menu().actions()
+
+    assert [a.text() for a in interpolations() if a.isChecked()] == ['Linear']
+    interpolations()[1].trigger()
+    assert chart.curveStepMode('x') == 'left'
+    assert [a.text() for a in interpolations() if a.isChecked()] == ['Zero-order hold']
+    interpolations()[0].trigger()
+    assert chart.curveStepMode('x') is None
+
+
+def test_chosen_curve_color_is_kept(gui):
+    from PyQt6.QtGui import QColor
+    from pywisp.buffer import DataPointBuffer
+    from pywisp.widgets.plotchart import PlotChart
+    chart = PlotChart('t', {})
+    for name in 'abc':
+        chart.addCurve(name, DataPointBuffer())
+    chart.setCurveColor('c', '#123456')
+    chart.removeCurve('a')
+    # the other curves take the palette color of their new position, the chosen color stays
+    assert chart.curveColor('b') == chart.settings.color(0)
+    assert chart.curveColor('c') == QColor('#123456')
+    assert chart.plotCurves['c'].opts['pen'].color() == QColor('#123456')
+    # also when the curve is shown again
+    chart.removeCurve('c')
+    chart.addCurve('c', DataPointBuffer())
+    assert chart.curveColor('c') == QColor('#123456')
+
+
+def test_rename_plot(gui, qtbot, monkeypatch):
+    from PyQt6.QtWidgets import QInputDialog, QTabBar
+    pm = gui.plotManager
+    gui.show()
+    pm.addPlot()
+    pm.addPlot()
+    monkeypatch.setattr(QInputDialog, 'getText', lambda *args, **kwargs: ("Speed", True))
+
+    # a double click on the tab renames the plot, the object name stays for the saved view
+    qtbot.waitUntil(lambda: any(bar.isVisible() and 'plot_000' in [bar.tabText(i) for i in range(bar.count())]
+                                for bar in gui.plotArea.findChildren(QTabBar)))
+    bar = next(bar for bar in gui.plotArea.findChildren(QTabBar)
+               if bar.isVisible() and 'plot_000' in [bar.tabText(i) for i in range(bar.count())])
+    index = [bar.tabText(i) for i in range(bar.count())].index('plot_000')
+    qtbot.mouseDClick(bar, Qt.MouseButton.LeftButton, pos=bar.tabRect(index).center())
+    dock = pm.plotDocks['plot_000']
+    assert dock.windowTitle() == "Speed" and dock.objectName() == 'plot_000'
+
+    # titles are unique
+    pm.renamePlot('plot_001')
+    assert pm.plotDocks['plot_001'].windowTitle() == 'plot_001'
+
+
+def test_array_checked_before_its_elements_are_known(gui, monkeypatch):
+    pm = gui.plotManager
+    monkeypatch.setattr(gui.exp, 'getDataPoints', lambda: ['x', 'state'])
+    monkeypatch.setattr(gui.exp, 'getDataPointElements', lambda: {})
+    monkeypatch.setattr(gui.exp, 'handleFrame',
+                        lambda f: {'Time': f[0], 'DataPoints': {'state': np.array(f[1:])}})
+    startExperiment(gui)
+    gui.updateDataPoints(['x', 'state'])
+    # before the first frame the array has no elements and is checked like any data point
+    treeItem(pm, 'state').setCheckState(0, Qt.CheckState.Checked)
+    gui.updateData([(1000, 1.0, 10.0), (2000, 2.0, 20.0)])
+
+    # its elements take its place, the curve of the whole array could not be drawn
+    chart = pm.plotCharts['plot_000']
+    assert set(chart.plotCurves) == {'state.1', 'state.2'}
+    assert treeItem(pm, 'state').checkState(0) == Qt.CheckState.Checked
+    gui.updateDataPlots()
+    x, y = chart.plotCurves['state.2'].getData()
+    assert list(x) == [1.0, 2.0] and list(y) == [10.0, 20.0]
+    gui.stopExperiment()
 
 
 @pytest.mark.parametrize('names', [None, ['pos', 'phi']])
@@ -1052,7 +1155,7 @@ def test_array_data_points(gui, monkeypatch, names):
                         lambda f: {'Time': f[0], 'DataPoints': {'state': np.array(f[1:])}})
     startExperiment(gui)
     gui.updateData([(1000, 1.0, 10.0), (2000, 2.0, 20.0)])
-    tree = pm.dataPointNameTree
+    tree = pm.dataPointTree
 
     def children(item):
         return [item.child(i).text(0) for i in range(item.childCount())]
@@ -1061,27 +1164,22 @@ def test_array_data_points(gui, monkeypatch, names):
     assert children(tree.topLevelItem(0)) == []
     assert children(tree.topLevelItem(1)) == [e1, e2]
 
-    # a longer array adds elements, expansion and selection are kept
+    # a single element is plotted over time
+    tree.topLevelItem(1).child(1).setCheckState(0, Qt.CheckState.Checked)
+    assert tree.topLevelItem(1).checkState(0) == Qt.CheckState.PartiallyChecked
+
+    # a longer array adds elements, the expansion and the checks are kept
     tree.topLevelItem(1).setExpanded(True)
-    tree.topLevelItem(1).child(1).setSelected(True)
     gui.updateData([(3000, 3.0, 30.0, 300.0)])
     state = tree.topLevelItem(1)
     assert children(state) == [e1, e2, e3]
-    assert state.isExpanded() and [item.text(0) for item in tree.selectedItems()] == [e2]
-
-    # a single element is plotted over time
-    pm.addDataPointToTree()
-    plot = pm.dataPointTreeWidget.topLevelItem(0)
-    assert plot.childCount() == 1 and plot.child(0).text(1) == e2
-    pm.plotVectorClicked(plot)
+    assert state.isExpanded() and state.child(1).checkState(0) == Qt.CheckState.Checked
     gui.updateDataPlots()
     x, y = pm.plotCharts['plot_000'].plotCurves[e2].getData()
     assert list(x) == [1.0, 2.0, 3.0] and list(y) == [10.0, 20.0, 30.0]
 
-    # the parent stands for all of its elements
-    tree.clearSelection()
-    state.setSelected(True)
-    pm.addDataPointToTree()
+    # the parent checks all of its elements
+    state.setCheckState(0, Qt.CheckState.Checked)
     assert set(pm.plotCharts['plot_000'].plotCurves) == {e1, e2, e3}
     x, y = pm.plotCharts['plot_000'].plotCurves[e3].getData()
     # earlier frames did not contain this element
@@ -1398,79 +1496,101 @@ def test_start_retry_keeps_one_measurement(gui, sent):
 
 
 def test_standard_dock_layout(gui):
+    left, right, bottom = (Qt.DockWidgetArea.LeftDockWidgetArea, Qt.DockWidgetArea.RightDockWidgetArea,
+                           Qt.DockWidgetArea.BottomDockWidgetArea)
     # experiments and last measurements share a tab, the log spans the whole width at the bottom
-    assert gui.experimentDock.container() is gui.lastMeasDock.container()
-    assert gui.experimentDock.container().type() == "tab"
-    assert gui.logDock.container() is gui.area.topContainer
-    assert gui.remoteDock.container() is gui.propertyDock.container()
+    assert gui.tabifiedDockWidgets(gui.experimentDock) == [gui.lastMeasDock]
+    assert [gui.dockWidgetArea(d) for d in (gui.experimentDock, gui.propertyDock, gui.remoteDock)] == [left] * 3
+    assert gui.dockWidgetArea(gui.logDock) == bottom
+    assert gui.corner(Qt.Corner.BottomLeftCorner) == gui.corner(Qt.Corner.BottomRightCorner) == bottom
+    # the animation and the plots in the plot area, the data points right of them
+    assert gui.plotArea.dockWidgetArea(gui.animationDock) == left
+    assert gui.plotArea.dockWidgetArea(gui.dataPointDock) == right
 
 
-def test_dock_sizes_follow_the_stretch(gui, qtbot):
-    # the animation takes two thirds of the width, also after the window has been shown
+def test_standard_dock_sizes(gui, qtbot):
     gui.resize(1600, 1000)
     gui.show()
-    qtbot.waitUntil(lambda: gui.animationDock.width() > 1.8 * gui.propertyDock.width())
-    gui.resize(1200, 800)
-    qtbot.waitUntil(lambda: gui.animationDock.width() > 1.8 * gui.propertyDock.width())
+    qtbot.waitUntil(lambda: abs(gui.experimentDock.width() - 1600 * 2 // 9) < 20)
+    assert gui.logDock.height() < 1000 // 10
+    # the data points three sixteenths of the plot area, sized after the plot area got its width
+    qtbot.waitUntil(lambda: abs(gui.dataPointDock.width() - gui.plotArea.width() * 3 // 16) < 20)
 
 
 def test_dock_state_is_saved_as_default(gui, qtbot):
-    gui.area.moveDock(gui.logDock, "above", gui.experimentDock)
+    left, right = Qt.DockWidgetArea.LeftDockWidgetArea, Qt.DockWidgetArea.RightDockWidgetArea
+    gui.addDockWidget(right, gui.remoteDock)
     gui.saveDockState()
-    gui.area.moveDock(gui.logDock, "bottom", None)
+    gui.addDockWidget(left, gui.remoteDock)
     gui.loadStandardDockState()
-    assert gui.logDock.container() is gui.experimentDock.container()
+    assert gui.dockWidgetArea(gui.remoteDock) == right
 
     # the saved view is restored after a restart, a reset removes it
     restarted = pw.MainGui()
     qtbot.addWidget(restarted)
-    assert restarted.logDock.container() is restarted.experimentDock.container()
+    assert restarted.dockWidgetArea(restarted.remoteDock) == right
     restarted.resetDockState()
-    assert not restarted._settings.contains("view/dock_state")
-    assert restarted.logDock.container() is restarted.area.topContainer
+    assert not restarted._settings.contains("view/main_state")
+    assert restarted.dockWidgetArea(restarted.remoteDock) == left
+    assert restarted.tabifiedDockWidgets(restarted.experimentDock) == [restarted.lastMeasDock]
 
 
 def test_broken_dock_state_falls_back_to_standard(gui, qtbot):
-    gui._settings.setValue("view/dock_state", "{broken")
+    from PyQt6.QtCore import QByteArray
+    gui._settings.setValue("view/main_state", QByteArray(b"broken"))
+    gui._settings.setValue("view/plot_state", QByteArray(b"broken"))
+    # the view of older versions is removed
+    gui._settings.setValue("view/dock_state", "{}")
     restarted = pw.MainGui()
     qtbot.addWidget(restarted)
-    assert restarted.logDock.container() is restarted.area.topContainer
+    assert restarted.dockWidgetArea(restarted.remoteDock) == Qt.DockWidgetArea.LeftDockWidgetArea
+    assert not restarted._settings.contains("view/dock_state")
 
 
-def test_saved_dock_state_omits_plots(gui, qtbot):
+def test_saved_view_places_new_plots(gui):
     pm = gui.plotManager
-    startExperiment(gui)
-    gui.updateData([frame(1000, 1.0)])
-    pm.dataPointNameTree.topLevelItem(0).setSelected(True)
-    pm.addDataPointToTree()
-    pm.plotVectorClicked(pm.dataPointTreeWidget.topLevelItem(0))
-    gui.stopExperiment()
-    plot = pm.findAllPlotDocks()[0]
-
-    def savedState():
-        gui.saveDockState()
-        state = json.loads(gui._settings.value("view/dock_state"))
-        assert "plot_000" not in json.dumps(state)
-        return state
-
-    def check(node):
-        typ, contents, props = node
-        if typ != "dock":
-            assert contents and len(props.get("sizes", contents)) == len(contents)
-            assert props.get("index", 0) < len(contents)
-            for child in contents:
-                check(child)
-
-    # the plot as the shown tab next to the animation
-    gui.area.moveDock(plot, "above", gui.animationDock)
-    check(savedState()["main"])
-
-    # the plot alone in a floating window
-    gui.area.addTempArea().addDock(plot)
-    state = savedState()
-    check(state["main"])
-    assert state["float"] == []
-
+    name = pm.addPlot()
+    gui.plotArea.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, pm.plotDocks[name])
+    gui.saveDockState()
+    pm.closeAllPlots()
     gui.loadStandardDockState()
-    assert pm.findAllPlotDocks() == []
-    assert gui.animationDock.container() is not None
+
+    # a plot that did not exist when the view was loaded takes its saved place once it is created
+    assert pm.addPlot() == name
+    assert gui.plotArea.dockWidgetArea(pm.plotDocks[name]) == Qt.DockWidgetArea.TopDockWidgetArea
+    # others are tabbed with the current plot
+    other = pm.addPlot()
+    assert gui.plotArea.tabifiedDockWidgets(pm.plotDocks[name]) == [pm.plotDocks[other]]
+
+
+def test_add_tab_next_to_the_data_dock(gui, qtbot):
+    from PyQt6.QtWidgets import QInputDialog, QTabBar
+    pm = gui.plotManager
+    gui.resize(1600, 1000)
+    gui.show()
+
+    def tabs():
+        # Qt keeps tab bars of dissolved tab groups outside of the window
+        return {tuple(bar.tabText(i) for i in range(bar.count())): (bar, bar.tabText(bar.currentIndex()))
+                for bar in gui.plotArea.findChildren(QTabBar) if bar.isVisible() and bar.x() >= 0 and bar.count()}
+
+    qtbot.waitUntil(lambda: ('Data', '+') in tabs())
+    for expected in (('Animation', 'plot_000'), ('Animation', 'plot_000', 'plot_001')):
+        bar, shown = tabs()[('Data', '+')]
+        qtbot.mouseClick(bar, Qt.MouseButton.LeftButton, pos=bar.tabRect(1).center())
+        # the plot is added next to the current one, the data dock stays shown
+        qtbot.waitUntil(lambda expected=expected: tabs().get(expected, (None, None))[1] == expected[-1])
+        assert tabs()[('Data', '+')][1] == 'Data' and pm.currentPlot == expected[-1]
+
+    # the "+" tab follows the data dock
+    gui.plotArea.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, gui.dataPointDock)
+    qtbot.waitUntil(lambda: gui.plotArea.dockWidgetArea(pm.addTabDock) == Qt.DockWidgetArea.BottomDockWidgetArea)
+    assert gui.plotArea.tabifiedDockWidgets(pm.addTabDock) == [gui.dataPointDock]
+    # the standard view shows the plots as tabs next to the animation
+    gui.resetDockState()
+    qtbot.waitUntil(lambda: ('Animation', 'plot_000', 'plot_001') in tabs() and ('Data', '+') in tabs())
+
+    # the title of the tab cannot be taken by a plot
+    with mock.patch.object(QInputDialog, 'getText', return_value=("+", True)):
+        pm.renamePlot('plot_000')
+    assert pm.plotDocks['plot_000'].windowTitle() == 'plot_000'
