@@ -3,6 +3,7 @@ import struct
 from collections import OrderedDict
 from unittest import mock
 
+import json
 import logging
 import os
 import stat
@@ -1394,3 +1395,82 @@ def test_start_retry_keeps_one_measurement(gui, sent):
     assert len(gui.measurements) == 1 and gui.lastMeasList.count() == 1
     assert gui._runningMeasurement is gui.measurements[0] and gui.measurements[0].running
     gui.stopExperiment()
+
+
+def test_standard_dock_layout(gui):
+    # experiments and last measurements share a tab, the log spans the whole width at the bottom
+    assert gui.experimentDock.container() is gui.lastMeasDock.container()
+    assert gui.experimentDock.container().type() == "tab"
+    assert gui.logDock.container() is gui.area.topContainer
+    assert gui.remoteDock.container() is gui.propertyDock.container()
+
+
+def test_dock_sizes_follow_the_stretch(gui, qtbot):
+    # the animation takes two thirds of the width, also after the window has been shown
+    gui.resize(1600, 1000)
+    gui.show()
+    qtbot.waitUntil(lambda: gui.animationDock.width() > 1.8 * gui.propertyDock.width())
+    gui.resize(1200, 800)
+    qtbot.waitUntil(lambda: gui.animationDock.width() > 1.8 * gui.propertyDock.width())
+
+
+def test_dock_state_is_saved_as_default(gui, qtbot):
+    gui.area.moveDock(gui.logDock, "above", gui.experimentDock)
+    gui.saveDockState()
+    gui.area.moveDock(gui.logDock, "bottom", None)
+    gui.loadStandardDockState()
+    assert gui.logDock.container() is gui.experimentDock.container()
+
+    # the saved view is restored after a restart, a reset removes it
+    restarted = pw.MainGui()
+    qtbot.addWidget(restarted)
+    assert restarted.logDock.container() is restarted.experimentDock.container()
+    restarted.resetDockState()
+    assert not restarted._settings.contains("view/dock_state")
+    assert restarted.logDock.container() is restarted.area.topContainer
+
+
+def test_broken_dock_state_falls_back_to_standard(gui, qtbot):
+    gui._settings.setValue("view/dock_state", "{broken")
+    restarted = pw.MainGui()
+    qtbot.addWidget(restarted)
+    assert restarted.logDock.container() is restarted.area.topContainer
+
+
+def test_saved_dock_state_omits_plots(gui, qtbot):
+    pm = gui.plotManager
+    startExperiment(gui)
+    gui.updateData([frame(1000, 1.0)])
+    pm.dataPointNameTree.topLevelItem(0).setSelected(True)
+    pm.addDataPointToTree()
+    pm.plotVectorClicked(pm.dataPointTreeWidget.topLevelItem(0))
+    gui.stopExperiment()
+    plot = pm.findAllPlotDocks()[0]
+
+    def savedState():
+        gui.saveDockState()
+        state = json.loads(gui._settings.value("view/dock_state"))
+        assert "plot_000" not in json.dumps(state)
+        return state
+
+    def check(node):
+        typ, contents, props = node
+        if typ != "dock":
+            assert contents and len(props.get("sizes", contents)) == len(contents)
+            assert props.get("index", 0) < len(contents)
+            for child in contents:
+                check(child)
+
+    # the plot as the shown tab next to the animation
+    gui.area.moveDock(plot, "above", gui.animationDock)
+    check(savedState()["main"])
+
+    # the plot alone in a floating window
+    gui.area.addTempArea().addDock(plot)
+    state = savedState()
+    check(state["main"])
+    assert state["float"] == []
+
+    gui.loadStandardDockState()
+    assert pm.findAllPlotDocks() == []
+    assert gui.animationDock.container() is not None

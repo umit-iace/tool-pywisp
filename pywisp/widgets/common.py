@@ -73,8 +73,8 @@ class PlainTextLogger(logging.Handler):
 
 
 class PinnedDock(Dock):
-    def __init__(self, *args):
-        super(PinnedDock, self).__init__(*args)
+    def __init__(self, *args, **kwargs):
+        super(PinnedDock, self).__init__(*args, **kwargs)
         self.label.mouseDoubleClickEvent = lambda event: event.ignore()
 
 

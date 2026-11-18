@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import json
 import logging
 import os
 import shutil
@@ -29,7 +30,7 @@ except ImportError:
 from PyQt6.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QCoreApplication
 from PyQt6.QtGui import QAction, QActionGroup, QBrush, QFontDatabase, QGuiApplication, QIcon, QKeySequence, QPalette, QPixmap
 from PyQt6.QtWidgets import QAbstractItemView, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QSizePolicy, QSplashScreen, QStatusBar, QTextEdit, QStyle, QStyleOptionToolButton, QStylePainter, QToolBar, QToolButton, \
-    QVBoxLayout, QWidget
+    QSplitter, QVBoxLayout, QWidget
 from PyQt6.QtWidgets import QMessageBox
 from pyqtgraph.dockarea import DockArea
 
@@ -197,19 +198,21 @@ class MainGui(QMainWindow):
         self.experimentDock = PinnedDock("Experiments")
         self.lastMeasDock = PinnedDock("Last Measurements")
         self.propertyDock = PinnedDock("Parameters")
-        self.logDock = PinnedDock("Log")
+        # half the height of the other docks, the log spans the whole width
+        self.logDock = PinnedDock("Log", size=(10, 5))
         self.dataDock = PinnedDock("Data")
-        self.animationDock = PinnedDock("Animation")
+        self.animationDock = PinnedDock("Animation", size=(20, 10))
         self.remoteDock = PinnedDock("Remote")
 
         # arrange docks
         self.area.addDock(self.animationDock, "right")
-        self.area.addDock(self.lastMeasDock, "left", self.animationDock)
-        self.area.addDock(self.propertyDock, "bottom", self.lastMeasDock)
+        self.area.addDock(self.experimentDock, "left", self.animationDock)
+        self.area.addDock(self.lastMeasDock, "below", self.experimentDock)
+        self.area.addDock(self.propertyDock, "bottom", self.experimentDock)
         self.area.addDock(self.dataDock, "bottom", self.propertyDock)
-        self.area.addDock(self.logDock, "bottom", self.dataDock)
-        self.area.addDock(self.experimentDock, "left", self.lastMeasDock)
-        self.area.addDock(self.remoteDock, "right", self.propertyDock)
+        self.area.addDock(self.remoteDock, "bottom", self.propertyDock)
+        self.area.addDock(self.logDock, "bottom")
+        self.experimentDock.raiseDock()
 
         # property dock
         self.targetView = ExperimentView(self)
@@ -311,6 +314,8 @@ class MainGui(QMainWindow):
         self.actLoadStandardState = QAction('&Load default view', self)
         self.viewMenu.addAction(self.actLoadStandardState)
         self.actLoadStandardState.triggered.connect(self.loadStandardDockState)
+        self.viewMenu.addAction("Sa&ve view as default", self.saveDockState)
+        self.viewMenu.addAction("&Reset default view", self.resetDockState)
         self.actShowCoords = QAction("&Show coordinates", self)
         self.actShowCoords.setCheckable(True)
         self.actShowCoords.setChecked(
@@ -435,6 +440,9 @@ class MainGui(QMainWindow):
         loadExpFromFileSuccess = self.loadExpFromFile(fileName)
 
         self.standardDockState = self.area.saveState()
+        self._dockSizesApplied = False
+        # restoring sets the stretch factors, which keep the proportions when the window is resized
+        self.loadStandardDockState()
 
         self.exp = ExperimentInteractor(self.targetView, self)
 
@@ -993,6 +1001,29 @@ class MainGui(QMainWindow):
             self.targetViewChanged()
         return sucess
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._dockSizesApplied:
+            # the splitters get their real size only now, before they would split the space by their minimum sizes
+            self._dockSizesApplied = True
+            QTimer.singleShot(0, self._applyDockSizes)
+
+    def _applyDockSizes(self):
+        """
+        Sizes the splitters of the dock area by their stretch factors, which hold the proportions of the restored
+        state. Qt splits the space by the minimum sizes otherwise, since the restored splitters had no size yet.
+        """
+        for container in self.area.findAll()[0]:
+            if not isinstance(container, QSplitter):
+                continue
+            horizontal = container.orientation() == Qt.Orientation.Horizontal
+            stretches = [container.widget(i).sizePolicy().horizontalStretch() if horizontal
+                         else container.widget(i).sizePolicy().verticalStretch() for i in range(container.count())]
+            # setSizes only keeps the proportions if the sizes add up to the available space
+            space = sum(container.sizes())
+            if sum(stretches) and space:
+                container.setSizes([round(space * stretch / sum(stretches)) for stretch in stretches])
+
     def closeEvent(self, QCloseEvent):
         """
         Is called by closing the GUI. Disconnects and sends close event.
@@ -1216,10 +1247,76 @@ class MainGui(QMainWindow):
 
     def loadStandardDockState(self):
         """
-        Loads the standard dock configuration of the GUI
+        Loads the dock configuration saved by the user, or the standard one if there is none
         """
         self.plotManager.closeAllPlots()
-        self.area.restoreState(self.standardDockState)
+        state = self._settings.value("view/dock_state")
+        if state:
+            try:
+                # docks the state names but that do not exist (anymore) are skipped
+                self.area.restoreState(self._stretchable(json.loads(state)), missing="ignore")
+                QTimer.singleShot(0, self._applyDockSizes)
+                return
+            except Exception:
+                self._logger.warning("The saved view could not be restored, the standard view is used")
+        self.area.restoreState(self._stretchable(self.standardDockState))
+        QTimer.singleShot(0, self._applyDockSizes)
+
+    @classmethod
+    def _stretchable(cls, state):
+        """
+        Scales the splitter sizes of a dock area state to at most 255. pyqtgraph also uses the sizes as stretch
+        factors, which Qt caps at 255, so larger sizes would split the space evenly on every resize.
+        """
+        def scale(node):
+            typ, contents, props = node
+            if typ == "dock":
+                return node
+            props = dict(props)
+            if props.get("sizes"):
+                top = max(max(props["sizes"]), 1)
+                props["sizes"] = [max(1, round(255 * size / top)) for size in props["sizes"]]
+            return typ, [scale(child) for child in contents], props
+
+        return {**state, "main": state["main"] and scale(state["main"]),
+                "float": [({**area, "main": area["main"] and scale(area["main"])}, geo)
+                          for area, geo in state["float"]]}
+
+    def saveDockState(self):
+        """ saves the current dock configuration without the plots as the default view of the user """
+        state = self.area.saveState()
+        state["main"] = self._withoutPlots(state["main"])
+        # floating windows that only held plots are dropped
+        state["float"] = [({**area, "main": main}, geo) for area, geo in state["float"]
+                          if (main := self._withoutPlots(area["main"])) is not None]
+        self._settings.setValue("view/dock_state", json.dumps(state))
+
+    def _withoutPlots(self, state):
+        """
+        Removes the plot docks from a dock area state, together with their sizes and empty containers,
+        since plots do not exist when the state is restored
+        """
+        if state is None:
+            return None
+        typ, contents, props = state
+        if typ == "dock":
+            return state if contents in self.plotManager.nonPlottingDocks else None
+        kept = [(i, child) for i, child in enumerate(map(self._withoutPlots, contents)) if child is not None]
+        if not kept:
+            return None
+        indices = [i for i, _ in kept]
+        props = dict(props)
+        if "sizes" in props:
+            props["sizes"] = [props["sizes"][i] for i in indices]
+        if "index" in props:
+            # the shown tab stays shown, if it was a plot the first one is shown
+            props["index"] = indices.index(props["index"]) if props["index"] in indices else 0
+        return typ, [child for _, child in kept], props
+
+    def resetDockState(self):
+        """ removes the default view of the user and restores the standard one """
+        self._settings.remove("view/dock_state")
+        self.loadStandardDockState()
 
     def saveLastMeas(self):
         """
