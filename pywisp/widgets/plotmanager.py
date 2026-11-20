@@ -6,8 +6,8 @@ import logging
 
 from PyQt6.QtCore import QEvent, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QActionGroup, QColor, QIcon, QPixmap
-from PyQt6.QtWidgets import QColorDialog, QDockWidget, QInputDialog, QMenu, QTabBar, QTreeWidget, \
-    QTreeWidgetItem, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QCheckBox, QColorDialog, QDockWidget, QHBoxLayout, QInputDialog, QMenu, QSpinBox, \
+    QTabBar, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 
 from ..buffer import DataPointBuffer, ElementBuffer
 from ..export import Exporter
@@ -29,6 +29,8 @@ TREE_STYLE_SHEET = """
 
 #: title of the tab that adds a plot
 ADD_TAB = "+"
+#: smallest width of a plot tab, more tabs than fit are scrolled
+TAB_MIN_WIDTH = "6em"
 
 #: interpolation between the points of a curve, the value is the pyqtgraph step mode
 INTERPOLATIONS = {"Linear": None, "Zero-order hold": "left"}
@@ -49,7 +51,7 @@ class PlotManager(QWidget):
     A checked data point is shown in the current plot, the plot that was shown or clicked last.
     """
     #: coordinates of the mouse in a plot
-    coords = pyqtSignal(str)
+    coords = pyqtSignal(object)  # (x, y) or None
     #: the last plot has been closed
     allPlotsClosed = pyqtSignal()
     #: an export has ended, `True` if successful
@@ -78,6 +80,7 @@ class PlotManager(QWidget):
         # charts and docks by the object name of the dock, which stays when a plot is renamed
         self.plotCharts = {}
         self.plotDocks = {}
+        self._lastBuffers = {}
         self.currentPlot = None
         self.exporter = None
         # names shown in the data point tree: [(name, [element names])]
@@ -96,9 +99,27 @@ class PlotManager(QWidget):
             lambda pos: self._showContextMenu(self.dataPointTree.itemAt(pos),
                                               self.dataPointTree.viewport().mapToGlobal(pos)))
 
+        # moving window of the current plot, it is often changed during a run, the plot menu has it too
+        self.movingWindowCheck = QCheckBox("Moving window")
+        self.movingWindowCheck.toggled.connect(
+            lambda on: self.currentPlot and self.plotCharts[self.currentPlot].setEnableMovingWindow(on))
+        self.movingWindowSize = QSpinBox()
+        self.movingWindowSize.setRange(1, 10000)
+        self.movingWindowSize.setSuffix(" s")
+        # applied on enter, focus loss or the arrows, not on every typed digit
+        self.movingWindowSize.setKeyboardTracking(False)
+        self.movingWindowSize.valueChanged.connect(
+            lambda value: self.currentPlot and self.plotCharts[self.currentPlot].setMovingWindowWidth(value))
+        windowRow = QHBoxLayout()
+        windowRow.setContentsMargins(4, 2, 4, 2)
+        windowRow.addWidget(self.movingWindowCheck)
+        windowRow.addStretch()
+        windowRow.addWidget(self.movingWindowSize)
+
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.dataPointTree)
+        layout.addLayout(windowRow)
         self.setLayout(layout)
         self._updateHeader()
 
@@ -231,6 +252,20 @@ class PlotManager(QWidget):
     def _updateHeader(self):
         title = self.plotDocks[self.currentPlot].windowTitle() if self.currentPlot else "no plot"
         self.dataPointTree.setHeaderLabels([f"Shown in: {title}"])
+        self._syncMovingWindow()
+
+    def _syncMovingWindow(self):
+        """ shows the moving window of the current plot """
+        chart = self.plotCharts.get(self.currentPlot)
+        for widget in (self.movingWindowCheck, self.movingWindowSize):
+            widget.setEnabled(chart is not None)
+            widget.blockSignals(True)
+        if chart is not None:
+            self.movingWindowCheck.setChecked(chart.movingWindowEnable)
+            self.movingWindowSize.setValue(chart.movingWindowWidth)
+            self.movingWindowSize.setEnabled(chart.movingWindowEnable)
+        for widget in (self.movingWindowCheck, self.movingWindowSize):
+            widget.blockSignals(False)
 
     def setCurrentPlot(self, name):
         """ makes the plot with the given object name the one the checked data points are shown in """
@@ -259,8 +294,11 @@ class PlotManager(QWidget):
         dock.setWidget(chart)
         dock.closed.connect(lambda: self._removePlot(name))
         dock.visibilityChanged.connect(lambda visible: visible and self.setCurrentPlot(name))
+        # catch up on the updates skipped while the plot was hidden
+        dock.visibilityChanged.connect(lambda visible: visible and chart.updateCurves(self._lastBuffers))
         self.plotCharts[name] = chart
         self.plotDocks[name] = dock
+        chart.movingWindowChanged.connect(lambda: name == self.currentPlot and self._syncMovingWindow())
 
         if not self.plotArea.restoreDockWidget(dock):
             self.plotArea.tabifyDockWidget(self.plotDocks.get(self.currentPlot, self.anchorDock), dock)
@@ -325,7 +363,11 @@ class PlotManager(QWidget):
     def eventFilter(self, obj, event):
         if obj is self.plotArea and event.type() == QEvent.Type.ChildPolished \
                 and isinstance(event.child(), QTabBar):
-            event.child().installEventFilter(self)
+            tabBar = event.child()
+            tabBar.installEventFilter(self)
+            # many plots: tabs keep a readable width and the bar scrolls with arrows, like browser tabs
+            tabBar.setUsesScrollButtons(True)
+            tabBar.setStyleSheet(f"QTabBar::tab {{ min-width: {TAB_MIN_WIDTH}; }}")
         elif isinstance(obj, QTabBar) and event.type() == QEvent.Type.MouseButtonPress \
                 and event.button() == Qt.MouseButton.LeftButton \
                 and obj.tabText(obj.tabAt(event.position().toPoint())) == ADD_TAB:
@@ -341,14 +383,17 @@ class PlotManager(QWidget):
 
     def showData(self, dataPointBuffers):
         """ shows the given data in all plots, e.g. of another measurement """
+        self._lastBuffers = dataPointBuffers
         for chart in self.plotCharts.values():
             chart.cache.clear()
             chart.updateCurves(dataPointBuffers)
 
     def updateCharts(self, dataPointBuffers):
-        """ adds new data to all plots """
-        for chart in self.plotCharts.values():
-            chart.updateCurves(dataPointBuffers)
+        """ adds new data to the visible plots, hidden ones (e.g. other tabs) catch up when they are shown """
+        self._lastBuffers = dataPointBuffers
+        for name, chart in self.plotCharts.items():
+            if not self.plotDocks[name].visibleRegion().isEmpty():
+                chart.updateCurves(dataPointBuffers)
 
     def closeAllPlots(self):
         """ closes all plots """

@@ -172,13 +172,11 @@ class MainGui(QMainWindow):
         self._setConnectionLed('red', "Not connected")
         self.statusbarLabel = QLabel("")
         self.statusBar.addPermanentWidget(self.statusbarLabel, 1)
-        self.coordTimer = QTimer()
-        self.coordTimer.timeout.connect(self.disableCoord)
-        self.coordLabel = QLabel("x=0.0 y=0.0")
-        self.coordLabel.setVisible(False)
-        self.statusBar.addPermanentWidget(self.coordLabel, 0)
-        # the times on the right, a caption in the color of disabled text and the value in a
-        # fixed width font, so it does not jump while counting
+        # the mouse position in a plot and the times on the right, a caption in the color of disabled text and
+        # the value in a fixed width font, so it does not jump while counting
+        self.coordXLabel = self._addStatusValue("x", "mouse position in the plot", "")
+        self.coordYLabel = self._addStatusValue("y", "mouse position in the plot", "")
+        self.updateCoordInfo(None)
         self.guiTimeLabel = self._addStatusTime("GUI", "time since the start of the experiment in the gui")
         self.expTimeLabel = self._addStatusTime("Exp", "time of the experiment on the rig")
         self.guiStartTime = 0.0
@@ -230,6 +228,8 @@ class MainGui(QMainWindow):
         self.animationLayout = QVBoxLayout()
         self.animationFrame = None
         self.animationDock.setWidget(self.animationWidget)
+        # catch up on the updates skipped while the animation was hidden
+        self.animationDock.visibilityChanged.connect(lambda visible: visible and self._updateVisualizer())
 
         # experiment dock
         self.experimentList = QListWidget(self)
@@ -292,7 +292,7 @@ class MainGui(QMainWindow):
                                        dataPointNames=lambda: self.exp.getDataPoints(),
                                        plotConfig=lambda: self.config)
         self.plotManager.coords.connect(self.updateCoordInfo)
-        self.plotManager.allPlotsClosed.connect(self.disableCoord)
+        self.plotManager.allPlotsClosed.connect(lambda: self.updateCoordInfo(None))
         self.plotManager.exportDone.connect(self.exportDone)
         self.actExport.triggered.connect(self.plotManager.exportDataPoints)
         self.dataPointDock.setWidget(self.plotManager)
@@ -320,13 +320,6 @@ class MainGui(QMainWindow):
         self.actLoadStandardState.triggered.connect(self.loadStandardDockState)
         self.viewMenu.addAction("Sa&ve view as default", self.saveDockState)
         self.viewMenu.addAction("&Reset default view", self.resetDockState)
-        self.actShowCoords = QAction("&Show coordinates", self)
-        self.actShowCoords.setCheckable(True)
-        self.actShowCoords.setChecked(
-            self._settings.value("view/show_coordinates", type=bool)
-        )
-        self.viewMenu.addAction(self.actShowCoords)
-        self.actShowCoords.changed.connect(self.updateShowCoordsSetting)
         self.themeMenu = self.viewMenu.addMenu("&Theme")
         self._themeActions = QActionGroup(self)
         for name in THEMES:
@@ -558,14 +551,11 @@ class MainGui(QMainWindow):
             self.config['TimerTime'] = timerTime
             self._logger.info(f"Set timer time to {timerTime}")
 
-    def updateCoordInfo(self, coordText):
-        self.coordLabel.setText(coordText)
-        self.coordLabel.setVisible(True)
-        self.coordTimer.start(5000)
-
-    def disableCoord(self):
-        self.coordLabel.setText("")
-        self.coordTimer.stop()
+    def updateCoordInfo(self, coords):
+        """ shows the mouse position ``(x, y)`` in a plot in the status bar, ``None`` clears it """
+        x, y = (f"{v:>10.4g}" for v in coords) if coords else (f"{'–':>10}",) * 2
+        self.coordXLabel.setText(x)
+        self.coordYLabel.setText(y)
 
     def _currentMeasurement(self):
         """ the measurement shown in the gui or `None` """
@@ -588,10 +578,6 @@ class MainGui(QMainWindow):
     @pyqtSlot(QModelIndex)
     def targetViewChanged(self, index=None):
         self.targetView.resizeColumnToContents(0)
-
-    @pyqtSlot()
-    def updateShowCoordsSetting(self):
-        self._settings.setValue("view/show_coordinates", self.actShowCoords.isChecked())
 
     @pyqtSlot()
     def startExperiment(self):
@@ -1217,7 +1203,14 @@ class MainGui(QMainWindow):
             self._logger.warning(msg)
 
     def updateDataPlots(self):
-        if self.visualizer:
+        self._updateVisualizer()
+        self.plotManager.updateCharts(self._currentDataPointBuffers)
+
+    def _updateVisualizer(self):
+        # a hidden animation costs as much as a shown one, skip it unless every frame is saved
+        hidden = self.animationDock.visibleRegion().isEmpty() or self.isMinimized()
+        running = self._currentDataPointBuffers is not None  # also called on showing, without an experiment
+        if self.visualizer and running and (not hidden or self.actSaveAnimation.isChecked()):
             try:
                 self.visualizer.update(self._currentDataPointBuffers)
                 if self.vtkWidget is not None:
@@ -1226,8 +1219,6 @@ class MainGui(QMainWindow):
                 # disable the visualizer, otherwise the error would repeat with every timer tick
                 self._logger.exception(f"Visualizer '{type(self.visualizer).__name__}' failed and has been disabled")
                 self.visualizer = None
-
-        self.plotManager.updateCharts(self._currentDataPointBuffers)
 
     def _createDock(self, title, window):
         """ a dock of the given main window that cannot be closed, the title names it in the saved view """
@@ -1463,6 +1454,10 @@ class MainGui(QMainWindow):
 
     def _addStatusTime(self, caption, tooltip):
         """ adds a time with its caption on the right of the status bar, returns the label of the value """
+        return self._addStatusValue(caption, tooltip, timeString(0))
+
+    def _addStatusValue(self, caption, tooltip, value):
+        """ adds a value with its caption on the right of the status bar, returns the label of the value """
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.VLine)
         sep.setFrameShadow(QFrame.Shadow.Sunken)
@@ -1475,7 +1470,7 @@ class MainGui(QMainWindow):
         layout.setSpacing(6)
         captionLabel = QLabel(caption)
         captionLabel.setForegroundRole(QPalette.ColorRole.PlaceholderText)
-        valueLabel = QLabel(timeString(0))
+        valueLabel = QLabel(value)
         font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
         font.setBold(True)
         valueLabel.setFont(font)

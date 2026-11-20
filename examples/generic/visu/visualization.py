@@ -65,6 +65,9 @@ class MplDoublePendulumVisualizer(MplVisualizer):
         self.axes.add_patch(self.pendulum1Shaft)
         self.axes.add_patch(self.pendulum2)
         self.axes.add_patch(self.pendulum2Shaft)
+        # the beam does not move, it is part of the cached background
+        self.setAnimated(self.cart, self.pendulumShaft, self.pendulum2, self.pendulum1, self.pendulum1Shaft,
+                         self.pendulum2Shaft)
 
         self.canvas.draw_idle()
 
@@ -96,5 +99,5 @@ class MplDoublePendulumVisualizer(MplVisualizer):
         self.pendulum2.set_transform(t_phi2)
         self.pendulum2Shaft.set_center(x2)
 
-        self.canvas.draw_idle()
+        self.draw()
         self.saveIfChecked()

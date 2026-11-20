@@ -169,6 +169,45 @@ class MplVisualizer(Visualizer):
         self.qLayout.addWidget(self.canvas)
         self.qWidget.setLayout(self.qLayout)
 
+        # blitting, see setAnimated
+        self._animated = []
+        self._background = None
+        self.canvas.mpl_connect('draw_event', self._onDraw)
+        self.canvas.mpl_connect('resize_event', self._onResize)
+
+    def setAnimated(self, *artists):
+        """
+        Marks the artists that change in :meth:`update`. :meth:`draw` then only redraws them on a cached
+        background (blitting) instead of the whole figure, which is much cheaper. Everything else, e.g. the
+        axes, is drawn only on a full redraw (resize, theme change, ``self.canvas.draw_idle()``).
+        """
+        for artist in artists:
+            artist.set_animated(True)
+        self._animated = list(artists)
+
+    def draw(self):
+        """ shows the changes of :meth:`update`, call it at the end of it instead of ``self.canvas.draw_idle()`` """
+        if not self._animated or self._background is None:
+            # the full redraw also caches the background in _onDraw
+            self.canvas.draw_idle()
+            return
+        self.canvas.restore_region(self._background)
+        self._drawAnimated()
+        self.canvas.blit(self.fig.bbox)
+
+    def _drawAnimated(self):
+        for artist in self._animated:
+            self.fig.draw_artist(artist)
+
+    def _onDraw(self, event):
+        # a full redraw skips the animated artists, keep it as background and add them
+        if self._animated:
+            self._background = self.canvas.copy_from_bbox(self.fig.bbox)
+            self._drawAnimated()
+
+    def _onResize(self, event):
+        self._background = None
+
     def updateTheme(self):
         """ draws the axes in the colors of the theme, the figure itself is transparent """
         palette = QApplication.palette()
@@ -185,7 +224,7 @@ class MplVisualizer(Visualizer):
 
     def saveIfChecked(self):
         """
-        Must be called after self.draw_idle() in implementation.
+        Must be called after self.draw() (or self.canvas.draw_idle()) in implementation.
         """
         if self.saveAnimation and self.picturePath is not None:
             fileName = self.picturePath + os.path.sep + self.timeStamp + "%04d" % self.fileNameCounter + '.png'

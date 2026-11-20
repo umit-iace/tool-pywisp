@@ -2,6 +2,7 @@ import time
 
 import numpy as np
 import pytest
+from PyQt6.QtCore import QEvent, QPointF
 
 from pywisp.buffer import DataPointBuffer
 from pywisp.export import plotDataPoints
@@ -228,3 +229,113 @@ def test_incremental_update_timing(makeChart, qtbot, moving, method):
     assert cx[-1] == x[-1]
     if moving:
         assert cx[0] >= x[-1] - 30
+
+
+def test_grid_lines_at_the_axis_ticks(makeChart):
+    chart = makeChart()
+    chart.resize(400, 300)
+    chart.setXRange(0, 10, padding=0)
+    chart.setYRange(-1, 1, padding=0)
+    # the grid of the axes is replaced, it is too expensive
+    assert chart.getAxis('bottom').grid is False and chart.getAxis('left').grid is False
+    lines = []
+
+    class Recorder:
+        def setPen(self, pen):
+            self.alpha = pen.color().alpha()
+
+        def drawLines(self, lineList):
+            lines.extend((self.alpha, line) for line in lineList)
+
+    chart.gridLines.paint(Recorder())
+    major, minor = chart.getAxis('bottom').tickValues(0, 10, chart.getViewBox().width())[:2]
+    vertical = [(a, line.x1()) for a, line in lines if line.x1() == line.x2()]
+    assert sorted(x for a, x in vertical if a == plotchart.Grid.MAJOR_ALPHA) == sorted(major[1])
+    assert sorted(x for a, x in vertical if a == plotchart.Grid.MINOR_ALPHA) == sorted(minor[1])
+    assert any(line.y1() == line.y2() for _, line in lines)
+    # it is painted below the curves without errors
+    chart.grab()
+
+
+def test_no_axis_grid_in_menu(makeChart):
+    chart = makeChart()
+    menu = chart.getPlotItem().ctrlMenu
+    names = [act.text() for act in menu.actions()]
+    assert 'Grid' not in names and 'Downsample' in names
+
+
+def test_coords(makeChart, qtbot):
+    chart = makeChart()
+    with qtbot.waitSignal(chart.coords) as blocker:
+        chart.scene().sigMouseMoved.emit(QPointF(10, 10))
+    assert len(blocker.args[0]) == 2
+    with qtbot.waitSignal(chart.coords) as blocker:
+        chart.leaveEvent(QEvent(QEvent.Type.Leave))
+    assert blocker.args == [None]
+
+
+def test_separate_axes(makeChart, qtbot):
+    chart = makeChart()
+    chart.resize(600, 400)
+    chart.show()
+    qtbot.waitExposed(chart)
+    plotItem = chart.getPlotItem()
+    for i, name in enumerate('ab'):
+        chart.addCurve(name, DataPointBuffer([0.0, 1.0, 2.0], [0.0, 10.0 ** i, 0.0]))
+
+    chart.setSeparateAxes(True)
+    assert chart.actSeparateAxes.isChecked()
+    # the first curve keeps the main axis, the second gets its own view box and axis in its color
+    assert list(chart.axisViews) == ['b']
+    viewBox, axis = chart.axisViews['b']
+    assert chart.plotCurves['b'].getViewBox() is viewBox
+    assert chart.plotCurves['a'].getViewBox() is plotItem.vb
+    assert axis.linkedView() is viewBox and chart.curveAxis('b') is axis
+    assert axis.pen().color() == chart.curveColor('b')
+    assert chart.curveAxis('a').pen().color() == chart.curveColor('a')
+    assert viewBox.autoRangeEnabled()[1]
+    qtbot.waitUntil(lambda: viewBox.geometry() == plotItem.vb.sceneBoundingRect())
+
+    # data still goes through the moving window path, x follows the main view
+    chart.updateCurves({'b': DataPointBuffer([0.0, 1.0, 2.0, 3.0], [0.0, 5.0, 0.0, 5.0])})
+    assert np.array_equal(curveData(chart, 'b')[1], [0.0, 5.0, 0.0, 5.0])
+    plotItem.vb.setXRange(1, 2, padding=0)
+    assert np.allclose(viewBox.viewRange()[0], plotItem.vb.viewRange()[0])
+
+    # a range set by the user turns auto range off for that axis only, auto range all resets it
+    viewBox.setYRange(-100, 100)
+    chart.updateCurves({'b': DataPointBuffer([0.0, 1.0], [0.0, 1.0])})
+    assert not viewBox.autoRangeEnabled()[1]
+    assert plotItem.vb.autoRangeEnabled()[1]
+    chart.setAutoRange()
+    assert viewBox.autoRangeEnabled()[1]
+
+    # recoloring recolors the axis
+    chart.setCurveColor('b', '#123456')
+    assert axis.pen().color().name() == '#123456'
+
+    # added curves get an axis, removed ones lose it
+    chart.addCurve('c', DataPointBuffer([0.0], [1.0]))
+    assert list(chart.axisViews) == ['b', 'c']
+    chart.removeCurve('b')
+    assert list(chart.axisViews) == ['c']
+    assert viewBox.scene() is None and axis.scene() is None
+    # the first curve removed, the next one moves to the main axis
+    chart.removeCurve('a')
+    assert chart.axisViews == {}
+    assert chart.plotCurves['c'].getViewBox() is plotItem.vb
+    chart.addCurve('d', DataPointBuffer([0.0], [1.0]))
+
+    # off: all curves share the main axis again
+    chart.setSeparateAxes(False)
+    assert chart.axisViews == {}
+    assert all(c.getViewBox() is plotItem.vb for c in chart.plotCurves.values())
+    assert set(plotItem.listDataItems()) == set(chart.plotCurves.values())
+    assert plotItem.getAxis('left').labelText == ''
+
+
+def test_separate_axes_from_config(makeChart):
+    chart = makeChart(SeparateYAxes=True)
+    for name in 'ab':
+        chart.addCurve(name, DataPointBuffer([0.0], [0.0]))
+    assert list(chart.axisViews) == ['b']

@@ -12,9 +12,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import yaml
-from PyQt6.QtCore import QEvent, QPoint, QPointF, Qt
+from PyQt6.QtCore import QCoreApplication, QEvent, QPoint, QPointF, Qt
 from PyQt6.QtGui import QMouseEvent
-from PyQt6.QtWidgets import QApplication, QFileDialog
+from PyQt6.QtWidgets import QApplication, QFileDialog, QLabel, QTabBar
 
 import pywisp as pw
 from pywisp.connectionManager import ConnectionManager
@@ -127,11 +127,17 @@ def test_missing_config(qtbot, cleanRegistry):
     form.stopExperiment()
 
 
-def test_show_coordinates_setting(gui):
-    gui.actShowCoords.setChecked(False)
-    assert gui._settings.value("view/show_coordinates", type=bool) is False
-    gui.actShowCoords.setChecked(True)
-    assert gui._settings.value("view/show_coordinates", type=bool) is True
+def test_coordinates_in_status_bar(gui):
+    assert gui.coordXLabel.text().strip() == gui.coordYLabel.text().strip() == "–"
+    gui.plotManager.coords.emit((1.23456, -0.5))
+    assert (gui.coordXLabel.text().strip(), gui.coordYLabel.text().strip()) == ("1.235", "-0.5")
+    # fixed width, so the status bar does not jump
+    assert len(gui.coordXLabel.text()) == len(gui.coordYLabel.text()) == 10
+    gui.plotManager.allPlotsClosed.emit()
+    assert gui.coordXLabel.text().strip() == "–"
+    # left of the gui time
+    labels = gui.statusBar.findChildren(QLabel)
+    assert labels.index(gui.coordXLabel) < labels.index(gui.coordYLabel) < labels.index(gui.guiTimeLabel)
 
 
 @pytest.fixture
@@ -705,6 +711,8 @@ def test_failing_visualizer_is_disabled(gui, caplog):
         def update(self, dataPoints):
             raise RuntimeError("boom")
     gui.visualizer = BrokenVisualizer()
+    gui.show()  # a hidden visualizer is not updated
+    gui._currentDataPointBuffers = {}  # nor one without data
     gui.updateDataPlots()
     assert gui.visualizer is None
     assert any("has been disabled" in r.getMessage() for r in caplog.records)
@@ -1153,6 +1161,7 @@ def test_array_data_points(gui, monkeypatch, names):
     monkeypatch.setattr(gui.exp, 'getDataPointElements', lambda: {'state': names} if names else {})
     monkeypatch.setattr(gui.exp, 'handleFrame',
                         lambda f: {'Time': f[0], 'DataPoints': {'state': np.array(f[1:])}})
+    gui.show()  # hidden plots are not updated
     startExperiment(gui)
     gui.updateData([(1000, 1.0, 10.0), (2000, 2.0, 20.0)])
     tree = pm.dataPointTree
@@ -1594,3 +1603,96 @@ def test_add_tab_next_to_the_data_dock(gui, qtbot):
     with mock.patch.object(QInputDialog, 'getText', return_value=("+", True)):
         pm.renamePlot('plot_000')
     assert pm.plotDocks['plot_000'].windowTitle() == 'plot_000'
+
+
+def test_hidden_plots_and_visualizer_are_skipped(gui, qtbot):
+    calls = []
+
+    class CountingVisualizer:
+        def update(self, dataPoints):
+            calls.append(1)
+    gui.visualizer = CountingVisualizer()
+    pm = gui.plotManager
+    # without a running experiment there is no data, showing the animation does not update it
+    gui.show()
+    gui.animationDock.raise_()
+    QCoreApplication.processEvents()
+    assert calls == [] and gui.visualizer is not None
+    gui._currentDataPointBuffers = {}
+    pm.addPlot()
+    pm.addPlot()
+    gui.show()
+    qtbot.waitExposed(gui)
+    first, second = (pm.plotCharts[n] for n in ('plot_000', 'plot_001'))
+    pm.plotDocks['plot_001'].raise_()
+    QCoreApplication.processEvents()
+    updated = []
+    first.updateCurves = lambda buffers: updated.append('plot_000')
+    second.updateCurves = lambda buffers: updated.append('plot_001')
+    gui.updateDataPlots()
+    # the animation is a tab behind the plots
+    assert updated == ['plot_001'] and calls == []
+
+    # a plot or the animation that is shown again catches up at once
+    pm.plotDocks['plot_000'].raise_()
+    QCoreApplication.processEvents()
+    assert updated[-1] == 'plot_000'
+    gui.animationDock.raise_()
+    QCoreApplication.processEvents()
+    assert len(calls) == 1
+    gui.updateDataPlots()
+    assert len(calls) == 2
+
+    # the minimized animation is skipped, unless the frames are saved
+    gui.showMinimized()
+    QCoreApplication.processEvents()
+    gui.updateDataPlots()
+    assert len(calls) == 2
+    gui.actSaveAnimation.blockSignals(True)
+    gui.actSaveAnimation.setChecked(True)
+    gui.updateDataPlots()
+    assert len(calls) == 3
+
+
+def test_moving_window_in_data_tab(gui):
+    pm = gui.plotManager
+    check, size = pm.movingWindowCheck, pm.movingWindowSize
+    pm.closeAllPlots()
+    QCoreApplication.processEvents()
+    assert not check.isEnabled() and not size.isEnabled()
+
+    firstName = pm.addPlot()
+    first = pm.plotCharts[firstName]
+    assert check.isEnabled() and check.isChecked() == first.movingWindowEnable
+    size.setValue(17)
+    assert first.movingWindowWidth == 17
+
+    # each plot has its own window, the tab shows the one of the current plot
+    secondName = pm.addPlot()
+    second = pm.plotCharts[secondName]
+    second.setMovingWindowWidth(5)
+    pm.setCurrentPlot(secondName)
+    assert size.value() == 5
+    check.setChecked(False)
+    assert not second.movingWindowEnable and not size.isEnabled() and first.movingWindowEnable
+    pm.setCurrentPlot(firstName)
+    assert size.value() == 17 and check.isChecked()
+
+    # a change in the menu of the plot shows up in the tab
+    first.setMovingWindowWidth(42)
+    assert size.value() == 42
+
+
+def test_many_plot_tabs_scroll(gui, qtbot):
+    gui.resize(1200, 800)
+    gui.show()
+    qtbot.waitExposed(gui)
+    for _ in range(30):
+        gui.plotManager.addPlot()
+    QCoreApplication.processEvents()
+    bar = max((b for b in gui.plotArea.findChildren(QTabBar) if b.isVisible()), key=QTabBar.count)
+    assert bar.count() == 31
+    # the tabs keep a readable width instead of shrinking to "pl...", the bar scrolls
+    assert bar.usesScrollButtons()
+    assert bar.tabRect(1).width() >= bar.fontMetrics().horizontalAdvance("plot_000")
+    assert sum(bar.tabRect(i).width() for i in range(bar.count())) > bar.width()

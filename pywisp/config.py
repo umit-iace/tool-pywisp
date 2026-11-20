@@ -33,6 +33,7 @@ CONFIG_KEYS = {
     'MovingWindowEnable': (lambda v: isinstance(v, bool), "True or False"),
     'MovingWindowSize': (lambda v: _isNumber(v) and v > 0, "a positive number (s)"),
     'downsamplingMethod': (lambda v: v in DOWNSAMPLING_METHODS, f"one of {DOWNSAMPLING_METHODS}"),
+    'SeparateYAxes': (lambda v: isinstance(v, bool), "True or False"),
 }
 
 # deprecated or misspelled keys of the Config section and their current name

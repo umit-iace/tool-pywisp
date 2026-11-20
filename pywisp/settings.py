@@ -31,9 +31,6 @@ _default = {
         ("light", "System"),
         ("dark", "Dark"),
     ],
-    "view": [
-        ("show_coordinates", "True"),
-    ],
 }
 class Settings(QSettings):
     def __init__(self):

@@ -143,3 +143,57 @@ def test_update_theme(visu):
     assert visu.axes.xaxis.label.get_color() == fg
     assert visu.axes.spines['left'].get_edgecolor()[:3] == pytest.approx(
         tuple(int(fg[i:i + 2], 16) / 255 for i in (1, 3, 5)))
+
+
+class BlitVisualizer(LineVisualizer):
+    def __init__(self, qWidget, qLayout):
+        super().__init__(qWidget, qLayout)
+        self.setAnimated(self.line)
+
+    def update(self, dataPoints):
+        self.line.set_data([0, 1], [0, dataPoints['y']])
+        self.draw()
+        self.saveIfChecked()
+
+
+def test_blitting_redraws_only_the_animated_artists(qtbot, monkeypatch):
+    widget = QWidget()
+    qtbot.addWidget(widget)
+    visu = BlitVisualizer(widget, QVBoxLayout())
+    widget.resize(300, 300)
+    widget.show()
+    fullDraws = []
+    visu.canvas.mpl_connect('draw_event', fullDraws.append)
+    blits = []
+    blit = visu.canvas.blit
+    monkeypatch.setattr(visu.canvas, 'blit', lambda bbox=None: (blits.append(1), blit(bbox)))
+
+    # the first update needs a full redraw for the background
+    visu.update({'y': 1.0})
+    qtbot.waitUntil(lambda: bool(fullDraws) and visu._background is not None)
+    assert visu.line.get_animated()
+    count = len(fullDraws)
+    visu.update({'y': 2.0})
+    visu.update({'y': 3.0})
+    qtbot.wait(50)
+    assert len(fullDraws) == count and len(blits) == 2
+
+    # a resize invalidates the background
+    widget.resize(400, 350)
+    qtbot.waitUntil(lambda: len(fullDraws) > count)
+    assert visu._background is not None
+
+
+def test_blitting_saves_complete_pictures(qtbot, tmp_path):
+    widget = QWidget()
+    qtbot.addWidget(widget)
+    visu = BlitVisualizer(widget, QVBoxLayout())
+    visu.line.set_linewidth(20)
+    visu.line.set_color('red')
+    visu.setExpName('exp')
+    visu.checkSaveAnimation(True)
+    visu.startAnimation()
+    visu.update({'y': 1.0})
+    from matplotlib.image import imread
+    image = imread(next((tmp_path / 'ani_exp').iterdir()))
+    assert ((image[..., 0] > 0.8) & (image[..., 1] < 0.2)).any()

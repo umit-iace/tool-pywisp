@@ -214,6 +214,14 @@ the ``Data`` dock adds a plot, a double click on its tab renames it, and its clo
 dock lists the data points of the experiment. A checked data point is shown in the current plot, that is the plot
 that was shown or clicked last, its name is shown above the list. Checking a data point without a plot adds one. A
 right click on a checked data point changes the color of its curve or its interpolation, linear or zero-order hold.
+Below the list, the moving window of the current plot is switched on or off and its length is set in seconds, the
+same as in the context menu of the plot.
+
+``Separate Y Axes`` in the context menu of a plot shows each curve on its own y axis in the color of the curve: the
+first curve keeps the left axis, the others get an axis to the right. The axes scale automatically. Dragging or
+scrolling on an axis changes its range and turns its automatic scaling off, ``Auto Range All`` turns it on again for
+all axes, a right click on an axis offers it for that axis alone. Dragging and scrolling in the plot itself moves the
+time axis and the left axis.
 
 All docks can be moved: dragged onto another dock they become tabs, dragged to its side they are shown next to it,
 e.g. to show plots above each other. Plots and the animation stay in the plot area, the other docks around it.
@@ -237,6 +245,7 @@ To save the configuration the ``defaults.sreg`` ``Config`` section can be extend
     MovingWindowSize:    <time in s>
     MovingWindowEnable:  <True..enable moving window, False..disable moving window>
     downsamplingMethod:  <peak, mean, subsample or off>
+    SeparateYAxes:       <True..each curve on its own y axis, False..one y axis for all curves>
 
 The configuration file is checked when it is loaded. Unknown keys, settings that do not
 exist in a module and malformed remote widgets are reported in the log. Experiments that

@@ -2,20 +2,67 @@ import io
 import logging
 import math
 import numpy as np
-from PyQt6.QtCore import QTimer, pyqtSignal
+from PyQt6.QtCore import QLineF, pyqtSignal
 from PyQt6.QtGui import QAction, QColor, QPixmap
 from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QMenu, QVBoxLayout
-from pyqtgraph import PlotWidget, TextItem, mkPen
+from pyqtgraph import AxisItem, GraphicsObject, PlotWidget, ViewBox, mkPen
 from ..export import plotDataPoints
 from .common import ContextLineEditAction
 from .fileselector import FileSelector
 from ..settings import Settings
 
+
+class Grid(GraphicsObject):
+    """
+    Grid lines at the ticks of the axes, strong at the labeled ticks and faint in between. Replaces the grid of
+    the axes (``showGrid``), which costs several times as much to draw, since the axes repaint the whole view on
+    every change of the moving window.
+    """
+    MAJOR_ALPHA = 110
+    MINOR_ALPHA = 35
+
+    def __init__(self, plotItem):
+        super().__init__()
+        self.plotItem = plotItem
+        # below the curves
+        self.setZValue(-1000)
+        plotItem.addItem(self, ignoreBounds=True)
+        plotItem.getViewBox().sigRangeChanged.connect(self._rangeChanged)
+
+    def _rangeChanged(self):
+        self.prepareGeometryChange()
+        self.update()
+
+    def boundingRect(self):
+        return self.plotItem.getViewBox().viewRect()
+
+    def paint(self, painter, *args):
+        viewBox = self.plotItem.getViewBox()
+        rect = viewBox.viewRect()
+        for name, vertical in (('bottom', True), ('left', False)):
+            axis = self.plotItem.getAxis(name)
+            # the time axis keeps the neutral color, the left one may take the color of a curve (separate axes)
+            color = QColor(self.plotItem.getAxis('bottom').pen().color())
+            lo, hi = (rect.left(), rect.right()) if vertical else (rect.top(), rect.bottom())
+            size = viewBox.width() if vertical else viewBox.height()
+            # the ticks of the axis, the first level is labeled, a level does not repeat the values of the others
+            for level, (_, values) in enumerate(axis.tickValues(min(lo, hi), max(lo, hi), size)[:2]):
+                color.setAlpha(self.MAJOR_ALPHA if level == 0 else self.MINOR_ALPHA)
+                painter.setPen(mkPen(color, cosmetic=True))
+                if vertical:
+                    painter.drawLines([QLineF(v, rect.top(), v, rect.bottom()) for v in values])
+                else:
+                    painter.drawLines([QLineF(rect.left(), v, rect.right(), v) for v in values])
+
+
 class PlotChart(PlotWidget):
     """
     Object containing the plot widgets and the associated plot curves
     """
-    coords = pyqtSignal(str)
+    #: coordinates of the mouse in the plot
+    #: the moving window was switched or resized, from any place (menu, data tab)
+    movingWindowChanged = pyqtSignal()
+    coords = pyqtSignal(object)  # (x, y) or None when the mouse left the plot
 
     def __init__(self, title, config):
         super().__init__()
@@ -34,7 +81,7 @@ class PlotChart(PlotWidget):
         self.movingWindowWidth = config.get("MovingWindowSize", config.get("MovingWindowWidth", 30))
 
         # plot widget settings
-        self.showGrid(True, True)
+        self.gridLines = Grid(self.getPlotItem())
         self.getPlotItem().getAxis("bottom").setLabel(text="Time", units="s")
 
         # enable down-sampling and clipping for better performance
@@ -44,26 +91,21 @@ class PlotChart(PlotWidget):
         }
         self.cache = {}
 
-        coordItem = TextItem(text='', anchor=(0, 1))
-        self.getPlotItem().addItem(coordItem, ignoreBounds=True)
-        self.timer = QTimer()
-        def wrapCoordHide():
-            try:
-                coordItem.hide()
-            except RuntimeError: # happens when Chart got garbage collected in the meantime
-                pass
-        self.timer.timeout.connect(wrapCoordHide)
+        # separate y axes: the first curve keeps the main axis, the others get a view box and an axis to the right
+        self.separateAxes = config.get("SeparateYAxes", False)
+        self.axisViews = {}
+        self.getPlotItem().vb.sigResized.connect(self._syncAxisViews)
+
+        # the axis grid of pyqtgraph is too expensive, the cheap gridLines replace it, so its menu has to go
+        plotItem = self.getPlotItem()
+        for act in plotItem.ctrlMenu.actions():
+            if act.menu() and any(getattr(a, 'defaultWidget', lambda: None)() is plotItem.ctrl.gridGroup
+                                  for a in act.menu().actions()):
+                plotItem.ctrlMenu.removeAction(act)
 
         def coordWrapper(pos):
-            coords = self.getPlotItem().vb.mapSceneToView(pos)
-            coordText = f"x={coords.x():.3e} y={coords.y():.3e}"
-            if self.settings.value("view/show_coordinates", type=bool):
-                coordItem.setText(coordText.replace(" ", "\n"))
-                coordItem.setPos(coords.x(), coords.y())
-                coordItem.show()
-                self.timer.start(5000)
-
-            self.coords.emit(coordText)
+            coords = plotItem.vb.mapSceneToView(pos)
+            self.coords.emit((coords.x(), coords.y()))
 
         self.scene().sigMouseMoved.connect(coordWrapper)
 
@@ -84,6 +126,14 @@ class PlotChart(PlotWidget):
         qMenuMovingWindow = QMenu('Moving Window', self)
         qMenuMovingWindow.addAction(qActionMovingWindowSize)
         qMenuMovingWindow.addAction(qActionMovingWindowEnable)
+        # the window may also be changed in the data tab, the menu shows the current values
+        qMenuMovingWindow.aboutToShow.connect(lambda: (
+            qActionMovingWindowSize.data.setText(str(self.movingWindowWidth)),
+            qActionMovingWindowEnable.setChecked(self.movingWindowEnable)))
+
+        self.actSeparateAxes = QAction("Separate Y Axes", self, checkable=True)
+        self.actSeparateAxes.setChecked(self.separateAxes)
+        self.actSeparateAxes.triggered.connect(self.setSeparateAxes)
 
         self.scene().contextMenu = [qActionSep1,
                                       QAction("Auto Range All", self),
@@ -91,10 +141,15 @@ class PlotChart(PlotWidget):
                                       QAction("Save Image", self),
                                       qActionSep3,
                                       qMenuMovingWindow,
+                                      self.actSeparateAxes,
                                       ]
 
         self.scene().contextMenu[1].triggered.connect(self.setAutoRange)
         self.scene().contextMenu[3].triggered.connect(lambda: self.saveImage())
+
+    def leaveEvent(self, ev):
+        super().leaveEvent(ev)
+        self.coords.emit(None)
 
     def addCurve(self, name, data):
         """
@@ -109,6 +164,9 @@ class PlotChart(PlotWidget):
                                           pen=mkPen(color),
                                           skipFiniteCheck=True
                                           )
+        if self.separateAxes:
+            self._layoutAxes()
+            self._applyColor(name)
         self.updateCurves({name:data})
 
     def removeCurve(self, name):
@@ -117,10 +175,88 @@ class PlotChart(PlotWidget):
         curve = self.plotCurves.pop(name, None)
         if curve is None:
             return
-        self.getPlotItem().removeItem(curve)
+        if name not in self.axisViews:
+            self.getPlotItem().removeItem(curve)
+        # an own view box goes with its curve
+        self._layoutAxes()
         # the remaining curves move up, so do their palette colors
-        for curveName, curve in self.plotCurves.items():
-            curve.setPen(mkPen(self.curveColor(curveName)))
+        for curveName in self.plotCurves:
+            self._applyColor(curveName)
+
+    def setSeparateAxes(self, enable):
+        """ shows each curve on its own y axis, or all curves on the main axis """
+        self.separateAxes = enable
+        self.actSeparateAxes.setChecked(enable)
+        self._layoutAxes()
+        for name in self.plotCurves:
+            self._applyColor(name)
+        # the main axis shows other curves now
+        self.getPlotItem().enableAutoRange(y=True)
+
+    def curveAxis(self, name):
+        """ the y axis of the curve with the given name """
+        if name in self.axisViews:
+            return self.axisViews[name][1]
+        return self.getPlotItem().getAxis('left')
+
+    def _layoutAxes(self):
+        """
+        Moves the curves to their view boxes, the first curve stays on the main axis.
+        Only called when curves or the mode change, the view boxes of the remaining curves are kept.
+        """
+        plotItem = self.getPlotItem()
+        names = list(self.plotCurves)[1:] if self.separateAxes else []
+        for name in [name for name in self.axisViews if name not in names]:
+            viewBox, axis = self.axisViews.pop(name)
+            plotItem.layout.removeItem(axis)
+            self.scene().removeItem(axis)
+            viewBox.setXLink(None)
+            if name in self.plotCurves:
+                # moved within the scene: a curve added to the scene without a parent fails to find its view box
+                curve = self.plotCurves[name]
+                curve.setParentItem(plotItem.vb.childGroup)
+                viewBox.addedItems.remove(curve)
+                plotItem.addItem(curve)
+                plotItem.enableAutoRange(y=True)
+            self.scene().removeItem(viewBox)
+        for col, name in enumerate(names, start=3):
+            if name not in self.axisViews:
+                viewBox = ViewBox()
+                # below the main view box, which keeps the mouse interaction, the axis changes the y range
+                viewBox.setZValue(-100)
+                # the curve is added before the view box is in the scene, for the same reason
+                curve = self.plotCurves[name]
+                plotItem.removeItem(curve)
+                viewBox.addItem(curve)
+                self.scene().addItem(viewBox)
+                viewBox.setGeometry(plotItem.vb.sceneBoundingRect())
+                viewBox.setXLink(plotItem.vb)
+                axis = AxisItem('right')
+                axis.linkToView(viewBox)
+                self.axisViews[name] = (viewBox, axis)
+            # the columns behind the right axis of the plot item, in the order of the curves
+            plotItem.layout.addItem(self.axisViews[name][1], 2, col)
+        if not self.separateAxes or not self.plotCurves:
+            left = plotItem.getAxis('left')
+            left.setPen()
+            left.setTextPen()
+            left.setLabel()
+
+    def _syncAxisViews(self):
+        """ the view boxes of the separate axes cover the main view box """
+        rect = self.getPlotItem().vb.sceneBoundingRect()
+        for viewBox, _ in self.axisViews.values():
+            viewBox.setGeometry(rect)
+
+    def _applyColor(self, name):
+        """ the curve and its own axis get the color of the curve """
+        pen = mkPen(self.curveColor(name))
+        self.plotCurves[name].setPen(pen)
+        if self.separateAxes:
+            axis = self.curveAxis(name)
+            axis.setPen(pen)
+            axis.setTextPen(pen)
+            axis.setLabel(name, color=pen.color().name())
 
     def curveColor(self, name):
         """ the color of the curve with the given name """
@@ -130,7 +266,7 @@ class PlotChart(PlotWidget):
 
     def setCurveColor(self, name, color):
         self.curveColors[name] = QColor(color)
-        self.plotCurves[name].setPen(mkPen(self.curveColors[name]))
+        self._applyColor(name)
 
     def curveStepMode(self, name):
         return self.plotCurves[name].opts['stepMode']
@@ -148,16 +284,21 @@ class PlotChart(PlotWidget):
     def setAutoRange(self):
         self.autoRange()
         self.enableAutoRange()
+        for viewBox, _ in self.axisViews.values():
+            viewBox.enableAutoRange(y=True)
 
     def setEnableMovingWindow(self, movingWindowEnable):
         self.movingWindowEnable = movingWindowEnable
         self.setAutoRange()
+        self.movingWindowChanged.emit()
 
     def setMovingWindowWidth(self, movingWindowWidth):
         try:
             self.movingWindowWidth = int(movingWindowWidth)
         except ValueError:
             self._logger.error(f"Invalid moving window width '{movingWindowWidth}'")
+            return
+        self.movingWindowChanged.emit()
 
     def getMovingWindowWidth(self):
         return self.movingWindowWidth
