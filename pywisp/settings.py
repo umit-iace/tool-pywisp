@@ -1,5 +1,4 @@
 from PyQt6.QtCore import QSettings
-from PyQt6.QtGui import QColor
 
 import os
 
@@ -44,6 +43,8 @@ class Settings(QSettings):
             self.endGroup()
 
     def color(self, ix, kind='plot'):
+        # QtGui only for the gui, the core (QtCore) uses the settings as well
+        from PyQt6.QtGui import QColor
         """ kind: one of ['plot', 'log'] """
         group = f'{kind}_colors'
         if kind == 'log':

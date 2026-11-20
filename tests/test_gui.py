@@ -282,7 +282,7 @@ def test_connection_selection(gui):
     actions = connectionMenuActions(gui)
     assert [a.text() for a in actions] == ["DummyConnection", "DummySerial"]
     assert [a.isChecked() for a in actions] == [True, False]
-    assert manager.connectionActions.isExclusive()
+    assert gui.connectionMenu.connectionActions.isExclusive()
     combo = gui.connComboBox
     assert [combo.itemText(i) for i in range(combo.count())] == ["DummyConnection", "DummySerial"]
     assert combo.currentText() == "DummyConnection"
@@ -316,9 +316,9 @@ def test_connection_menu_structure(gui):
     assert [a.text() for a in actions] == ["DummyConnection", "DummySerial", "", "Settings"]
     assert actions[0].menu() is None and actions[1].menu() is not None
     assert actions[2].isSeparator()
-    assert actions[3] is gui.connectionManager.actSettings and not actions[3].isCheckable()
+    assert actions[3] is gui.connectionMenu.actSettings and not actions[3].isCheckable()
     # the serial entry with its submenu is a radio button like the others
-    assert actions[1] in gui.connectionManager.connectionActions.actions()
+    assert actions[1] in gui.connectionMenu.connectionActions.actions()
 
 
 def test_connection_group_is_delimited_in_the_toolbar(gui):
@@ -396,7 +396,7 @@ def test_settings_dialog_from_menu(gui, monkeypatch):
     monkeypatch.setattr(ConnectionSettingsDialog, "exec", exec)
     monkeypatch.setitem(DummyConnection.settings, "port", 45999)
     gui.connComboBox.setCurrentText("DummySerial")
-    gui.connectionManager.actSettings.trigger()
+    gui.connectionMenu.actSettings.trigger()
     # the active connection is shown first and stays active
     assert shown == ["DummySerial"]
     assert DummyConnection.settings["port"] == 46000
@@ -411,7 +411,7 @@ def test_settings_dialog_cancel_discards(gui, monkeypatch):
         return ConnectionSettingsDialog.DialogCode.Rejected
 
     monkeypatch.setattr(ConnectionSettingsDialog, "exec", exec)
-    gui.connectionManager.actSettings.trigger()
+    gui.connectionMenu.actSettings.trigger()
     assert DummySerial.settings["baud"] == 115200
 
 
@@ -441,8 +441,8 @@ def test_selection_is_disabled_while_connected(gui, qtbot):
     try:
         assert gui.isConnected
         assert not gui.connComboBox.isEnabled()
-        assert not manager.connectionActions.isEnabled()
-        assert not manager.actSettings.isEnabled()
+        assert not gui.connectionMenu.connectionActions.isEnabled()
+        assert not gui.connectionMenu.actSettings.isEnabled()
         # the serial entry with the device menu is locked too
         assert not serialMenu(gui).menuAction().isEnabled()
         assert not manager.setActiveConnection("DummySerial")
@@ -454,7 +454,7 @@ def test_selection_is_disabled_while_connected(gui, qtbot):
         assert [a.isChecked() for a in connectionMenuActions(gui)] == [True, False]
     finally:
         gui.disconnectRig()
-    assert gui.connComboBox.isEnabled() and manager.connectionActions.isEnabled() and manager.actSettings.isEnabled()
+    assert gui.connComboBox.isEnabled() and gui.connectionMenu.connectionActions.isEnabled() and gui.connectionMenu.actSettings.isEnabled()
 
 
 def test_only_the_active_connection_is_opened(gui, qtbot):
@@ -676,7 +676,7 @@ def startExperiment(gui):
 def test_data_path_handles_batches(gui):
     startExperiment(gui)
     gui.updateData([frame(1000, 1.0), frame(2000, 2.0)])
-    buf = gui._currentDataPointBuffers['x']
+    buf = gui.session.currentBuffers['x']
     assert list(buf.time) == [1.0, 2.0]
     assert list(buf.values) == [1.0, 2.0]
     gui.stopExperiment()
@@ -712,7 +712,7 @@ def test_failing_visualizer_is_disabled(gui, caplog):
             raise RuntimeError("boom")
     gui.visualizer = BrokenVisualizer()
     gui.show()  # a hidden visualizer is not updated
-    gui._currentDataPointBuffers = {}  # nor one without data
+    gui.session.currentBuffers = {}  # nor one without data
     gui.updateDataPlots()
     assert gui.visualizer is None
     assert any("has been disabled" in r.getMessage() for r in caplog.records)
@@ -880,7 +880,7 @@ def test_measurement_list(gui):
     measurement = item.data(Qt.ItemDataRole.UserRole)
     assert measurement is gui.measurements[0] and measurement.running
     assert item.text() == "1: First ~current~"
-    assert gui._currentDataPointBuffers is measurement.dataPointBuffers
+    assert gui.session.currentBuffers is measurement.dataPointBuffers
 
     gui.stopExperiment()
     assert not measurement.running
@@ -1381,7 +1381,7 @@ def rigStatus(gui, **kwargs):
 
 def rigCell(gui):
     """ text and background color of the rig value of the setting gain """
-    model = gui.exp.targetModel
+    model = gui.targetView.targetModel
     index = model.index(0, 2, model.index(0, 0))
     brush = model.data(index, Qt.ItemDataRole.BackgroundRole)
     return model.data(index), brush.color() if brush is not None else None
@@ -1399,30 +1399,30 @@ def startConfirmed(gui, sent):
     """ start with a rig supporting syncs, which confirms the parameters and the start """
     rigStatus(gui, sync=(0, 0, 0))
     startExperiment(gui)
-    rigStatus(gui, sync=(gui._startSyncId, *pw.frameCrc(sent)))
+    rigStatus(gui, sync=(gui.session._startSyncId, *pw.frameCrc(sent)))
     rigStatus(gui, running=True, seq=1, sync=(gui.connectionManager._syncId, 0, 0))
-    assert gui._startConfirmed
+    assert gui.session._startConfirmed
 
 
 def test_start_waits_for_the_sync(gui, sent):
-    green = pw.ExperimentInteractor.RIG_COLORS[True]
-    red = pw.ExperimentInteractor.RIG_COLORS[False]
+    green = pw.ExperimentView.RIG_COLORS[True]
+    red = pw.ExperimentView.RIG_COLORS[False]
     rigStatus(gui, sync=(0, 0, 0))
     assert rigCell(gui) == ("", red)
     startExperiment(gui)
     assert sent == [{'id': 10, 'msg': struct.pack('<d', 2.0)}]
-    assert gui._startSyncId is not None and gui.measurements == []
+    assert gui.session._startSyncId is not None and gui.measurements == []
     assert gui.actStopExperiment.isEnabled()
 
-    rigStatus(gui, sync=(gui._startSyncId, *pw.frameCrc(sent)))
+    rigStatus(gui, sync=(gui.session._startSyncId, *pw.frameCrc(sent)))
     assert sent[-1] == START
-    assert gui.exp.runningExperiment and gui._runningMeasurement is gui.measurements[-1]
+    assert gui.exp.runningExperiment and gui.session.runningMeasurement is gui.measurements[-1]
     assert gui.measurements[-1].parameters == {'Dummy.gain': [(0.0, 2.0)]}
     assert gui.exp.rigSettings == {'Dummy': {'gain': 2.0}}
     assert rigCell(gui) == ("2.0", green)
     # the sync reset the counter of the rig, it reports no frames with the start
     rigStatus(gui, running=True, seq=1, sync=(gui.connectionManager._syncId, 0, 0))
-    assert gui._startConfirmed
+    assert gui.session._startConfirmed
     gui.stopExperiment()
 
 
@@ -1434,7 +1434,7 @@ def test_start_without_confirmed_parameters(gui, sent, qtbot, confirm):
         startExperiment(gui)
         if confirm:
             # other parameters arrived
-            rigStatus(gui, sync=(gui._startSyncId, 1, 0x123))
+            rigStatus(gui, sync=(gui.session._startSyncId, 1, 0x123))
         else:
             qtbot.waitUntil(lambda: warning.called, timeout=2000)
     warning.assert_called_once()
@@ -1457,8 +1457,8 @@ def test_rig_without_sync_starts_with_a_warning(gui, sent, caplog):
 
 
 def test_changed_parameters_are_logged_once_confirmed(gui, sent):
-    green = pw.ExperimentInteractor.RIG_COLORS[True]
-    red = pw.ExperimentInteractor.RIG_COLORS[False]
+    green = pw.ExperimentView.RIG_COLORS[True]
+    red = pw.ExperimentView.RIG_COLORS[False]
     startConfirmed(gui, sent)
     gui.updateData([frame(1500, 1.0)])
     gui.exp.setParameter('Dummy', 'gain', 3.0)
@@ -1491,16 +1491,16 @@ def test_rig_values_are_cleared(gui, sent, qtbot):
 def test_start_retry_keeps_one_measurement(gui, sent):
     rigStatus(gui, sync=(0, 0, 0))
     startExperiment(gui)
-    rigStatus(gui, sync=(gui._startSyncId, *pw.frameCrc(sent)))
+    rigStatus(gui, sync=(gui.session._startSyncId, *pw.frameCrc(sent)))
     assert len(gui.measurements) == 1
     # the rig reports other frames with the start, the start is tried again with a new sync
     rigStatus(gui, running=True, seq=1, count=3, crc=0x123, sync=(gui.connectionManager._syncId, 0, 0))
-    assert gui._startRetried and gui._startSyncId is not None
+    assert gui.session._startRetried and gui.session._startSyncId is not None
     count = len(sent)
-    rigStatus(gui, seq=1, sync=(gui._startSyncId, *pw.frameCrc(sent[count - 1:])))
+    rigStatus(gui, seq=1, sync=(gui.session._startSyncId, *pw.frameCrc(sent[count - 1:])))
     assert sent[-1] == START
     assert len(gui.measurements) == 1 and gui.lastMeasList.count() == 1
-    assert gui._runningMeasurement is gui.measurements[0] and gui.measurements[0].running
+    assert gui.session.runningMeasurement is gui.measurements[0] and gui.measurements[0].running
     gui.stopExperiment()
 
 
@@ -1618,7 +1618,7 @@ def test_hidden_plots_and_visualizer_are_skipped(gui, qtbot):
     gui.animationDock.raise_()
     QCoreApplication.processEvents()
     assert calls == [] and gui.visualizer is not None
-    gui._currentDataPointBuffers = {}
+    gui.session.currentBuffers = {}
     pm.addPlot()
     pm.addPlot()
     gui.show()

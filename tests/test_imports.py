@@ -1,8 +1,11 @@
+import ast
 import logging
 import os
 import subprocess
 import sys
 import tempfile
+
+import pytest
 
 import pywisp as pw
 
@@ -65,3 +68,28 @@ def test_setup_logging_force(monkeypatch):
     pw.setupLogging(force=True)
     assert root.level == logging.INFO
     assert any(isinstance(h, logging.StreamHandler) for h in root.handlers)
+
+
+@pytest.mark.parametrize("module", ["connectionManager", "export", "experiments", "session"])
+def test_core_module_imports_no_widgets(module):
+    """ the core runs headless, its modules do not import widgets, not even inside functions """
+    path = os.path.join(os.path.dirname(pw.__file__), module + ".py")
+    with open(path) as f:
+        tree = ast.parse(f.read())
+    names = [a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names]
+    names += [n.module or "" for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)]
+    forbidden = [n for n in names if n in ("PyQt6.QtWidgets", "PyQt6.QtGui") or n.split(".")[0] == "widgets"]
+    assert not forbidden
+
+
+def test_session_runs_without_widgets():
+    """ the package and a session only load QtCore, so they run under a QCoreApplication """
+    out = runClean(
+        "import sys\n"
+        "from PyQt6.QtCore import QCoreApplication\n"
+        "import pywisp\n"
+        "app = QCoreApplication([])\n"
+        "session = pywisp.Session()\n"
+        "print(sorted(m for m in sys.modules if m.startswith(('PyQt6.QtWidgets', 'PyQt6.QtGui'))),\n"
+        "      session.state, pywisp.MainGui.__name__, 'PyQt6.QtWidgets' in sys.modules)\n")
+    assert out == "[] idle MainGui True"

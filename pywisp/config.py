@@ -12,7 +12,6 @@ import logging
 
 import yaml
 
-from .widgets.remote import REMOTE_WIDGETS
 
 __all__ = ["validateExperiments", "dumpExperiments"]
 
@@ -192,6 +191,8 @@ def _checkWidget(report, widgetName, widget, exp, modules):
     if not isinstance(widget, dict):
         return "its config must be a mapping"
 
+    # the widget classes define their keys, imported here so the core does not load QtWidgets
+    from .widgets.remote import REMOTE_WIDGETS
     widgetType = widget.get('widgetType')
     cls = REMOTE_WIDGETS.get(widgetType)
     if cls is None:
@@ -261,6 +262,7 @@ def dumpExperiments(experiments):
         remote = exp.get('Remote') if isinstance(exp, dict) else None
         if not isinstance(remote, dict):
             continue
+        from .widgets.remote import REMOTE_WIDGETS
         for widget in remote.values():
             if not isinstance(widget, dict):
                 continue

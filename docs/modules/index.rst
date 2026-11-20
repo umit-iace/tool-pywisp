@@ -21,6 +21,7 @@ access any PyWisp module, or use this contents:
     measurement
     min
     registry
+    session
     utils
     visualization
     widgets

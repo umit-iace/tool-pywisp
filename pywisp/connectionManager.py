@@ -8,13 +8,11 @@ import time
 
 import serial.tools.list_ports
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
-from PyQt6.QtGui import QActionGroup
 
-from .connection import Connection, SerialConnection
+from .connection import Connection
 from .min import LOG_FRAME_ID, LOG_MORE, RIG_LOG_LEVELS, STATUS_FRAME_ID, Control, RigStatus, controlFrame, frameCrc, syncFrame
 from .registry import getRegisteredConnections
 from .settings import Settings
-from .widgets.dialogs import ConnectionSettingsDialog
 
 __all__ = ["ConnectionManager"]
 
@@ -444,81 +442,6 @@ class ConnectionManager(QObject):
             self._setHeartbeatInterval(self.connection.heartbeatInterval)
         else:
             self.heartbeatTimer.stop()
-
-    # menu with the selection and the settings of the connections
-
-    def fillMenu(self, menu, parentWidget=None):
-        """
-        Adds the selection of the active connection (radio buttons, a serial connection gets a submenu with the
-        available devices) and the entry of the settings dialog to the given menu.
-        Both are only enabled while disconnected.
-        :param parentWidget: parent of the dialog
-        """
-        #: radio buttons selecting the active connection
-        self.connectionActions = QActionGroup(menu)
-        self.connectionActions.setExclusive(True)
-        serialCnt = 0
-        for name, cls in self.connections.items():
-            if issubclass(cls, SerialConnection):
-                deviceMenu = menu.addMenu(name)
-                deviceMenu.aboutToShow.connect(lambda name=name, deviceMenu=deviceMenu:
-                                               self._fillDeviceMenu(name, deviceMenu))
-                act = deviceMenu.menuAction()
-                if cls.settings['port'] == '':
-                    self.setDefaultComPort(cls.settings, serialCnt)
-                serialCnt += 1
-            else:
-                # owned by the menu
-                act = menu.addAction(name)
-            act.setData(name)
-            act.setCheckable(True)
-            act.setChecked(name == self.activeConnection)
-            self.connectionActions.addAction(act)
-            act.triggered.connect(lambda _, name=name: self._onActionTriggered(name))
-        self.activeConnectionChanged.connect(self._checkActiveAction)
-        menu.addSeparator()
-
-        #: opens the settings dialog of the connections
-        self.actSettings = menu.addAction("Settings")
-        self.actSettings.triggered.connect(lambda: self.editSettings(parentWidget))
-        self.stateChanged.connect(self._lockMenu)
-
-    def _lockMenu(self, state):
-        self.connectionActions.setEnabled(state == self.DISCONNECTED)
-        self.actSettings.setEnabled(state == self.DISCONNECTED)
-
-    def _onActionTriggered(self, name):
-        # a refused selection checks the active connection again
-        self.setActiveConnection(name)
-        self._checkActiveAction(self.activeConnection)
-
-    def _checkActiveAction(self, name):
-        for act in self.connectionActions.actions():
-            act.setChecked(act.data() == name)
-
-    def _fillDeviceMenu(self, name, deviceMenu):
-        """ lists the available serial devices, selecting one sets the port and activates the connection """
-        settings = self.connections[name].settings
-
-        def select(port):
-            settings['port'] = port
-            self._onActionTriggered(name)
-
-        deviceMenu.clear()
-        for p in serial.tools.list_ports.comports():
-            # owned by the menu, so clear() deletes it
-            act = deviceMenu.addAction(p.device)
-            act.setCheckable(True)
-            act.setChecked(p.device == settings['port'])
-            act.triggered.connect(lambda _, port=p.device: select(port))
-        if deviceMenu.isEmpty():
-            deviceMenu.addAction("No devices found").setEnabled(False)
-
-    def editSettings(self, parentWidget=None):
-        """ edits the settings of the connections with a dialog, does not change the active connection """
-        dialog = ConnectionSettingsDialog(self.connections, self.activeConnection, parent=parentWidget)
-        if dialog.exec() == ConnectionSettingsDialog.DialogCode.Accepted:
-            dialog.apply()
 
     def setDefaultComPort(self, settings, cnt):
         """

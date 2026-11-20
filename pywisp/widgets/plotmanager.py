@@ -13,6 +13,7 @@ from ..buffer import DataPointBuffer, ElementBuffer
 from ..export import Exporter
 from .common import TreeWidgetStyledItemDelegate
 from .dialogs import ExportDialog
+from .fileselector import FileSelector
 from .plotchart import PlotChart
 
 __all__ = ["PlotManager"]
@@ -438,7 +439,8 @@ class PlotManager(QWidget):
         expData = {lbl: buf.snapshot() for lbl, buf in dataPoints.items()}
         # copied, confirmed parameters may still be logged during the export
         parameters = {key: list(values) for key, values in measurement.parameters.items()}
-        self.exporter = Exporter(dataPoints=expData, parameters=parameters)
+        fileName = FileSelector(["CSV Data (*.csv)", "PNG Image (*.png)"]).getSaveFileName()
+        self.exporter = Exporter(dataPoints=expData, parameters=parameters, fileName=fileName)
         self.exporter.done.connect(self._onExportDone)
         self.exporter.runExport()
 

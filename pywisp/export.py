@@ -12,7 +12,6 @@ from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from .buffer import ElementBuffer
 from .measurement import elementName
-from .widgets.fileselector import FileSelector
 
 __all__ = ["Exporter", "plotDataPoints"]
 
@@ -69,7 +68,7 @@ class Exporter(QObject):
     :param parameters: optional logged settings ``{'Module.setting': [(time, value), ...]}``, see
         :attr:`pywisp.measurement.Measurement.parameters`, exported as forward-filled csv columns before
         the data points, the png ignores them
-    :param fileName: target file, asked for if not given
+    :param fileName: target file, ``.csv`` or ``.png``
     """
     done = pyqtSignal(bool)
     # running exports keep themselves alive, destroying a running QThread aborts the process
@@ -78,9 +77,7 @@ class Exporter(QObject):
     def __init__(self, **kwargs):
         super().__init__()
         dataPoints = kwargs.get("dataPoints", None)
-        fileName = kwargs.get("fileName", None) or FileSelector(
-            ["CSV Data (*.csv)", "PNG Image (*.png)"]
-        ).getSaveFileName()
+        fileName = kwargs.get("fileName", None)
 
         self.worker = self.ExportThread(dataPoints, fileName, kwargs.get("parameters"))
         self.logger = logging.getLogger("Exporter")

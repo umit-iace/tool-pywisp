@@ -6,11 +6,13 @@ version of :data:`pywisp.TOOL_LIBS_VERSION`, over both connections of the exampl
 Set ``TOOL_LIBS_SOURCE_DIR`` to a local tool-libs checkout to build against it instead of
 fetching it, e.g. ``TOOL_LIBS_SOURCE_DIR=../tool-libs uv run pytest tests/test_example_generic.py``.
 """
+import json
 import logging
 import os
 import shutil
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -156,7 +158,7 @@ SREG = """
 
 def rigCells(gui):
     """ {(module, setting): (rig value, background color)} of the 'Rig' column of the parameter view """
-    model = gui.exp.targetModel
+    model = gui.targetView.targetModel
     cells = {}
     for row in range(model.rowCount()):
         parent = model.index(row, 0)
@@ -172,8 +174,8 @@ def rigCells(gui):
 def test_generic_example_gui(sim, example, qtbot, tmp_path, connection):
     """ start with confirmed parameters, change one during the run and export it with the data """
     from pywisp.export import Exporter
-    green = pw.ExperimentInteractor.RIG_COLORS[True]
-    red = pw.ExperimentInteractor.RIG_COLORS[False]
+    green = pw.ExperimentView.RIG_COLORS[True]
+    red = pw.ExperimentView.RIG_COLORS[False]
     pendulum, traj = example
     pw.registerExperimentModule(type(pendulum))
     pw.registerExperimentModule(type(traj))
@@ -191,11 +193,11 @@ def test_generic_example_gui(sim, example, qtbot, tmp_path, connection):
         assert gui.actStartExperiment.isEnabled()
         gui.actStartExperiment.trigger()
         # the parameters are sent, START waits for the sync
-        assert gui._startSyncId is not None and START not in sent and gui.measurements == []
-        qtbot.waitUntil(lambda: gui._startConfirmed, timeout=5000)
+        assert gui.session._startSyncId is not None and START not in sent and gui.measurements == []
+        qtbot.waitUntil(lambda: gui.session._startConfirmed, timeout=5000)
         assert sent.count(START) == 1
         measurement = gui.measurements[-1]
-        assert gui._runningMeasurement is measurement
+        assert gui.session.runningMeasurement is measurement
         settings = {'DoublePendulum': {'Config': 0},
                     'Trajectory': {'Type': 1, 'times': [0, 1], 'values': [0, 0.15]}}
         assert gui.exp.rigSettings == settings
@@ -231,3 +233,64 @@ def test_generic_example_gui(sim, example, qtbot, tmp_path, connection):
     config = df['DoublePendulum.Config']
     assert config.iloc[0] == 0 and config.iloc[-1] == 1
     assert (df['Trajectory.Type'] == 1).all()
+
+
+HEADLESS = """
+import json, sys, time
+import yaml
+from PyQt6.QtCore import QCoreApplication
+import pywisp.session as session
+from pywisp.config import validateExperiments
+from pywisp.registry import (registerConnection, registerExperimentModule, getRegisteredExperimentModules,
+                             getRegisteredVisualizers)
+import connection, testbench, trajectory
+
+app = QCoreApplication([])
+
+
+def waitUntil(cond, timeout=5.0):
+    end = time.monotonic() + timeout
+    while not cond():
+        if time.monotonic() > end:
+            raise TimeoutError
+        app.processEvents()
+        time.sleep(0.005)
+
+
+registerConnection(connection.Udp)
+registerConnection(connection.Tcp)
+registerExperimentModule(testbench.DoublePendulum)
+registerExperimentModule(trajectory.Trajectory)
+exp, = validateExperiments(yaml.safe_load(sys.argv[2]), getRegisteredExperimentModules(), getRegisteredVisualizers())
+s = session.Session()
+states = []
+s.stateChanged.connect(states.append)
+assert s.connectionManager.setActiveConnection(sys.argv[1])
+s.connect()
+waitUntil(lambda: s.connectionManager.isResponding() is True)
+assert s.setExperiment(exp)
+assert s.start(exp['Config']['HeartbeatTime'])
+waitUntil(lambda: s.state == s.RUNNING and s._startConfirmed)
+measurement = s.runningMeasurement
+waitUntil(lambda: measurement.lastTime > 0.5)
+s.stop()
+s.disconnect()
+print(json.dumps({'states': states, 'lastTime': measurement.lastTime, 'running': measurement.running,
+                  'buffers': sorted(measurement.dataPointBuffers), 'buffersDetached': s.currentBuffers is None,
+                  'widgets': sorted(m for m in sys.modules if m.startswith(('PyQt6.QtWidgets', 'PyQt6.QtGui')))}))
+"""
+
+
+@pytest.mark.parametrize("connection", ["Udp", "Tcp"])
+def test_generic_example_headless(sim, connection, tmp_path):
+    """ a session runs the experiment under a QCoreApplication without loading QtWidgets or QtGui """
+    env = dict(os.environ, QT_QPA_PLATFORM="offscreen", HOME=str(tmp_path), XDG_CONFIG_HOME=str(tmp_path),
+               PYTHONPATH=os.pathsep.join([str(EXAMPLE / "visu"), os.environ.get("PYTHONPATH", "")]))
+    res = subprocess.run([sys.executable, "-c", HEADLESS, connection, SREG], env=env, cwd=tmp_path,
+                         capture_output=True, text=True, timeout=60)
+    assert res.returncode == 0, res.stderr
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out['states'] == ['syncing', 'starting', 'running', 'idle']
+    assert out['lastTime'] > 0.5 and not out['running'] and out['buffersDetached']
+    assert 'T' in out['buffers']
+    assert out['widgets'] == []

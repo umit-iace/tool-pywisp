@@ -3,10 +3,10 @@ import struct
 from collections import OrderedDict
 
 import pytest
-from PyQt6.QtWidgets import QTreeView
 
 import pywisp as pw
 from pywisp.experiments import ExperimentInteractor, checkFrame
+from pywisp.widgets.experimentview import ExperimentView
 from pywisp.min import Frame
 
 
@@ -99,9 +99,10 @@ class Broken(pw.ExperimentModule):
 def interactor(qtbot, cleanRegistry):
     for mod in (Counter, Legacy, Echo, Rogue, Broken):
         pw.registerExperimentModule(mod)
-    view = QTreeView()
-    qtbot.addWidget(view)
-    exp = ExperimentInteractor(view)
+    exp = ExperimentInteractor()
+    exp.view = ExperimentView()
+    qtbot.addWidget(exp.view)
+    exp.view.setInteractor(exp)
     exp.sent = []
     exp.sendData.connect(exp.sent.append)
     return exp
@@ -328,7 +329,7 @@ def test_settings_are_the_data_object(interactor):
     """ the model only displays the settings, edits in the view and set parameters reach them """
     from PyQt6.QtCore import Qt
     interactor.setExperiment({'Name': 'a', 'Echo': {'gain': 2.0}})
-    model = interactor.targetModel
+    model = interactor.view.targetModel
     moduleIndex = model.index(0, 0)
     offsetIndex = model.index(1, 1, moduleIndex)
 
@@ -389,7 +390,7 @@ def test_confirm_settings_reports_changes(interactor):
 def rigCell(interactor, row):
     """ text and background color of the rig value in a row of the first module """
     from PyQt6.QtCore import Qt
-    model = interactor.targetModel
+    model = interactor.view.targetModel
     index = model.index(row, 2, model.index(0, 0))
     brush = model.data(index, Qt.ItemDataRole.BackgroundRole)
     return model.data(index), brush.color() if brush is not None else None
@@ -397,9 +398,9 @@ def rigCell(interactor, row):
 
 def test_rig_column(interactor):
     from PyQt6.QtCore import Qt
-    green, red = ExperimentInteractor.RIG_COLORS[True], ExperimentInteractor.RIG_COLORS[False]
+    green, red = ExperimentView.RIG_COLORS[True], ExperimentView.RIG_COLORS[False]
     interactor.setExperiment({'Name': 'a', 'Echo': {'gain': 2.0}})
-    model = interactor.targetModel
+    model = interactor.view.targetModel
     assert model.headerData(2, Qt.Orientation.Horizontal) == 'Rig'
     gainIndex = model.index(0, 2, model.index(0, 0))
     assert not model.flags(gainIndex) & Qt.ItemFlag.ItemIsEditable
@@ -450,3 +451,42 @@ def test_failing_modules_are_not_in_last_sent(interactor, monkeypatch):
     assert interactor.lastSent == {}
     # so they are never taken for confirmed values
     assert interactor.confirmSettings(interactor.lastSent) == []
+
+
+def test_state_without_view(cleanRegistry):
+    """ the interactor keeps the state as dicts and reports changes with signals, no view needed """
+    pw.registerExperimentModule(Echo)
+    exp = ExperimentInteractor()
+    events = []
+    exp.experimentChanged.connect(lambda: events.append('exp'))
+    exp.settingChanged.connect(lambda *args: events.append(args))
+    exp.rigSettingsChanged.connect(lambda: events.append('rig'))
+
+    assert exp.setExperiment({'Name': 'a', 'Echo': {'gain': 2.0, 'missing': 1}})
+    assert exp.name == 'a'
+    assert exp.getExperiment() == {'Name': 'a', 'Echo': {'gain': 2.0, 'offset': 0.0}}
+    assert exp.getParameter('Echo', 'gain') == 2.0
+    assert exp.setParameter('Echo', 'gain', 3.0)
+    assert not exp.setParameter('Echo', 'missing', 1)
+    exp.trackRig(True)
+    assert exp.trackingRig
+    exp.confirmSettings({'Echo': {'gain': 3.0}})
+    exp.clearRigSettings()
+    assert events == ['exp', ('Echo', 'gain', 3.0), 'rig', 'rig', 'rig']
+
+    # a failing experiment leaves no modules
+    assert not exp.setExperiment({'Name': 'b', 'Unknown': {}})
+    assert exp.getExperiment() == {'Name': 'b'}
+    assert events[-1] == 'exp'
+
+
+def test_experiments_does_not_import_qt_gui():
+    """ the experiment state is usable without QtWidgets/QtGui, e.g. in a daemon """
+    import ast
+    import pywisp.experiments as module
+    tree = ast.parse(open(module.__file__).read())
+    names = [alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names]
+    names += [node.module or '' for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)]
+    # shortcut: checks only the imports of the module itself, its dependencies config (widgets.remote) and
+    # registry (visualization) still load QtWidgets, test a fresh `import pywisp.experiments` once they are Qt-free
+    assert not [n for n in names if n.startswith(('PyQt6.QtWidgets', 'PyQt6.QtGui', '.widgets'))]

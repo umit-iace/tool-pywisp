@@ -8,6 +8,9 @@ Widgets
 .. automodule:: pywisp.widgets.remotepanel
     :members:
 
+.. automodule:: pywisp.widgets.experimentview
+    :members:
+
 .. automodule:: pywisp.widgets.plotmanager
     :members:
 
