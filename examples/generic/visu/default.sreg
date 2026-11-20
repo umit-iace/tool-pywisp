@@ -15,4 +15,4 @@
   Config:
     MovingWindowEnable: True  # Enable windowing
     MovingWindowSize: 10 # Show past 10 seconds of measurements
-    HeartbeatTime: 0  # disable keep-alive packets
+    HeartbeatTime: 250  # [ms], the rig stops the experiment after 1 s without heartbeat

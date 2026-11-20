@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "setuptools_scm"]
+requires = ["setuptools>=77", "setuptools_scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -13,33 +13,75 @@ authors = [
 readme = "README.rst"
 requires-python = ">=3.10"
 keywords = ["pywisp", "visualisation", "lab", "prototyping"]
+license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
+    "Environment :: X11 Applications :: Qt",
+    "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
     'numpy>1.24.4',
-    'PyQt5',
+    'PyQt6',
     'matplotlib',
     'pyqtgraph',
     'pyserial',
     'PyYAML',
     'python-dateutil',
     'pandas',
-    'build',
+    'pysdl2',
+    'pysdl2-dll',
+    'vtk',
 ]
 
 [tool.setuptools.dynamic]
 version = {attr = "pywisp.__version__"}
 
-[tool.uv.workspace]
-members = ["examples/generic/doublePendulum"]
+[tool.setuptools.packages.find]
+include = ["pywisp*"]
+
+[tool.setuptools.package-data]
+pywisp = ["resources/*.yaml", "resources/icons/*"]
 
 [dependency-groups]
 dev = [
     "sphinx",
-    "sphinxcontrib-plantuml>=0.31",
+    "sphinxcontrib-mermaid>=2.1.1",
+    "pytest",
+    "pytest-qt",
+    "pytest-cov",
+    "ruff",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+qt_api = "pyqt6"
+markers = [
+    "slow: long running benchmarks, deselect with '-m \"not slow\"'",
+]
+
+[tool.coverage.run]
+source = ["pywisp"]
+
+[tool.ruff]
+line-length = 120
+extend-exclude = [
+    "examples/tcp/bur",
+]
+
+[tool.ruff.lint]
+# pyflakes, bugbear and the most important pycodestyle errors
+select = ["F", "B", "E9", "E7", "UP032"]
+ignore = [
+    "F403", "F405",  # star imports are used for the public api
+    "B008",          # function calls in defaults
+    "B904",          # raise ... from inside except
+    "B905",          # zip() without strict=
+    "E701",          # compact one line ifs are used in min.py
+]
+
+[tool.ruff.lint.per-file-ignores]
+"pywisp/__init__.py" = ["E402"]

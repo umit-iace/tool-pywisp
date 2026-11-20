@@ -1,0 +1,3 @@
+VAR
+	state : USINT;
+END_VAR

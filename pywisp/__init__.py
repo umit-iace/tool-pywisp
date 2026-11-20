@@ -1,34 +1,35 @@
 # -*- coding: utf-8 -*-
-import logging.config
-import matplotlib as mpl
-import os
+# pyqtgraph uses the qt binding that has been imported first, so import PyQt6
+# before anything pulls in pyqtgraph
+from PyQt6 import QtCore  # noqa: F401
 
-# make everybody use qt5
-mpl.use('Qt5Agg')
-os.environ["PYQTGRAPH_QT_LIB"] = "PyQt5"
-os.environ['QT_AUTO_SCREEN_SCALE_FACTOR'] = "1"
+__author__ = 'IACE'
+__email__ = 'jens.wurm@umit-tirol.at'
+__version__ = '1.1.1'
+#: tool-libs version (tag or branch) the rig software has to use, the examples are built with it
+TOOL_LIBS_VERSION = 'feature/tests'
 
 from .min import *
 from .connection import *
 from .experimentModules import *
 from .experiments import *
-from .experiments import *
-from .gui import *
 from .registry import *
 from .utils import *
-from .visualization import *
+from .session import *
 
-__author__ = 'IACE'
-__email__ = 'jens.wurm@umit-tirol.at'
-__version__ = '1.1.1'
+# the widgets need QtWidgets, they are imported on first use, so the core runs headless under a QCoreApplication
+_LAZY = {name: '.widgets.experimentview'
+         for name in ("ExperimentModel", "PropertyItem", "PropertyDelegate", "ExperimentView")}
+_LAZY.update({name: '.visualization' for name in ("Visualizer", "MplVisualizer", "VtkVisualizer")})
+_LAZY.update(MainGui='.gui', MovableWidget='.widgets.remote', registerRemoteWidget='.widgets.remote')
 
-# configure logging
-with open(getResource("logging.yaml", ""), "r") as f:
-    log_conf = yaml.load(f, Loader=Loader)
+__all__ = [name for name in globals() if not name.startswith('_')] + list(_LAZY)
 
-logging.config.dictConfig(log_conf)
 
-# go to correct directory
-import sys
-if (dir := os.path.dirname(sys.argv[-1])):
-    os.chdir(dir)
+def __getattr__(name):
+    if name not in _LAZY:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    import importlib
+    value = getattr(importlib.import_module(_LAZY[name], __name__), name)
+    globals()[name] = value
+    return value

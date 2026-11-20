@@ -1,51 +1,82 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
+import shutil
+import sys
+import tempfile
 import time
-import importlib.metadata
-from copy import deepcopy
 
-import serial.tools.list_ports
 import yaml
 
 # vtk
-vtk_error_msg = ""
+vtkErrorMsg = ""
 try:
-    import vtk
-
     from vtk import vtkRenderer
-    from vtk import qt
     # import patched class that fixes scroll problem
     from .visualization import QVTKRenderWindowInteractor
 
-    vtk_available = True
+    vtkAvailable = True
 except ImportError as e:
-    vtk_available = False
-    vtk_error_msg = e
+    vtkAvailable = False
+    vtkErrorMsg = e
     vtkRenderer = None
     QVTKRenderWindowInteractor = None
 
 try:
-    from yaml import CLoader as Loader, CDumper as Dumper
+    from yaml import CSafeLoader as SafeLoader
 except ImportError:
-    from yaml import Loader, Dumper
-from PyQt5.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QCoreApplication, QMutex
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
-from pyqtgraph.dockarea import *
+    from yaml import SafeLoader
+from PyQt6.QtCore import QSize, Qt, pyqtSlot, pyqtSignal, QModelIndex, QTimer, QCoreApplication
+from PyQt6.QtGui import QAction, QActionGroup, QBrush, QFontDatabase, QGuiApplication, QIcon, QKeySequence, QPalette, QPixmap
+from PyQt6.QtWidgets import QAbstractItemView, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QSizePolicy, QSplashScreen, QStatusBar, QTextEdit, QStyle, QStyleOptionToolButton, QStylePainter, QToolBar, QToolButton, \
+    QDockWidget, QTabWidget, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QMessageBox
 
-from .connection import SerialConnection, SocketConnection
-from .experiments import ExperimentInteractor, ExperimentView
-from .registry import *
-from .utils import getResource, PlainTextLogger, DataPointBuffer, Exporter, DataIntDialog, \
-    DataTcpIpDialog, RemoteWidgetEdit, FreeLayout, MovablePushButton, MovableSwitch, MovableSlider, PinnedDock, \
-    ContextLineEditAction, TreeWidgetStyledItemDelegate
+from .config import dumpExperiments, validateExperiments
+from .connectionManager import ConnectionManager
+from .registry import getRegisteredExperimentModules, getRegisteredVisualizers
+from .session import Session
+from .utils import getResource, setupLogging
+from .widgets.connectionmenu import ConnectionMenu
+from .widgets.common import PlainTextLogger
+from .widgets.dialogs import DataIntDialog
+from .widgets.experimentview import ExperimentView
+from .widgets.remotepanel import RemotePanel
 
 from .visualization import MplVisualizer, VtkVisualizer
-from .gamepad import getGamepadByIndex
-from .gamepad import getAllGamepads
+from .gamepad import getAllGamepads, openGamepad
 from .settings import Settings
-from .widgets.plotchart import PlotChart
+from .themes import THEMES, applyTheme, isDark, themedIcon
+from .widgets.plotmanager import PlotManager
+
+__all__ = ["MainGui"]
+
+
+class _CenteredToolButton(QToolButton):
+    """ tool button showing one action, with a fixed width it centers icon and text, the styles align them left """
+
+    def setDefaultAction(self, action):
+        # with more than one action the button gets a menu arrow and a popup with them
+        for act in self.actions():
+            self.removeAction(act)
+        super().setDefaultAction(action)
+
+    def paintEvent(self, event):
+        painter = QStylePainter(self)
+        opt = QStyleOptionToolButton()
+        self.initStyleOption(opt)
+        # the bevel over the full width, with an empty label
+        bevel = QStyleOptionToolButton(opt)
+        bevel.text, bevel.icon = "", QIcon()
+        bevel.toolButtonStyle = Qt.ToolButtonStyle.ToolButtonTextOnly
+        painter.drawComplexControl(QStyle.ComplexControl.CC_ToolButton, bevel)
+        # the label in a rect of its natural width in the middle, without a second bevel
+        offset = max(0, (self.width() - self.sizeHint().width()) // 2)
+        opt.rect = self.rect().adjusted(offset, 0, -offset, 0)
+        opt.state &= ~(QStyle.StateFlag.State_MouseOver | QStyle.StateFlag.State_Sunken | QStyle.StateFlag.State_On
+                       | QStyle.StateFlag.State_Raised | QStyle.StateFlag.State_HasFocus)
+        opt.state |= QStyle.StateFlag.State_AutoRaise
+        painter.drawComplexControl(QStyle.ComplexControl.CC_ToolButton, opt)
 
 
 class MainGui(QMainWindow):
@@ -58,49 +89,56 @@ class MainGui(QMainWindow):
     def __init__(self, fileName=None, parent=None):
         super(MainGui, self).__init__(parent)
 
+        # keeps a logging config of the application
+        setupLogging()
+
+        # log errors in slots instead of letting PyQt abort the application,
+        # but do not replace a hook somebody else installed
+        if sys.excepthook is sys.__excepthook__:
+            sys.excepthook = logUncaughtException
+
+        from . import __version__
         QCoreApplication.setOrganizationName("IACE")
         QCoreApplication.setOrganizationDomain("https://umit-tirol.at/iace")
-        QCoreApplication.setApplicationVersion(
-            importlib.metadata.version("PyWisp"))
-        QCoreApplication.setApplicationName(globals()["__package__"])
+        QCoreApplication.setApplicationVersion(__version__)
+        QCoreApplication.setApplicationName(__package__)
 
         # general config parameters
         self.config = {'TimerTime': 40, # [] = ms
                        'HeartbeatTime': 0,
                        }
         self.configDefaults = self.config.copy()
-        QStyleSheet = """
-            QListView::item:selected {
-                color: black;
-            }
-            QListView::item:selected:!active {
-                background: transparent;
-            }
-            QListView::item:selected:active {
-                background: transparent;
-            }
-            QListView::item:hover { }
-            QTreeView {
-                selection-background-color: transparent;
-            }
-            QTreeView::item:selected { }
-            QTreeView::item:hover { }
-            QTreeView::item:hover:selected { }
-        """
-
         # Create and display the splash screen
-        self.splashScreenIcon = QPixmap(getResource("icon.svg"))
-        self.splashScreen = QSplashScreen(self, self.splashScreenIcon, Qt.WindowStaysOnTopHint)
-        self.splashScreen.setEnabled(False)
-        self.splashScreen.show()
+        # without a display Qt waits in vain for the splash screen to become visible
+        self.splashScreen = None
+        if QGuiApplication.platformName() != "offscreen":
+            self.splashScreenIcon = QPixmap(getResource("icon.svg"))
+            self.splashScreen = QSplashScreen(self.splashScreenIcon, Qt.WindowType.WindowStaysOnTopHint)
+            self.splashScreen.setEnabled(False)
+            self.splashScreen.show()
 
-        self.connections = {}
-        self.isConnected = False
+        # runs the experiments, owns the connection to the rig and the experiment interactor
+        self.session = Session(self)
+        self.connectionManager = self.session.connectionManager
+        self.exp = self.session.exp
+        self.connectionManager.stateChanged.connect(self._onConnectionStateChanged)
+        self.connectionManager.rigStatusChanged.connect(self._updateConnectionStatus)
+        self.session.stateChanged.connect(self._onSessionStateChanged)
+        self.session.measurementStarted.connect(self._onMeasurementStarted)
+        self.session.measurementFinished.connect(self._onMeasurementFinished)
+        self.session.measurementDropped.connect(self._onMeasurementDropped)
+        self.session.dataReceived.connect(self._onDataReceived)
+        self.session.commError.connect(self._setCommError)
+        self.session.startAborted.connect(lambda msg: QMessageBox.warning(self, "Start failed", msg))
+        # problem of the communication with the rig, shown by the yellow traffic light
+        self._commError = None
+        # the frames pass updateData, looked up on every call, so it can be replaced, e.g. in tests
+        self.connectionManager.framesReceived.disconnect(self.session.handleFrames)
+        self.connectionManager.framesReceived.connect(lambda frames: self.updateData(frames))
+        self.selectedExp = False
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.updateDataPlots)
-        self.heartbeatTimer = QTimer()
-        self.heartbeatTimer.timeout.connect(self.heartbeat)
 
         # initialize logger
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -122,71 +160,81 @@ class MainGui(QMainWindow):
         # status bar
         self.statusBar = QStatusBar(self)
         self.setStatusBar(self.statusBar)
-        self.statusbarLabel = QLabel("Not connected!")
+        # traffic light of the connection: red not connected, green connected, yellow a problem,
+        # the tooltip tells which
+        self.connectionLed = QLabel()
+        self.connectionLed.setFixedSize(14, 14)
+        self.statusBar.addPermanentWidget(self.connectionLed, 0)
+        self._setConnectionLed('red', "Not connected")
+        self.statusbarLabel = QLabel("")
         self.statusBar.addPermanentWidget(self.statusbarLabel, 1)
+        # the mouse position in a plot and the times on the right, a caption in the color of disabled text and
+        # the value in a fixed width font, so it does not jump while counting
+        self.coordXLabel = self._addStatusValue("x", "mouse position in the plot", "")
+        self.coordYLabel = self._addStatusValue("y", "mouse position in the plot", "")
+        self.updateCoordInfo(None)
+        self.guiTimeLabel = self._addStatusTime("GUI", "time since the start of the experiment in the gui")
+        self.expTimeLabel = self._addStatusTime("Exp", "time of the experiment on the rig")
         self.guiStartTime = 0.0
         self.guiTimer = QTimer()
-        self.guiTimer.setTimerType(Qt.PreciseTimer)
+        self.guiTimer.setTimerType(Qt.TimerType.PreciseTimer)
         self.guiTimer.timeout.connect(
-            lambda: self.guiTimeLabel.setText(
-                f"GUI time={timeString(time.time()-self.guiStartTime)}"
-            )
+            lambda: self.guiTimeLabel.setText(timeString(time.time() - self.guiStartTime))
         )
-        self.guiTimeLabel = QLabel("GUI time=00:00:00")
-        self.statusBar.addPermanentWidget(self.guiTimeLabel, 1)
-        self.expTimeLabel = QLabel("Exp time=00:00:00")
-        self.statusBar.addPermanentWidget(self.expTimeLabel, 1)
-        statusBarDummyLabel = QLabel("")
-        self.statusBar.addPermanentWidget(statusBarDummyLabel, 4)
-        self.coordTimer = QTimer()
-        self.coordTimer.timeout.connect(self.disableCoord)
-        self.coordLabel = QLabel("x=0.0 y=0.0")
-        self.coordLabel.setVisible(False)
-        self.statusBar.addPermanentWidget(self.coordLabel, 2)
 
-        # the docking area allows to rearrange the user interface at runtime
-        self.area = DockArea()
-        self.setCentralWidget(self.area)
+        # the docks can be rearranged at runtime, the plots and the animation in the plot area in the center,
+        # the other docks around it
+        self.plotArea = QMainWindow()
+        for window in (self, self.plotArea):
+            window.setDockOptions(QMainWindow.DockOption.AllowTabbedDocks | QMainWindow.DockOption.AllowNestedDocks
+                                  | QMainWindow.DockOption.AnimatedDocks)
+            window.setTabPosition(Qt.DockWidgetArea.AllDockWidgetAreas, QTabWidget.TabPosition.North)
+        self.setCentralWidget(self.plotArea)
+        # the log spans the whole width
+        self.setCorner(Qt.Corner.BottomLeftCorner, Qt.DockWidgetArea.BottomDockWidgetArea)
+        self.setCorner(Qt.Corner.BottomRightCorner, Qt.DockWidgetArea.BottomDockWidgetArea)
 
-        # create docks
-        self.experimentDock = PinnedDock("Experiments")
-        self.lastMeasDock = PinnedDock("Last Measurements")
-        self.propertyDock = PinnedDock("Parameters")
-        self.logDock = PinnedDock("Log")
-        self.dataDock = PinnedDock("Data")
-        self.animationDock = PinnedDock("Animation")
-        self.remoteDock = PinnedDock("Remote")
+        self.experimentDock = self._createDock("Experiments", self)
+        self.lastMeasDock = self._createDock("Last Measurements", self)
+        self.propertyDock = self._createDock("Parameters", self)
+        self.remoteDock = self._createDock("Remote", self)
+        self.logDock = self._createDock("Log", self)
+        self.animationDock = self._createDock("Animation", self.plotArea)
+        self.dataPointDock = self._createDock("Data", self.plotArea)
 
-        # arrange docks
-        self.area.addDock(self.animationDock, "right")
-        self.area.addDock(self.lastMeasDock, "left", self.animationDock)
-        self.area.addDock(self.propertyDock, "bottom", self.lastMeasDock)
-        self.area.addDock(self.dataDock, "bottom", self.propertyDock)
-        self.area.addDock(self.logDock, "bottom", self.dataDock)
-        self.area.addDock(self.experimentDock, "left", self.lastMeasDock)
-        self.area.addDock(self.remoteDock, "right", self.propertyDock)
-        self.nonPlottingDocks = list(self.area.findAll()[1].keys())
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.experimentDock)
+        # split before tabbing, a dock split from a tabbed one would become a tab as well
+        self.splitDockWidget(self.experimentDock, self.propertyDock, Qt.Orientation.Vertical)
+        self.splitDockWidget(self.propertyDock, self.remoteDock, Qt.Orientation.Vertical)
+        self.tabifyDockWidget(self.experimentDock, self.lastMeasDock)
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.logDock)
+        self.experimentDock.raise_()
+        self.plotArea.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.animationDock)
+        self.plotArea.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dataPointDock)
 
         # property dock
         self.targetView = ExperimentView(self)
         self.targetView.expanded.connect(self.targetViewChanged)
         self.targetView.collapsed.connect(self.targetViewChanged)
 
-        self.propertyDock.addWidget(self.targetView)
+        self.propertyDock.setWidget(self.targetView)
 
         # animation dock
         self.animationWidget = QWidget()
         self.animationLayout = QVBoxLayout()
         self.animationFrame = None
-        self.animationDock.addWidget(self.animationWidget)
+        self.animationDock.setWidget(self.animationWidget)
+        # catch up on the updates skipped while the animation was hidden
+        self.animationDock.visibilityChanged.connect(lambda visible: visible and self._updateVisualizer())
 
         # experiment dock
         self.experimentList = QListWidget(self)
-        self.experimentList.setFocusPolicy(Qt.NoFocus)
-        self.experimentList.setStyleSheet(QStyleSheet)
-        self.experimentList.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.experimentDock.addWidget(self.experimentList)
-        self.experimentList.itemDoubleClicked.connect(self.experimentDclicked)
+        self.experimentList.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        # experiments are applied by a double click, the applied one is shown in bold and
+        # the running one with a background, a selection would hide both
+        self.experimentList.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.experimentDock.setWidget(self.experimentList)
+        self.experimentList.itemDoubleClicked.connect(self.experimentDoubleClicked)
         self._currentExperimentIndex = None
         self._currentExperimentName = None
         self._experimentStartTime = 0
@@ -194,110 +242,55 @@ class MainGui(QMainWindow):
         self.actStartExperiment = QAction(self)
         self.actStartExperiment.setDisabled(True)
         self.actStartExperiment.setText("&Start experiment")
-        self.actStartExperiment.setIcon(QIcon(getResource("play.png")))
         self.actStartExperiment.setShortcut(QKeySequence("F5"))
         self.actStartExperiment.triggered.connect(self.startExperiment)
 
         self.actStopExperiment = QAction(self)
         self.actStopExperiment.setText("&Stop experiment")
         self.actStopExperiment.setDisabled(True)
-        self.actStopExperiment.setIcon(QIcon(getResource("stop.png")))
         self.actStopExperiment.setShortcut(QKeySequence("F6"))
         self.actStopExperiment.triggered.connect(self.stopExperiment)
 
+        self.actExport = QAction("&Export", self)
+        self.actExport.setToolTip("Export data points to a file")
+
         self.visComboBox = QComboBox()
+
+        # selection of the active connection, synced with the radio buttons of the connections menu
+        self.connComboBox = QComboBox()
+        self.connComboBox.setToolTip("Connection to the rig")
+        self.connComboBox.addItems(list(self.connectionManager.connections))
+        self.connComboBox.setCurrentText(self.connectionManager.activeConnection or "")
+        self.connComboBox.currentTextChanged.connect(self._onConnComboBoxChanged)
+        self.connectionManager.activeConnectionChanged.connect(self.connComboBox.setCurrentText)
         self.visComboBox.currentIndexChanged.connect(self.visualizerChanged)
 
         # lastmeas dock
         self.lastMeasList = QListWidget(self)
-        self.lastMeasList.setFocusPolicy(Qt.NoFocus)
-        self.lastMeasList.setStyleSheet(QStyleSheet)
-        self.lastMeasDock.addWidget(self.lastMeasList)
+        self.lastMeasList.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.lastMeasList.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.lastMeasDock.setWidget(self.lastMeasList)
         self.lastMeasList.itemDoubleClicked.connect(self.loadLastMeas)
-        self.measurements = []
+        # all recorded measurements, each list item holds its measurement as user data
+        self.measurements = self.session.measurements
 
         # log dock
         self.logBox = QTextEdit(self)
         self.logBox.setReadOnly(True)
-        self.logBox.setLineWrapMode(QTextEdit.NoWrap)
+        self.logBox.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         self.logBox.ensureCursorVisible()
-        self.logDock.addWidget(self.logBox)
+        self.logDock.setWidget(self.logBox)
 
-        # daten dock
-        self.dataWidget = QWidget()
-        self.dataLayout = QHBoxLayout()
-
-        self.dataPointListWidget = QListWidget()
-        self.dataPointListLayout = QVBoxLayout()
-        self.dataPointListWidget.setLayout(self.dataPointListLayout)
-        self.dataPointListWidget.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.dataLayout.addWidget(self.dataPointListWidget)
-
-        self.dataPointManipulationWidget = QWidget()
-        self.dataPointManipulationLayout = QVBoxLayout()
-        self.dataPointManipulationLayout.addStretch()
-        self.dataPointManipulationLayout.setSpacing(5)
-        self.dataPointRightButtonWidget = QWidget()
-        self.dataPointRightButtonLayout = QVBoxLayout()
-        self.dataPointRightButton = QPushButton(chr(0x226b), self)
-        self.dataPointRightButton.setToolTip(
-            "Add the selected data set from the left to the selected plot "
-            "on the right.")
-        self.dataPointRightButton.clicked.connect(self.addDatapointToTree)
-        self.dataPointLabel = QLabel('DataPoint', self)
-        self.dataPointLabel.setAlignment(Qt.AlignCenter)
-        self.dataPointManipulationLayout.addWidget(self.dataPointLabel)
-        self.dataPointManipulationLayout.addWidget(self.dataPointRightButton)
-        self.dataPointLeftButtonWidget = QWidget()
-        self.dataPointLeftButtonLayout = QVBoxLayout()
-        self.dataPointLeftButton = QPushButton(chr(0x03A7), self)
-        self.dataPointLeftButton.setToolTip(
-            "Remove the selected data set from the plot on the right."
-        )
-        self.dataPointLeftButton.clicked.connect(self.removeDatapointFromTree)
-        self.dataPointManipulationLayout.addWidget(self.dataPointLeftButton)
-        self.dataPointExportButton = QPushButton(chr(0x25BC), self)
-        self.dataPointExportButton.setToolTip(
-            "Export the selected data set from the left to a csv or png file."
-        )
-        self.dataPointExportButton.clicked.connect(self.exportDataPointFromTree)
-        self.dataPointManipulationLayout.addWidget(self.dataPointExportButton)
-        self.dataPointPlotAddButtonWidget = QWidget()
-        self.dataPointPlotAddButtonLayout = QVBoxLayout()
-        self.dataPointPlotAddButton = QPushButton("+", self)
-        self.dataPointPlotAddButton.setToolTip(
-            "Create a new plot window."
-        )
-        self.dataPointPlotAddButton.clicked.connect(self.addPlotTreeItem)
-        self.plotLabel = QLabel('Plots', self)
-        self.plotLabel.setAlignment(Qt.AlignCenter)
-        self.dataPointManipulationLayout.addWidget(self.plotLabel)
-        self.dataPointManipulationLayout.addWidget(self.dataPointPlotAddButton)
-        self.dataPointPlotRemoveButtonWidget = QWidget()
-        self.dataPointPlotRemoveButtonLayout = QVBoxLayout()
-        self.dataPointPlotRemoveButton = QPushButton("-", self)
-        self.dataPointPlotRemoveButton.setToolTip(
-            "Delete the selected plot window."
-        )
-        self.dataPointPlotRemoveButton.clicked.connect(self.removeSelectedPlotTreeItems)
-        self.dataPointManipulationLayout.addWidget(self.dataPointPlotRemoveButton)
-        self.dataPointManipulationWidget.setLayout(self.dataPointManipulationLayout)
-        self.dataLayout.addWidget(self.dataPointManipulationWidget)
-
-        self.dataPointTreeWidget = QTreeWidget()
-        custom_QStyledItemDelegate = TreeWidgetStyledItemDelegate()
-        self.dataPointTreeWidget.setItemDelegate(custom_QStyledItemDelegate)
-        self.dataPointTreeWidget.setStyleSheet(QStyleSheet)
-        self.dataPointTreeWidget.setHeaderLabels(["PlotTitle", "DataPoint"])
-        self.dataPointTreeWidget.itemDoubleClicked.connect(self.plotVectorClicked)
-        self.dataPointTreeWidget.setExpandsOnDoubleClick(0)
-        self.dataPointTreeLayout = QVBoxLayout()
-
-        self.dataPointTreeWidget.setLayout(self.dataPointTreeLayout)
-        self.dataLayout.addWidget(self.dataPointTreeWidget)
-
-        self.dataWidget.setLayout(self.dataLayout)
-        self.dataDock.addWidget(self.dataWidget)
+        # plot area
+        self.plotManager = PlotManager(self.plotArea, self.animationDock, self.dataPointDock, self._settings,
+                                       currentMeasurement=self._currentMeasurement,
+                                       dataPointNames=lambda: self.exp.getDataPoints(),
+                                       plotConfig=lambda: self.config)
+        self.plotManager.coords.connect(self.updateCoordInfo)
+        self.plotManager.allPlotsClosed.connect(lambda: self.updateCoordInfo(None))
+        self.plotManager.exportDone.connect(self.exportDone)
+        self.actExport.triggered.connect(self.plotManager.exportDataPoints)
+        self.dataPointDock.setWidget(self.plotManager)
 
         # init logger for logging box
         self.textLogger = PlainTextLogger(self._settings,
@@ -306,33 +299,34 @@ class MainGui(QMainWindow):
         logging.getLogger().addHandler(self.textLogger)
         self._logger.info('Laboratory visualization')
 
-        # remote dock
-        self.remoteWidget = QWidget()
-        self.remoteWidget.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.remoteWidget.customContextMenuRequested.connect(self.remoteWidgetMenue)
-        self.remoteWidgetLayout = FreeLayout()
-        self.remoteWidget.setLayout(self.remoteWidgetLayout)
-        self.remoteDock.addWidget(self.remoteWidget)
-
         # menu bar
-        dateiMenu = self.menuBar().addMenu("&File")
-        dateiMenu.addAction("&Quit", self.close, QKeySequence(Qt.CTRL + Qt.Key_W))
+        fileMenu = self.menuBar().addMenu("&File")
+        self.actSaveExperiments = fileMenu.addAction("&Save experiments", QKeySequence.StandardKey.Save,
+                                                     lambda: self.saveExperiments())
+        self.actSaveExperimentsAs = fileMenu.addAction("Save experiments &as ...", QKeySequence.StandardKey.SaveAs,
+                                                       self.saveExperimentsAs)
+        fileMenu.addSeparator()
+        fileMenu.addAction("&Quit", QKeySequence("Ctrl+W"), self.close)
 
         # view
         self.viewMenu = self.menuBar().addMenu('&View')
-        self.actLoadStandardState = QAction('&Load default view')
+        self.actLoadStandardState = QAction('&Load default view', self)
         self.viewMenu.addAction(self.actLoadStandardState)
         self.actLoadStandardState.triggered.connect(self.loadStandardDockState)
-        self.actShowCoords = QAction("&Show coordinates", self)
-        self.actShowCoords.setCheckable(True)
-        self.actShowCoords.setChecked(
-            self._settings.value("view/show_coordinates") == "True"
-        )
-        self.viewMenu.addAction(self.actShowCoords)
-        self.actShowCoords.changed.connect(self.updateShowCoordsSetting)
+        self.viewMenu.addAction("Sa&ve view as default", self.saveDockState)
+        self.viewMenu.addAction("&Reset default view", self.resetDockState)
+        self.themeMenu = self.viewMenu.addMenu("&Theme")
+        self._themeActions = QActionGroup(self)
+        for name in THEMES:
+            act = self.themeMenu.addAction(name, lambda name=name: self.setTheme(name))
+            act.setCheckable(True)
+            self._themeActions.addAction(act)
+        self.actToggleTheme = QAction("Toggle &dark mode", self)
+        self.actToggleTheme.triggered.connect(self.toggleTheme)
+        self.viewMenu.addAction(self.actToggleTheme)
 
         self.gamepad = None
-        self.selectedGamepadIndex = None
+        self.selectedGamepadId = None
 
         ### options
         self.optMenu = self.menuBar().addMenu('&Options')
@@ -351,97 +345,111 @@ class MainGui(QMainWindow):
         self.expMenu = self.menuBar().addMenu('&Experiment')
         self.connMenu = self.menuBar().addMenu('&Connections')
 
-        availableConns = getRegisteredConnections()
-        if availableConns:
-            for name, cls in availableConns.items():
-                self._logger.info(f"Found Connection: {name}")
-                self.connections[name] = {'cls':cls}
-        else:
-            self._logger.error("No Connections found, return!")
-            # return
-
-        serialCnt = 0
-        for name, conn in self.connections.items():
-            cls = conn['cls']
-            if issubclass(cls, SerialConnection):
-                serialMenu = self.connMenu.addMenu(name)
-                self._getSerialMenu(serialMenu, cls.settings)
-                if cls.settings['port'] == '':
-                    self.setDefaultComPort(cls.settings, serialCnt)
-                serialCnt += 1
-            elif issubclass(cls, SocketConnection):
-                actTcp = self.connMenu.addAction(name)
-                actTcp.triggered.connect(lambda _, settings=cls.settings: self._getTcpMenu(settings))
-            else:
-                self._logger.warning("Cannot handle the connection type!")
-            self.connMenu.addSeparator()
+        self.connectionMenu = ConnectionMenu(self.connectionManager, self.connMenu, self)
 
         self.expMenu.addSeparator()
-        self.actConnect = QAction('&Connect')
-        self.actConnect.setIcon(QIcon(getResource("connected.png")))
+        self.actConnect = QAction('&Connect', self)
         self.actConnect.setShortcut(QKeySequence("F9"))
         self.expMenu.addAction(self.actConnect)
-        self.actConnect.triggered.connect(self.connect)
+        self.actConnect.triggered.connect(self.connectRig)
 
-        self.actDisconnect = QAction('&Disconnect')
+        self.actDisconnect = QAction('&Disconnect', self)
         self.actDisconnect.setEnabled(False)
-        self.actDisconnect.setIcon(QIcon(getResource("disconnected.png")))
         self.actDisconnect.setShortcut(QKeySequence("F10"))
-        self.actSendParameter = QAction('&Send all parameter')
+        self.actSendParameter = QAction('&Send all parameter', self)
         self.actSendParameter.setEnabled(False)
         self.actSendParameter.setShortcut(QKeySequence("F7"))
         self.expMenu.addAction(self.actSendParameter)
         self.actSendParameter.triggered.connect(self.sendParameter)
-        self.actSendChangedParameter = QAction('&Send changed parameter')
+        self.actSendChangedParameter = QAction('&Send changed parameter', self)
         self.actSendChangedParameter.setEnabled(False)
         self.actSendChangedParameter.setShortcut(QKeySequence("F8"))
         self.expMenu.addAction(self.actSendChangedParameter)
         self.actSendChangedParameter.triggered.connect(self.sendChangedParameter)
         self.expMenu.addAction(self.actDisconnect)
-        self.actDisconnect.triggered.connect(self.disconnect)
+        self.actDisconnect.triggered.connect(self.disconnectRig)
         self.expMenu.addSeparator()
         self.expMenu.addAction(self.actStartExperiment)
         self.expMenu.addAction(self.actStopExperiment)
-        self.expMenu.addAction(self.actSendParameter)
-        self.expMenu.addAction(self.actSendChangedParameter)
 
         # toolbar
         self.toolbarExp = QToolBar("Experiment")
-        self.toolbarExp.setContextMenuPolicy(Qt.PreventContextMenu)
+        self.toolbarExp.setObjectName("Experiment")
+        self.toolbarExp.setContextMenuPolicy(Qt.ContextMenuPolicy.PreventContextMenu)
         self.toolbarExp.setMovable(False)
         self.toolbarExp.setIconSize(iconSize)
         self.addToolBar(self.toolbarExp)
-        self.toolbarExp.addAction(self.actConnect)
-        self.toolbarExp.addAction(self.actDisconnect)
+        # one toggle button each for connect/disconnect and start/stop, showing the action that is enabled
+        def _swap(btn, a, b):
+            btn.setDefaultAction(b if b.isEnabled() else a)
+
+        self.connButton = _CenteredToolButton()
+        self.expButton = _CenteredToolButton()
+        self._toggleButtons = ((self.connButton, self.actConnect, self.actDisconnect),
+                               (self.expButton, self.actStartExperiment, self.actStopExperiment))
+        for btn, a, b in self._toggleButtons:
+            # widgets added to a toolbar do not inherit its icon size and style
+            btn.setIconSize(iconSize)
+            btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            btn.setAutoRaise(True)
+            for act in (a, b):
+                act.changed.connect(lambda btn=btn, a=a, b=b: _swap(btn, a, b))
+            _swap(btn, a, b)
+        self.toolbarExp.addWidget(self.connComboBox)
+        self.toolbarExp.addWidget(self.connButton)
         self.toolbarExp.addSeparator()
-        self.toolbarExp.addAction(self.actStartExperiment)
-        self.toolbarExp.addAction(self.actStopExperiment)
+        self.toolbarExp.addWidget(self.expButton)
+        self.toolbarExp.addSeparator()
+        self.exportButton = QToolButton()
+        self.exportButton.setDefaultAction(self.actExport)
+        self.exportButton.setIconSize(iconSize)
+        self.exportButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.exportButton.setAutoRaise(True)
+        self.toolbarExp.addWidget(self.exportButton)
         self.toolbarExp.addSeparator()
         vSpacer = QWidget()
-        vSpacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        vSpacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.toolbarExp.addWidget(vSpacer)
-        self.toolbarExp.addSeparator()
         self.toolbarExp.addWidget(self.visComboBox)
+        self.toolbarExp.addSeparator()
+        self.toolbarExp.addAction(self.actToggleTheme)
+
+        # the icons are drawn in the text color of the theme or in the given (light, dark) color
+        green, red = ("#2e7d32", "#66bb6a"), ("#c62828", "#e57373")
+        self._themedIcons = {self.actStartExperiment: ("play.png", green), self.actStopExperiment: ("stop.png", red),
+                             self.actConnect: ("connected.png", green),
+                             self.actDisconnect: ("disconnected.png", red),
+                             self.actToggleTheme: ("theme.svg", None), self.actExport: ("export.svg", None)}
 
         self._currentExpListItem = None
         self._currentLastMeasItem = None
-        self._currentDataPointBuffers = None
-        self.plotCharts = {}
+        # config file and all of its experiments, including those skipped by the validation
+        self._configFile = None
+        self._fileExperiments = []
+        self._backedUpFiles = set()
 
         loadExpFromFileSuccess = self.loadExpFromFile(fileName)
 
-        self.standardDockState = self.area.saveState()
+        # sized when the window is shown
+        self.standardDockState = (self.saveState(), self.plotArea.saveState())
+        self._standardSizesPending = False
+        # the view of the pyqtgraph docks of older versions cannot be restored
+        self._settings.remove("view/dock_state")
+        self.loadStandardDockState()
 
-        self.exp = ExperimentInteractor(self.targetView, self)
-        self.exp.sendData.connect(self.writeToConnection)
+        self.targetView.setInteractor(self.exp)
+
+        # remote dock
+        self.remotePanel = RemotePanel(self.exp)
+        self.remotePanel.parametersChanged.connect(self._sendRemoteParameters)
+        self.remotePanel.saveRequested.connect(lambda: self.saveExperiments())
+        self.remoteDock.setWidget(self.remotePanel)
         self.runExp.connect(self.exp.runExperiment)
         self.stopExp.connect(self.exp.stopExperiment)
-        self.exp.expFinished.connect(self.saveLastMeas)
-        self.exp.missedbeat.connect(self.disconnect)
-        self.exp.expStop.connect(self.stopExperiment)
 
         self.visualizer = None
         self.vtkWidget = None
+        self.setTheme(self._settings.value("theme/name"))
 
         self._updateExperimentsList()
 
@@ -449,11 +457,10 @@ class MainGui(QMainWindow):
             self._applyFirstExperiment()
             self.selectedExp = True
 
-        self.data_mutex = QMutex()
-        self.exporter = None
 
         # close splash screen
-        self.splashScreen.finish(self)
+        if self.splashScreen is not None:
+            self.splashScreen.finish(self)
 
     def visualizerChanged(self, idx):
         for i in reversed(range(self.animationLayout.count())):
@@ -464,475 +471,139 @@ class MainGui(QMainWindow):
         visName = self.visComboBox.itemText(idx)
         available = getRegisteredVisualizers()
 
-        self.setVisualizer(available[visName])
-
-    def _getTcpMenu(self, settings):
-        # ip and port
-        ip, port, ok = DataTcpIpDialog.getData(parent=self,ip=settings['ip'], port=settings['port'])
-
-        if ok:
-            settings['ip'] = ip
-            settings['port'] = port
-
-    def _getSerialMenu(self, serialMenu, settings):
-        # port
-        portMenu = serialMenu.addMenu("Port")
-        portMenu.aboutToShow.connect(lambda: self.getComPorts(settings, portMenu))
-
-        # baud
-        baudMenu = serialMenu.addMenu("Baud")
-        baudMenu.aboutToShow.connect(lambda: self.getBauds(settings, baudMenu))
-
-        return serialMenu
-
-    def getBauds(self, settings, connMenu):
-        """
-        Sets the baud rate in serial connection menu
-        :param settings: serial connection settings
-        :param connMenu: serial connection menu
-        """
-
-        def setBaud(baud):
-            def fn():
-                settings['baud'] = baud
-
-            return fn
-
-        baud = settings['baud']
-        connMenu.clear()
-        for _baud in SerialConnection.supported_baudrates:
-            baudAction = QAction(_baud, self)
-            baudAction.setCheckable(True)
-            baudAction.setChecked(True if _baud in str(baud) else False)
-            baudAction.triggered.connect(setBaud(_baud))
-            connMenu.addAction(baudAction)
-
-    def setDefaultComPort(self, settings, cnt):
-        """
-        Sets the default port in given connection settings if an Arduino can found. If more than one Arduino can found,
-        the counter describes the connection number.
-        :param settings: serial connection settings
-        :param cnt: counter for serial connection
-        """
-        comPorts = serial.tools.list_ports.comports()
-        if comPorts:
-            arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
-
-            if len(arduinoPorts) != 0 and len(arduinoPorts) >= cnt:
-                settings['port'] = arduinoPorts[cnt]
-            else:
-                self._logger.warning("Can't set comport for Arduino automatically! Set the port manually!")
-        else:
-            self._logger.warning("No ComPorts for Arduino available, connect a device!")
-
-    def getComPorts(self, settings, connMenu):
-        """
-
-        :param settings:
-        :param connMenu:
-        """
-
-        def setPort(port):
-            def fn():
-                settings['port'] = port
-
-            return fn
-
-        port = settings['port']
-        connMenu.clear()
-        comPorts = serial.tools.list_ports.comports()
-        if comPorts:
-            if port == '':
-                arduinoPorts = [p.device for p in comPorts if 'Arduino' in p.description]
-                if len(arduinoPorts) != 0:
-                    port = arduinoPorts[0]
-                    settings['port'] = port
-            for p in comPorts:
-                portAction = QAction(p.device, self)
-                portAction.setCheckable(True)
-                portAction.setChecked(True if p.device in port else False)
-                portAction.triggered.connect(setPort(p.device))
-                connMenu.addAction(portAction)
-        else:
-            noAction = QAction("(None)", self)
-            noAction.setEnabled(False)
-            connMenu.addAction(noAction)
+        try:
+            self.setVisualizer(available[visName])
+        except Exception:
+            self._logger.exception(f"Cannot load visualizer '{visName}'")
+            self.visualizer = None
 
     def _updateExperimentsList(self):
         self.experimentList.clear()
         for exp in self._experiments:
-            self._logger.debug("Add '{}' to experiment list".format(exp["Name"]))
+            self._logger.debug(f"Add '{exp['Name']}' to experiment list")
             self.experimentList.addItem(exp["Name"])
 
     def detectGamepads(self):
-        # anonymous functoin to
-        def setGamepad(detectedDevices, index):
-            def fn():
-                self.selectGamepad(detectedDevices, index)
-            return fn
-
-        # clear menu bar
+        """ fill the gamepad menu with the connected gamepads """
         self.gamepadMenu.clear()
 
-        # detect all available Gamepads
-        detectedDevices = getAllGamepads()
-
-        if detectedDevices is None:
+        gamepads = getAllGamepads()
+        if not gamepads:
+            noneAction = self.gamepadMenu.addAction("No gamepad found")
+            noneAction.setEnabled(False)
             return
 
-        # build gamepadMenu items
-        for index, gamepad in enumerate(detectedDevices.gamepads):
-            selectGamepadAction = QAction(gamepad.name, self)
-            selectGamepadAction.setCheckable(True)
-            self.gamepadMenu.addAction(selectGamepadAction)
-            selectGamepadAction.triggered.connect(setGamepad(detectedDevices, index))
-            selectGamepadAction.setChecked(self.selectedGamepadIndex == index)
+        for info in gamepads:
+            # owned by the menu, so clear() deletes it
+            action = self.gamepadMenu.addAction(info.name)
+            action.setCheckable(True)
+            action.setChecked(self.selectedGamepadId == info.id)
+            action.triggered.connect(lambda checked, info=info: self.selectGamepad(info))
 
-    def selectGamepad(self, detectedDevices, index):
-        # stop existing gamepad
+    def selectGamepad(self, info):
+        self.stopGamepad()
+        self.gamepad = openGamepad(info.id)
+        if self.gamepad is not None:
+            self._logger.info(f"Gamepad '{info.name}' connected")
+            self.selectedGamepadId = info.id
+            # the gamepad stops by itself when it is unplugged
+            pad = self.gamepad
+            pad.finished.connect(lambda: self._onGamepadFinished(pad))
+        self.updateRemoteGamepad()
+
+    def _onGamepadFinished(self, pad):
+        if pad is self.gamepad:
+            self.stopGamepad()
+
+    def stopGamepad(self):
         if self.gamepad is not None:
             self.gamepad.stop()
             self.gamepad = None
-            self.selectedGamepadIndex = None
-            for wid in self.remoteWidgetLayout.list:
-                if isinstance(wid, MovableSlider):
-                    wid.updateGamePad(self.gamepad)
-        # construct new gamepad
-        self.gamepad = getGamepadByIndex(detectedDevices, index)
-        # check if construction succeeded
-        if self.gamepad is not None:
-            self._logger.info('Gamepad connected')
-            self.selectedGamepadIndex = index
-            for wid in self.remoteWidgetLayout.list:
-                wid.updateGamePad(self.gamepad)
-        else:
-            self._logger.info('Gamepad not connected')
+            self.selectedGamepadId = None
+            self.updateRemoteGamepad()
+
+    def updateRemoteGamepad(self):
+        """ (re-)connect all remote widgets to the current gamepad """
+        self.remotePanel.setGamepad(self.gamepad)
 
     def setTimerTime(self):
         """
         Sets the timer time in settings with a dialog.
         """
-        timerTime, ok = DataIntDialog.getData(parent=self,title="Timer Time", min=2, max=10000, unit='ms',
+        # plot updates are capped at 25 fps, see startExperiment
+        timerTime, ok = DataIntDialog.getData(parent=self, title="Timer Time", min=40, max=10000, unit='ms',
                                               current=self.config['TimerTime'])
-        if ok:
+        if ok and timerTime:
+            timerTime = int(timerTime)
             self.config['TimerTime'] = timerTime
-            self._logger.info("Set timer time to {}".format(timerTime))
+            self._logger.info(f"Set timer time to {timerTime}")
 
-    def updateCoordInfo(self, coord_text):
-        self.coordLabel.setText(coord_text)
-        self.coordLabel.setVisible(True)
-        self.coordTimer.start(5000)
+    def updateCoordInfo(self, coords):
+        """ shows the mouse position ``(x, y)`` in a plot in the status bar, ``None`` clears it """
+        x, y = (f"{v:>10.4g}" for v in coords) if coords else (f"{'–':>10}",) * 2
+        self.coordXLabel.setText(x)
+        self.coordYLabel.setText(y)
 
-    def disableCoord(self):
-        self.coordLabel.setText("")
-        self.coordTimer.stop()
-
-    # event functions
-    def addPlotTreeItem(self, default=False):
-        text = "plot_{:03d}".format(self.dataPointTreeWidget.topLevelItemCount())
-        if not default:
-            name, ok = QInputDialog.getText(self,
-                                            "Select a plot title",
-                                            "Name of the new plot:",
-                                            text=text)
-            if not (ok and name):
-                return
-        else:
-            name = text
-
-        similarItems = self.dataPointTreeWidget.findItems(name, Qt.MatchExactly)
-        if similarItems:
-            self._logger.error("Name '{}' exists.".format(name))
-            return
-
-        topLevelItem = QTreeWidgetItem()
-        topLevelItem.setText(0, name)
-        self.dataPointTreeWidget.addTopLevelItem(topLevelItem)
-        topLevelItem.setExpanded(1)
-
-        for index in range(self.dataPointTreeWidget.topLevelItemCount()):
-            self.dataPointTreeWidget.topLevelItem(index).setSelected(False)
-            for childIndex in range(self.dataPointTreeWidget.topLevelItem(index).childCount()):
-                self.dataPointTreeWidget.topLevelItem(index).child(childIndex).setSelected(False)
-        topLevelItem.setSelected(True)
-
-    def removeSelectedPlotTreeItems(self):
-        items = self.dataPointTreeWidget.selectedItems()
-        if not items:
-            self._logger.error("Cannot delete plot: No plot selected.")
-            return
-
-        for item in items:
-            self.removePlotTreeItem(item)
-
-    def removePlotTreeItem(self, item):
-        # get the  top item
-        while item.parent():
-            item = item.parent()
-
-        text = "The labeled plot '" + item.text(0) + "' will be deleted!"
-        buttonReply = QMessageBox.warning(self, "Plot delete", text, QMessageBox.Ok | QMessageBox.Cancel)
-        if buttonReply == QMessageBox.Ok:
-            openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-            if item.text(0) in openDocks:
-                self.area.docks[item.text(0)].close()
-
-            self.dataPointTreeWidget.takeTopLevelItem(self.dataPointTreeWidget.indexOfTopLevelItem(item))
-
-    def addDatapointToTree(self):
-        if not self.dataPointListWidget.selectedIndexes():
-            self._logger.error("Cannot add datapoint: No datapoint selected.")
-            return
-
-        toplevelItems = self.dataPointTreeWidget.selectedItems()
-        if not toplevelItems:
-            if self.dataPointTreeWidget.topLevelItemCount() < 2:
-                if self.dataPointTreeWidget.topLevelItemCount() < 1:
-                    self.addPlotTreeItem(default=True)
-                toplevelItem = self.dataPointTreeWidget.topLevelItem(0)
-            else:
-                self._logger.error("Cannot add dataset: No dataset selected.")
-                return
-        else:
-            toplevelItem = toplevelItems[0]
-
-        while toplevelItem.parent():
-            toplevelItem = toplevelItem.parent()
-
-        topLevelItemList = []
-        for i in range(toplevelItem.childCount()):
-            topLevelItemList.append(toplevelItem.child(i).text(1))
-
-        for idx, dataPoint in enumerate(self.dataPointListWidget.selectedItems()):
-            if dataPoint.text() not in topLevelItemList:
-                child = QTreeWidgetItem()
-                child.setText(1, dataPoint.text())
-                toplevelItem.addChild(child)
-
-        for i in range(toplevelItem.childCount()):
-            toplevelItem.child(i).setBackground(0, self._settings.color(i))
-
-        self.updatePlotChart(toplevelItem)
-
-    def exportDataPointFromTree(self):
-        if self.exporter is not None:
-            self._logger.error("There is already an export job running")
-            return
-
-        if not self.dataPointListWidget.selectedIndexes():
-            self._logger.error("Can't export data set: no data set selected.")
-            return
-
+    def _currentMeasurement(self):
+        """ the measurement shown in the gui or `None` """
         if self._currentLastMeasItem is None:
-            self._logger.error("Nothing to export!")
-            return
+            return None
+        return self._currentLastMeasItem.data(Qt.ItemDataRole.UserRole)
 
-        idx = self.lastMeasList.row(self._currentLastMeasItem)
-        dataPointBuffers = self.measurements[idx]['dataPointBuffers']
-
-        exp_lbls = [item.text()
-                    for item in self.dataPointListWidget.selectedItems()]
-        self._logger.info(f"Measurements selected for export are: {exp_lbls}")
-        dataPoints = {lbl: dataPointBuffers[lbl] for lbl in exp_lbls}
-
-        self.data_mutex.lock()
-        expData = deepcopy(dataPoints)
-        self.data_mutex.unlock()
-        self.exporter = Exporter(dataPoints=expData)
-        self.exporter.done.connect(self.exportDone)
-        self.exporter.runExport()
-
-    def removeDatapointFromTree(self):
-        items = self.dataPointTreeWidget.selectedItems()
-        if not items:
-            self._logger.error("Cannot delete dataset: No dataset selected.")
-            return
-
-        toplevelItem = items[0]
-        while toplevelItem.parent():
-            toplevelItem = toplevelItem.parent()
-
-        toplevelItem.takeChild(toplevelItem.indexOfChild(self.dataPointTreeWidget.selectedItems()[0]))
-
-        for i in range(toplevelItem.childCount()):
-            toplevelItem.child(i).setBackground(0, self._settings.color(i))
-
-        self.updatePlotChart(toplevelItem)
-
-    def updatePlotChart(self, item):
-        title = item.text(0)
-
-        if self._currentLastMeasItem is None:
-            self._logger.warning("No Measurement to plot!")
-            return
-
-        idx = self.lastMeasList.row(self._currentLastMeasItem)
-        dataPointBuffers = self.measurements[idx]['dataPointBuffers']
-
-        # check if a top level item has been clicked
-        if not item.parent():
-            if title in self.nonPlottingDocks:
-                self._logger.error("Title '{}' not allowed for a plot window since"
-                                   "it would shadow on of the reserved "
-                                   "names".format(title))
-                return
-
-            # check if plot has already been opened
-            openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-            if title in openDocks:
-                chart = self.plotCharts[title]
-
-                # check if all items are present as curves
-                req_lbls = []
-                for idx in range(item.childCount()):
-                    curve_lbl = item.child(idx).text(1)
-                    req_lbls.append(curve_lbl)
-                    if curve_lbl not in chart.plotCurves.keys():
-                        chart.addCurve(curve_lbl, dataPointBuffers[curve_lbl])
-
-                # clear all curves that are no longer required by items
-                ub_lbls = [lbl for lbl in chart.plotCurves.keys()
-                    if lbl not in req_lbls]
-                [chart.removeCurve(lbl) for lbl in ub_lbls]
-
-    def plotVectorClicked(self, item):
-        # ignore non-top level items
-        if item.parent():
-            return
-
-        title = item.text(0)
-        if title in self.nonPlottingDocks:
-            self._logger.error("Title '{}' not allowed for a plot window since"
-                               "it would shadow on of the reserved "
-                               "names".format(title))
-            return
-
-        # check if plot has already been opened
-        openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-        if title in openDocks:
-            # dataPointBuffers = self.getCurrentDataPoints()
-            # self.updatePlot(item, dataPointBuffers)
-            try:
-                self.area.docks[title].raiseDock()
-            except:
-                pass
-        else:
-            self.plotDataVector(item)
-
-    def getCurrentDataPoints(self):
-        if self._currentLastMeasItem is None:
-            dataPointNames = self.exp.getDataPoints()
-            dataPointBuffers = dict()
-            for data in dataPointNames:
-                dataPointBuffers[data] = DataPointBuffer()
-        else:
-            idx = self.lastMeasList.row(self._currentLastMeasItem)
-            dataPointBuffers = self.measurements[idx]['dataPointBuffers']
-        return dataPointBuffers
-
-    def updatePlot(self, item, dataPointBuffers):
-        title = item.text(0)
-        if title in self.plotCharts:
-            self.plotCharts[title].cache.clear()
-            self.plotCharts[title].updateCurves(dataPointBuffers)
-
-    def plotDataVector(self, item):
-        title = str(item.text(0))
-        if title in self.plotCharts.keys():
-            self._logger.error(f"Plot chart name '{title}' is already taken.")
-            return
-
-        # create chart
-        chart = PlotChart(title, self.config)
-        chart.coords.connect(self.updateCoordInfo)
-        self.plotCharts[title] = chart
-
-        # add curves
-        dataPointBuffers = self.getCurrentDataPoints()
-        for idx in range(item.childCount()):
-            for key, value in dataPointBuffers.items():
-                if key == item.child(idx).text(1):
-                    chart.addCurve(key, value)
-
-        # create dock container and add it to dock area
-        dock = Dock(title, closable=True)
-        dock.addWidget(chart)
-        dock.sigClosed.connect(self.closedDock)
-
-        plotWidgets = self.findAllPlotDocks()
-        if plotWidgets:
-            self.area.addDock(dock, "above", plotWidgets[0])
-        else:
-            self.area.addDock(dock, "bottom", self.animationDock)
-
-    def closedDock(self):
-        """
-        Gets called when a dock was closed, if it was a plot dock remove the corresponding PlotChart object
-        form the list
-        """
-        openDocks = [dock.title() for dock in self.findAllPlotDocks()]
-        d_lbls = [lbl for lbl in self.plotCharts.keys() if lbl not in openDocks]
-        [self.plotCharts.pop(lbl, None) for lbl in d_lbls]
-
-        if len(openDocks) == 0:
-            self.disableCoord()
+    def _measurementItem(self, measurement):
+        """ the item of the given measurement in the list of measurements """
+        for row in range(self.lastMeasList.count()):
+            item = self.lastMeasList.item(row)
+            if item.data(Qt.ItemDataRole.UserRole) is measurement:
+                return item
+        return None
 
     def exportDone(self, success):
         if success:
             self.statusbarLabel.setText("Export successful.")
-        self.exporter = None
 
     @pyqtSlot(QModelIndex)
     def targetViewChanged(self, index=None):
         self.targetView.resizeColumnToContents(0)
 
     @pyqtSlot()
-    def updateShowCoordsSetting(self):
-        self._settings.setValue("view/show_coordinates", str(self.actShowCoords.isChecked()))
-
-    @pyqtSlot()
     def startExperiment(self):
         """
-        Starts the experiment, the timer, and the connections. Disables the start button.
+        Sends the parameters of the experiment, once the rig confirmed them with a sync the experiment is started,
+        see :meth:`Session.start`. Rigs without sync support are started right away. Disables the start button.
         """
-        self._currentExperimentIndex = self.experimentList.row(self._currentExpListItem)
-        self._currentExperimentName = self._experiments[self._currentExperimentIndex]["Name"]
+        if self._currentExpListItem is None:
+            self._logger.error("No experiment selected!")
+            return
+        self.session.start(self.config['HeartbeatTime'])
 
-        if self._currentExperimentIndex is None:
-            expName = ""
+    def _onSessionStateChanged(self, state):
+        """ buttons and the color of the experiment: yellow until the rig confirmed the start, then green """
+        if state == Session.SYNCING:
+            self._currentExperimentIndex = self.experimentList.row(self._currentExpListItem)
+            self._currentExperimentName = self._experiments[self._currentExperimentIndex]["Name"]
+            # stop stays possible while the rig confirms the parameters
+            self.actStartExperiment.setDisabled(True)
+            self.actStopExperiment.setDisabled(False)
+            self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.GlobalColor.darkYellow))
+            self.experimentList.repaint()
+        elif state in (Session.STARTING, Session.RUNNING):
+            color = Qt.GlobalColor.darkYellow if state == Session.STARTING else Qt.GlobalColor.darkGreen
+            self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(color))
+            self.experimentList.repaint()
         else:
-            expName = str(self.experimentList.item(self._currentExperimentIndex).text())
+            self._onStopped()
 
-        self._logger.info("Experiment: {}".format(expName))
-
+    def _onMeasurementStarted(self, measurement):
         if self.visualizer is not None:
-            self.visualizer.setExpName(expName)
+            self.visualizer.setExpName(self._currentExperimentName)
             self.visualizer.startAnimation()
 
-        self.actStartExperiment.setDisabled(True)
-        self.actStopExperiment.setDisabled(False)
         self.actSendParameter.setDisabled(False)
         self.actSendChangedParameter.setDisabled(False)
-        if self._currentExperimentIndex is not None:
-            self.experimentList.item(self._currentExperimentIndex).setBackground(QBrush(Qt.darkGreen))
-            self.experimentList.repaint()
 
-        dataPointNames = self.exp.getDataPoints()
-
-        if dataPointNames:
-            self._currentDataPointBuffers = dict()
-            for data in dataPointNames:
-                self._currentDataPointBuffers[data] = DataPointBuffer()
-        else:
-            return
-
-        data = {}
-        data.update({'dataPointBuffers': self._currentDataPointBuffers})
-        data.update({'exp': deepcopy(self.exp.getExperiment())})
-        self.measurements.append(data)
-
-        item = QListWidgetItem(str(self.lastMeasList.count() + 1) + ": "
-                               + self._currentExperimentName + " ~current~")
+        item = QListWidgetItem(measurement.label())
+        item.setData(Qt.ItemDataRole.UserRole, measurement)
         self.lastMeasList.addItem(item)
         self.lastMeasList.scrollToItem(item)
         self.copyLastMeas(item)
@@ -940,60 +611,64 @@ class MainGui(QMainWindow):
         # cap the plot updates at 25 fps
         timeout = max(int(self.config['TimerTime']), 40)
         self.timer.start(timeout)
-        if self.config['HeartbeatTime']:
-            self.heartbeatTimer.start(int(self.config['HeartbeatTime']))
-        self.exp.runExperiment()
-
-        if self.actStopExperiment.isEnabled():
-            self.guiStartTime = time.time()
-            self.guiTimer.start(1000)
+        self.guiStartTime = time.time()
+        self.guiTimer.start(1000)
 
     @pyqtSlot()
     def stopExperiment(self):
         """
         Stops the experiment, the timer, clears the connections, and enables the start button.
         """
+        self.session.stop()
+
+    def _onStopped(self):
         if self.selectedExp:
             self.actStartExperiment.setDisabled(False)
         self.actStopExperiment.setDisabled(True)
         self.actSendParameter.setDisabled(True)
         self.actSendChangedParameter.setDisabled(True)
         for i in range(self.experimentList.count()):
-            self.experimentList.item(i).setBackground(QBrush(Qt.white))
+            # reset to the default background of the current style
+            self.experimentList.item(i).setData(Qt.ItemDataRole.BackgroundRole, None)
         self.experimentList.repaint()
 
         self.timer.stop()
-        self.heartbeatTimer.stop()
-        self.exp.stopExperiment()
-
-        # time.sleep(1)
-
+        # show the complete data, the session detaches the buffers of the finished run afterwards
+        if self.session.currentBuffers is not None:
+            self.updateDataPlots()
         self.guiTimer.stop()
+
+    def _showsRunningExperiment(self):
+        """
+        `True` if the gui shows the running experiment, otherwise a warning is logged
+        since parameters would be sent to the wrong experiment
+        """
+        running = self.session.runningMeasurement
+        if running is not None and self._currentMeasurement() is running and \
+                self._currentExperimentIndex == self.experimentList.row(self._currentExpListItem):
+            return True
+        if running is None:
+            self._logger.warning("No experiment is running!")
+        else:
+            row = self.experimentList.row(self._currentExpListItem)
+            selectedName = self._experiments[row]["Name"] if row >= 0 else None
+            self._logger.warning(f"Selected Experiment '{selectedName}' doesn't match "
+                                 f"current running Experiment '{running.name}'!")
+        return False
 
     def sendParameter(self):
         """
-        Sends all parameters of the current experiment with `ExperimentInteractor` function `sendParameterExperiment`
+        Sends all parameters of the current experiment, see :meth:`Session.sendParameters`
         """
-        if self._currentExperimentIndex == self.experimentList.row(self._currentExpListItem) and \
-                "~current~" in self._currentLastMeasItem.text():
-            self.exp.sendParameterExperiment()
-        else:
-            self._logger.warning("Selected Experiment '{}' doesn't match current running Experiment '{}'!".format(
-                self._currentExperimentName,
-                self._experiments[self.experimentList.row(self._currentExpListItem)]["Name"]))
+        if self._showsRunningExperiment():
+            self.session.sendParameters()
 
     def sendChangedParameter(self):
         """
-        Sends changed parameters of the current experiment with `ExperimentInteractor`
-        function `sendChangedParameterExperiment`
+        Sends changed parameters of the current experiment, see :meth:`Session.sendParameters`
         """
-        if self._currentExperimentIndex == self.experimentList.row(self._currentExpListItem) and \
-                "~current~" in self._currentLastMeasItem.text():
-            self.exp.sendChangedParameterExperiment()
-        else:
-            self._logger.warning("Selected Experiment '{}' doesn't match current running Experiment '{}'!".format(
-                self._currentExperimentName,
-                self._experiments[self.experimentList.row(self._currentExpListItem)]["Name"]))
+        if self._showsRunningExperiment():
+            self.session.sendParameters(changedOnly=True)
 
     def loadExpFromFile(self, fileName):
         """
@@ -1002,23 +677,44 @@ class MainGui(QMainWindow):
         """
         success = True
         if fileName is None:
-            if os.path.isfile('default.sreg'):
-                fileName = 'default.sreg'
-            else:
+            fileName = findDefaultConfig()
+            if fileName is None:
                 self._logger.error('No default.sreg found!')
                 success = False
         else:
             if not os.path.isfile(fileName):
-                self._logger.error('Config file {} does not exists!'.format(fileName))
+                self._logger.error(f'Config file {fileName} does not exists!')
                 success = False
 
         if success:
-            self._logger.info("Load config file: {0}".format(fileName))
+            self._logger.info(f"Load config file: {fileName}")
 
-            with open(fileName.encode(), "r") as f:
-                self._experiments = yaml.load(f, Loader=Loader)
+            try:
+                with open(fileName, "r") as f:
+                    experiments = yaml.load(f, Loader=SafeLoader)
+            except yaml.YAMLError as e:
+                self._logger.error(f"Cannot parse config file {fileName}: {e}")
+                return False
 
-            self._logger.info("Loading {} experiments".format(len(self._experiments)))
+            if not isinstance(experiments, list) or not experiments:
+                self._logger.error(f"Config file {fileName} contains no experiments!")
+                return False
+
+            # the valid experiments are normalized in place, so saving this list
+            # keeps the changes as well as the skipped experiments
+            fileExperiments = experiments
+            experiments = validateExperiments(experiments,
+                                              getRegisteredExperimentModules(),
+                                              getRegisteredVisualizers(),
+                                              logger=self._logger)
+            if not experiments:
+                self._logger.error(f"Config file {fileName} contains no usable experiments!")
+                return False
+
+            self._experiments = experiments
+            self._fileExperiments = fileExperiments
+            self._configFile = os.path.abspath(fileName)
+            self._logger.info(f"Loading {len(self._experiments)} experiments")
 
         return success
 
@@ -1054,17 +750,7 @@ class MainGui(QMainWindow):
         self.config.update(self._experiments[idx].get('Config', {}))
 
     def configureRemote(self, idx):
-        self.remoteWidgetLayout.clearAll()
-
-        if 'Remote' not in self._experiments[idx]:
-            return
-        if self._experiments[idx] is None:
-            self._logger.warning("Remote not correct configured in file!")
-            return
-        for name in self._experiments[idx]['Remote']:
-            config = self._experiments[idx]['Remote'][name]
-            config['name'] = name
-            self.remoteAddWidget(config)
+        self.remotePanel.setExperimentConfig(self._experiments[idx])
 
     def configureVisualizer(self, idx):
         availableVis = getRegisteredVisualizers()
@@ -1086,16 +772,16 @@ class MainGui(QMainWindow):
         if issubclass(vis, MplVisualizer):
             self.visualizer = vis(self.animationWidget,
                                   self.animationLayout)
-            self.animationDock.addWidget(self.animationWidget)
+            self.animationDock.setWidget(self.animationWidget)
         elif issubclass(vis, VtkVisualizer):
-            if vtk_available:
+            if vtkAvailable:
                 # vtk window
                 if self.animationFrame is None:
                     self.animationFrame = QFrame()
                     self.vtkWidget = QVTKRenderWindowInteractor(self.animationFrame)
                 self.animationLayout.addWidget(self.vtkWidget)
                 self.animationFrame.setLayout(self.animationLayout)
-                self.animationDock.addWidget(self.animationFrame)
+                self.animationDock.setWidget(self.animationFrame)
                 self.vtkRenderer = vtkRenderer()
                 self.vtkWidget.GetRenderWindow().AddRenderer(self.vtkRenderer)
                 self.visualizer = vis(self.vtkRenderer)
@@ -1106,14 +792,19 @@ class MainGui(QMainWindow):
         else:
             self._logger.warning("visualizer is not a subclass of MplVisualizer or VtkVisualizer")
             return
-        self._logger.info("loading visualizer '{}'".format(vis.__name__))
+        self._logger.info(f"loading visualizer '{vis.__name__}'")
 
         self.visualizer.checkSaveAnimation(self.actSaveAnimation.isChecked())
-        self.actSaveAnimation.disconnect()
+        try:
+            self.actSaveAnimation.toggled.disconnect()
+        except TypeError:
+            # no visualizer connected yet
+            pass
         self.actSaveAnimation.toggled.connect(self.visualizer.checkSaveAnimation)
+        self.visualizer.updateTheme()
 
     @pyqtSlot(QListWidgetItem)
-    def experimentDclicked(self, item):
+    def experimentDoubleClicked(self, item):
         """
         Apply the selected experiment to the current target and set it bold.
         :param item: item of the experiment in the `ExperimentList`
@@ -1144,27 +835,6 @@ class MainGui(QMainWindow):
                     self.actStartExperiment.setDisabled(False)
             self.selectedExp = True
 
-        # use gamepad
-        # stop existing gamepad
-        if self.gamepad is not None:
-            self.gamepad.stop()
-            self.gamepad = None
-            for wid in self.remoteWidgetLayout.list:
-                if isinstance(wid, MovableSlider):
-                    wid.updateGamePad(self.gamepad)
-        # construct new gamepad
-        if self.selectedGamepadIndex is not None:
-            self.gamepad = getGamepadByIndex(self.selectedGamepadIndex)
-            # check if construction succeeded
-            if self.gamepad is not None:
-                self._logger.info('Gamepad connected')
-                for wid in self.remoteWidgetLayout.list:
-                    wid.updateGamePad(self.gamepad)
-            else:
-                self._logger.info('Gamepad not connected')
-
-
-
     def _applyExperimentByIdx(self, index=0):
         """
         Applies the given experiment.
@@ -1172,17 +842,17 @@ class MainGui(QMainWindow):
         :return: `True` if successful, `False` if errors occurred
         """
         if index >= len(self._experiments):
-            self._logger.error("applyExperiment: index error! ({})".format(index))
+            self._logger.error(f"applyExperiment: index error! ({index})")
             return False
 
         expName = self._experiments[index]["Name"]
-        self._logger.info("Experiment '{}' applied".format(expName))
+        self._logger.info(f"Experiment '{expName}' applied")
 
         if self.isConnected:
             # check if experiment runs
             if not self.actStopExperiment.isEnabled():
                 self.actStartExperiment.setDisabled(False)
-        sucess = self.exp.setExperiment(self._experiments[index])
+        sucess = self.session.setExperiment(self._experiments[index])
         if sucess:
             self._currentExperimentIndex = index
             self._currentExperimentName = self._experiments[index]['Name']
@@ -1191,155 +861,246 @@ class MainGui(QMainWindow):
 
     def closeEvent(self, QCloseEvent):
         """
-        Is called by closing the GUI. Disconnects all connections and sends close event.
+        Is called by closing the GUI. Disconnects and sends close event.
         :param QCloseEvent:
         """
         self._logger.info("Close Event received, shutting down.")
-        if self.isConnected:
-            self.disconnect()
-        if self.exporter != None:
-            self._logger.warn("Export in progress, waiting!")
-            self.exporter.wait()
+        self.disconnectRig()
+        self.connectionManager.shutdown()
+        self.stopGamepad()
+        self.plotManager.waitForExport()
         logging.getLogger().removeHandler(self.textLogger)
         super().closeEvent(QCloseEvent)
 
-    @pyqtSlot()
-    def connect(self):
-        """
-        Connects all connections and sets the button states.
-        """
-        for name, conn in self.connections.items():
-            connInstance = conn['cls']()
-            if connInstance.connect():
-                self._logger.info(f"Connection for {name} established!")
-                self.actConnect.setEnabled(False)
-                self.actDisconnect.setEnabled(True)
-                if self._currentExpListItem is not None and self.selectedExp:
-                    self.actStartExperiment.setEnabled(True)
-                self.actStopExperiment.setEnabled(False)
-                self.statusbarLabel.setText("Connected!")
-                connInstance.received.connect(lambda frame: self.updateData(frame, name))
-                connInstance.finished.connect(self.disconnect)
-                self.connections[name]['inst'] = connInstance
-                self.isConnected = True
-            else:
-                self._logger.warning(f"No connection for {name} established! Check your settings!")
-                self.isConnected = False
-                return
-
-    def writeToConnection(self, data):
-        """
-        PySignal function, that sends the given data to the connections
-        :param data: to send data
-        """
-        if data['id'] == 1:
-            for conn in self.connections.values():
-                conn['inst'].writeData(data)
-        else:
-            self.connections[data['connection']]['inst'].writeData(data)
+    @property
+    def isConnected(self):
+        """ `True` if the connection to the rig is established """
+        return self.connectionManager.isConnected
 
     @pyqtSlot()
-    def disconnect(self):
+    def connectRig(self):
         """
-        Disconnects all connections and resets the button states.
+        Establishes the active connection in the background, the button states are set
+        once it is open.
         """
-        if self.actStopExperiment.isEnabled():
-            self.stopExperiment()
+        self.session.connect()
 
-        for conn in self.connections.values():
-            if conn.get('inst', None) and conn['inst'].connected:
-                conn['inst'].disconnect()
-                del conn['inst']
-        self.actConnect.setEnabled(True)
-        self.actDisconnect.setEnabled(False)
-        self.actStartExperiment.setEnabled(False)
-        self.actStopExperiment.setEnabled(False)
-        self.statusbarLabel.setText('Not Connected')
-        self.isConnected = False
-
-    def findAllPlotDocks(self):
+    @pyqtSlot()
+    def disconnectRig(self):
         """
-        Finds all docks with plots inside
-        :return: list of docks with plots
+        Stops a running experiment and disconnects.
         """
-        list = []
-        for title, dock in self.area.findAll()[1].items():
-            if title in self.nonPlottingDocks:
-                continue
-            else:
-                list.append(dock)
+        self.session.disconnect()
 
-        return list
+    def _onConnComboBoxChanged(self, name):
+        # a refused selection shows the active connection again
+        if not self.connectionManager.setActiveConnection(name):
+            self.connComboBox.setCurrentText(self.connectionManager.activeConnection or "")
 
-    def updateData(self, frame, connection):
-        data = self.exp.handleFrame(frame, connection)
-        if data is None:
+    def _onMeasurementDropped(self, measurement):
+        """ removes the item of a measurement that is not kept """
+        item = self._measurementItem(measurement)
+        if item is not None:
+            self.lastMeasList.takeItem(self.lastMeasList.row(item))
+
+    #: colors of the traffic light
+    LED_COLORS = {'red': '#d9534f', 'yellow': '#f0ad4e', 'green': '#5cb85c'}
+
+    def _setConnectionLed(self, state, tooltip):
+        """ :param state: 'red', 'yellow' or 'green' """
+        self.connectionLedState = state
+        self.connectionLed.setStyleSheet(f"background-color: {self.LED_COLORS[state]}; border-radius: 7px;")
+        self.connectionLed.setToolTip(tooltip)
+
+    def _setCommError(self, error):
+        """ problem of the communication shown by the traffic light, `None` once solved """
+        self._commError = error
+        self._updateConnectionStatus()
+
+    def _updateConnectionStatus(self):
+        """ traffic light and text of the status bar while connected """
+        if not self.connectionManager.isConnected:
             return
-        time = data['Time'] / 1000.0
-        dataPoints = data['DataPoints']
-        names = data['DataPoints'].keys()
+        parts, problems = [], []
+        name = self.connectionManager.activeConnection
+        responding = self.connectionManager.isResponding()
+        if not self.connectionManager.answered:
+            problems.append(f"{name}: no answer from the rig yet")
+        if responding is False:
+            parts.append(f"{name}: no response")
+            problems.append(f"{name}: the rig does not respond")
+        elif responding:
+            status = self.connectionManager.rigStatus[0]
+            text = f"{name}: {'RUN' if status.running else 'IDLE'}"
+            missing = [flag for bit, flag in enumerate(self.connectionManager.statusFlagNames())
+                       if not status.flags & (1 << bit)]
+            if missing:
+                text += f", missing: {', '.join(missing)}"
+                problems.append(f"{name}: missing {', '.join(missing)}")
+            parts.append(text)
+        if self._commError:
+            problems.append(self._commError)
+        self._setConnectionLed('yellow' if problems else 'green', "\n".join(["Connected"] + problems))
+        self.statusbarLabel.setText(" | ".join(parts))
 
-        self.data_mutex.lock()
-        for key in names:
-            self._currentDataPointBuffers[key].addValue(time, dataPoints[key])
-        self.data_mutex.unlock()
+    def _onConnectionStateChanged(self, state):
+        """ sets the button states and the status bar """
+        self.connComboBox.setEnabled(state == ConnectionManager.DISCONNECTED)
+        if state == ConnectionManager.CONNECTING:
+            self.actConnect.setEnabled(False)
+            self.actDisconnect.setEnabled(True)
+            self._setConnectionLed('yellow', "Connecting ...")
+            self.statusbarLabel.setText("")
+        elif state == ConnectionManager.CONNECTED:
+            self.actConnect.setEnabled(False)
+            self.actDisconnect.setEnabled(True)
+            if self._currentExpListItem is not None and self.selectedExp:
+                self.actStartExperiment.setEnabled(True)
+            self.actStopExperiment.setEnabled(False)
+            self._commError = None
+            self._updateConnectionStatus()
+        else:
+            self.actConnect.setEnabled(True)
+            self.actDisconnect.setEnabled(False)
+            self.actStartExperiment.setEnabled(False)
+            self.actStopExperiment.setEnabled(False)
+            self._setConnectionLed('red', "Not connected")
+            self.statusbarLabel.setText("")
 
-        time_text = "Exp time={}".format(timeString(time))
-        self.expTimeLabel.setText(time_text)
+    def updateData(self, frames):
+        """
+        Stores the data points of the received frames in the buffers of the current measurement,
+        see :meth:`Session.handleFrames`.
+        :param frames: list of frames received by the connection
+        """
+        self.session.handleFrames(frames)
+
+    def _onDataReceived(self, lastTime, newBuffers):
+        if newBuffers:
+            # the elements of an array data point are shown once their buffers exist
+            self.updateDataPoints(self.exp.getDataPoints())
+        self.expTimeLabel.setText(timeString(lastTime))
 
     def updateDataPlots(self):
-        if self.visualizer:
-            self.visualizer.update(self._currentDataPointBuffers)
-            if self.vtkWidget is not None:
-                self.vtkWidget.GetRenderWindow().GetInteractor().Render()
+        self._updateVisualizer()
+        self.plotManager.updateCharts(self.session.currentBuffers)
 
-        for lbl, chart in self.plotCharts.items():
-            chart.updateCurves(self._currentDataPointBuffers)
+    def _updateVisualizer(self):
+        # a hidden animation costs as much as a shown one, skip it unless every frame is saved
+        hidden = self.animationDock.visibleRegion().isEmpty() or self.isMinimized()
+        buffers = self.session.currentBuffers
+        running = buffers is not None  # also called on showing, without an experiment
+        if self.visualizer and running and (not hidden or self.actSaveAnimation.isChecked()):
+            try:
+                self.visualizer.update(buffers)
+                if self.vtkWidget is not None:
+                    self.vtkWidget.GetRenderWindow().GetInteractor().Render()
+            except Exception:
+                # disable the visualizer, otherwise the error would repeat with every timer tick
+                self._logger.exception(f"Visualizer '{type(self.visualizer).__name__}' failed and has been disabled")
+                self.visualizer = None
 
-    def heartbeat(self):
-        self.writeToConnection({'id': 1,
-                                'msg': bytes([1 << 1])})
+    def _createDock(self, title, window):
+        """ a dock of the given main window that cannot be closed, the title names it in the saved view """
+        dock = QDockWidget(title, window)
+        dock.setObjectName(title)
+        dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable
+                         | QDockWidget.DockWidgetFeature.DockWidgetFloatable)
+        return dock
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._standardSizesPending:
+            # the docks can only be sized once the window has its size
+            self._standardSizesPending = False
+            QTimer.singleShot(0, self._applyStandardSizes)
+
+    def _applyStandardSizes(self):
+        """
+        the sizes of the standard view: the left docks two ninths of the width and of equal height, the log a
+        twelfth of the height, the data points three sixteenths of the plot area
+        """
+        width, height = self.width(), self.height()
+        self.resizeDocks([self.experimentDock], [width * 2 // 9], Qt.Orientation.Horizontal)
+        self.resizeDocks([self.experimentDock, self.propertyDock, self.remoteDock, self.logDock],
+                         [height // 3] * 3 + [height // 12], Qt.Orientation.Vertical)
+        # the plot area gets its new width only with the next layout pass, a method is not called once deleted
+        QTimer.singleShot(0, self._applyPlotAreaSizes)
+
+    def _applyPlotAreaSizes(self):
+        width = self.plotArea.width()
+        self.plotArea.resizeDocks([self.animationDock, self.dataPointDock], [width * 13 // 16, width * 3 // 16],
+                                  Qt.Orientation.Horizontal)
+
+    def _restoreStandardView(self):
+        self.restoreState(self.standardDockState[0])
+        self.plotArea.restoreState(self.standardDockState[1])
+        self.plotManager.tabPlots()
+        if self.isVisible():
+            self._applyStandardSizes()
+        else:
+            self._standardSizesPending = True
 
     def loadStandardDockState(self):
         """
-        Loads the standard dock configuration of the GUI
+        Loads the view saved by the user, or the standard one if there is none
         """
-        self.plotCharts.clear()
+        mainState = self._settings.value("view/main_state")
+        plotState = self._settings.value("view/plot_state")
+        if mainState is None or plotState is None:
+            self._restoreStandardView()
+        elif not (self.restoreState(mainState) and self.plotArea.restoreState(plotState)):
+            self._logger.warning("The saved view could not be restored, the standard view is used")
+            self._restoreStandardView()
+        # views of older versions do not have the "+" tab next to the data dock
+        self.plotManager.placeAddTab()
 
-        for dock in self.findAllPlotDocks():
-            dock.close()
-        self.area.restoreState(self.standardDockState)
+    def saveDockState(self):
+        """ saves the arrangement of the docks as the default view of the user """
+        self._settings.setValue("view/main_state", self.saveState())
+        self._settings.setValue("view/plot_state", self.plotArea.saveState())
 
-    def saveLastMeas(self):
+    def resetDockState(self):
+        """ removes the default view of the user and restores the standard one """
+        self._settings.remove("view/main_state")
+        self._settings.remove("view/plot_state")
+        self._restoreStandardView()
+        self.plotManager.placeAddTab()
+    def _stretchable(cls, state):
         """
-        Saves at the end of an experiment the data in the measurements dict
+        Scales the splitter sizes of a dock area state to at most 255. pyqtgraph also uses the sizes as stretch
+        factors, which Qt caps at 255, so larger sizes would split the space evenly on every resize.
         """
-        if self._currentExperimentIndex is None:
-            return
+        def scale(node):
+            typ, contents, props = node
+            if typ == "dock":
+                return node
+            props = dict(props)
+            if props.get("sizes"):
+                top = max(max(props["sizes"]), 1)
+                props["sizes"] = [max(1, round(255 * size / top)) for size in props["sizes"]]
+            return typ, [scale(child) for child in contents], props
 
-        items = self.lastMeasList.findItems('~current~', Qt.MatchContains)
-        if len(items) != 1:
-            self._logger.warning('Error, more than one ~current~ measurement available. Using first one!')
+        return {**state, "main": state["main"] and scale(state["main"]),
+                "float": [({**area, "main": area["main"] and scale(area["main"])}, geo)
+                          for area, geo in state["float"]]}
 
-        item = items[0]
-        item.setText(item.text().replace(' ~current~', ''))
-
-        idx = self.lastMeasList.row(item)
-        self.measurements[idx].update({'dataPointBuffers': deepcopy(self._currentDataPointBuffers)})
+    def _onMeasurementFinished(self, measurement):
+        """ shows the end of the run in the label of the measurement """
+        item = self._measurementItem(measurement)
+        if item is not None:
+            item.setText(measurement.label())
 
     def copyLastMeas(self, item):
         self._currentLastMeasItem = item
-        idx = self.lastMeasList.row(item)
-
-        measurement = self.measurements[idx]
+        measurement = item.data(Qt.ItemDataRole.UserRole)
 
         dataPointNames = self.exp.getDataPoints()
-        dataPointBuffers = measurement['dataPointBuffers']
+        dataPointBuffers = measurement.dataPointBuffers
         if dataPointNames:
             self.updateDataPoints(dataPointNames)
 
-        for i in range(self.dataPointTreeWidget.topLevelItemCount()):
-            self.updatePlot(self.dataPointTreeWidget.topLevelItem(i), dataPointBuffers)
+        self.plotManager.showData(dataPointBuffers)
 
     def loadLastMeas(self, item):
         """
@@ -1351,47 +1112,36 @@ class MainGui(QMainWindow):
             return
         self.actStartExperiment.setDisabled(True)
         self.selectedExp = False
-        self.remoteWidgetLayout.clearAll()
+        # the remote widgets belong to the experiments, not to past measurements
+        self.remotePanel.setExperimentConfig(None)
 
-        expName = str(item.text())
+        measurement = item.data(Qt.ItemDataRole.UserRole)
+        if measurement is None:
+            self._logger.error(f"loadLastMeas(): No measurement stored for '{item.text()}'")
+            return False
         self._currentLastMeasItem = item
-        try:
-            idx = self.lastMeasList.row(item)
-        except ValueError:
-            self._logger.error("loadLastMeas(): No measurement called '{0}".format(expName))
-            return False
+        self._logger.info(f"Restore of measurement '{item.text()}'")
 
-        if idx >= len(self.measurements):
-            self._logger.error("loadLastMeas(): Invalid index '{}')".format(idx))
-            return False
-
-        self._logger.info("Restore of measurement '{}'".format(expName))
-
-        measurement = self.measurements[idx]
-
-        success = self.exp.setExperiment(measurement['exp'])
+        success = self.exp.setExperiment(measurement.experiment)
 
         self.setQListItemBold(self.lastMeasList, item, success)
         self.setQListItemBold(self.experimentList, item, success)
 
         dataPointNames = self.exp.getDataPoints()
-        dataPointBuffers = measurement['dataPointBuffers']
+        dataPointBuffers = measurement.dataPointBuffers
         if dataPointNames:
             self.updateDataPoints(dataPointNames)
 
-        for i in range(self.dataPointTreeWidget.topLevelItemCount()):
-            self.updatePlot(self.dataPointTreeWidget.topLevelItem(i), dataPointBuffers)
+        self.plotManager.showData(dataPointBuffers)
 
-        self._logger.info("Apply measurement '{}'".format(measurement['exp']['Name']))
+        self._logger.info(f"Apply measurement '{measurement.name}'")
 
     def updateDataPoints(self, dataPointNames):
         """
         Clears and adds all given data point names to list widget
         :param dataPointNames: list of data point names
         """
-        if dataPointNames:
-            self.dataPointListWidget.clear()
-            self.dataPointListWidget.addItems(dataPointNames)
+        self.plotManager.updateDataPoints(dataPointNames)
 
     def setQListItemBold(self, qList=None, item=None, state=True):
         """
@@ -1409,228 +1159,158 @@ class MainGui(QMainWindow):
             qList.item(i).setFont(newfont)
         qList.repaint()
 
-    def remoteRemoveWidget(self, widget):
-        idx = self.experimentList.row(self._currentExpListItem)
-        del self._experiments[idx]['Remote'][widget.widgetName]
-        self.remoteWidgetLayout.removeWidget(widget)
-
-    def remoteConfigWidget(self, widget, editWidget=True):
-        idx = self.experimentList.row(self._currentExpListItem)
-        exp = self.exp.getExperiment()
-        del exp['Name']
-        config, ok = RemoteWidgetEdit.getData(exp, editWidget, **(widget.getData()))
-        if not ok:
-            return
-        if not 'Remote' in self._experiments[idx]:
-            self._experiments[idx]['Remote'] = {}
-        del self._experiments[idx]['Remote'][widget.widgetName]
-
-        widget.widgetName = config['name']
-        widget.widgetType = config['widgetType']
-        widget.module = config['Module']
-        widget.parameter = config['Parameter']
-        if config['widgetType'] == "PushButton":
-            widget.valueOn = config['valueOn']
-            widget.valueReset = config['valueReset']
-            widget.shortcut.setKey(config['shortcut'])
-        elif config['widgetType'] == "Switch":
-            widget.valueOn = config['valueOn']
-            widget.valueOff = config['valueOff']
-            widget.shortcut.setKey(config['shortcut'])
-        elif config['widgetType'] == "Slider":
-            widget.minSlider = config['minSlider']
-            widget.maxSlider = config['maxSlider']
-            widget.stepSlider = config['stepSlider']
-            widget.shortcutPlus.setKey(config['shortcutPlus'])
-            widget.shortcutMinus.setKey(config['shortcutMinus'])
-        self._experiments[idx]['Remote'][config['name']] = config
-        widget.updateData()
-
-    def remoteAddWidget(self, config=None, **kwargs):
-        """
-        Adds a new widget to the remoteDock
-        :param config: RemoteWidgetEdit object containing widget parameters and information
-        """
-        changed = False
-        idx = self.experimentList.row(self._currentExpListItem)
-        exp = self.exp.getExperiment()
-        del exp['Name']
-        if not config:
-            config, ok = RemoteWidgetEdit.getData(exp=exp, **kwargs)
-            if not ok:
-                return
-            changed = True
-            if not 'Remote' in self._experiments[idx]:
-                self._experiments[idx]['Remote'] = {}
-            self._experiments[idx]['Remote'][config['name']] = {}
-
-        if changed:
-            self._experiments[idx]['Remote'][config['name']] = config
-        sliderLabel = None
-        if config['widgetType'] == "PushButton":
-            if 'valueReset' not in config:
-                config['valueReset'] = ''
-            if 'shortcut-Gp' not in config:
-                config['shortcut-Gp'] = None
-            widget = MovablePushButton(config['name'], config['valueOn'], config['valueReset'],
-                                       config['shortcut'], config['shortcut-Gp'],
-                                       module=config['Module'], parameter=config['Parameter'])
-            widget.setFixedHeight(40)
-            widget.setFixedWidth(100)
-            widget.clicked.connect(lambda: self.remotePushButtonSendParameter(widget))
-            widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
-                widget, editWidget=True))
-            widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
-        elif config['widgetType'] == "Switch":
-            if 'shortcut-Gp' not in config:
-                config['shortcut-Gp'] = None
-            widget = MovableSwitch(config['name'], config['valueOn'], config['valueOff'],
-                                   config['shortcut'], config['shortcut-Gp'],
-                                   module=config['Module'], parameter=config['Parameter'])
-            widget.setFixedHeight(40)
-            widget.setFixedWidth(100)
-            widget.clicked.connect(lambda: self.remoteSwitchSendParameter(widget))
-            widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
-                widget, editWidget=True))
-            widget.removeAction.triggered.connect(lambda _: self.remoteRemoveWidget(widget))
-        elif config['widgetType'] == "Slider":
-            if 'shortcut-Gp' not in config:
-                config['shortcut-Gp'] = None
-            if 'invertSlider' not in config:
-                config['invertSlider'] = False
-            sliderLabel = QLabel()
-            sliderLabel.setFixedHeight(15)
-            labelFont = sliderLabel.font()
-            labelFont.setPointSize(8)
-            sliderLabel.setFont(labelFont)
-            self.remoteWidgetLayout.addWidget(sliderLabel)
-            widget = MovableSlider(config['name'], config['minSlider'], config['maxSlider'], config['invertSlider'], config['stepSlider'],
-                                   sliderLabel,
-                                   config['shortcutPlus'], config['shortcutMinus'], config['shortcut-Gp'],
-                                   exp[config['Module']][config['Parameter']], module=config['Module'],
-                                   parameter=config['Parameter'])
-            widget.setFixedHeight(30)
-            widget.setFixedWidth(200)
-            widget.valueChanged.connect(lambda value, _wid=widget: self.remoteSliderSendParameter(_wid, value))
-            widget.sliderMoved.connect(lambda value, _wid=widget: self.remoteSliderUpdate(_wid, value))
-            widget.editAction.triggered.connect(lambda _: self.remoteConfigWidget(
-                widget, editWidget=True))
-            widget.removeAction.triggered.connect(lambda _, widget=widget: self.remoteRemoveWidget(widget))
-        else:
-            return
-        widget.move((self.remoteWidgetLayout.count() % 2) * 200, (self.remoteWidgetLayout.count() // 2) * 40)
-        if sliderLabel:
-            sliderLabel.move((self.remoteWidgetLayout.count() % 2) * 200 + 80,
-                             (self.remoteWidgetLayout.count() // 2) * 40 + 30)
-        self.remoteWidgetLayout.addWidget(widget)
-
-    def remotePushButtonSendParameter(self, widget):
-        """
-        Gets called when a user interacts with the pushbutton and sends the specified parameter to the bench
-        :param widget: the widget the user interacted with
-        """
-        value = widget.valueOn
-        self.remoteSendParamter(widget.module, widget.parameter, value)
-        self.remoteSliderUpdate(widget, value, sliderMoved=False)
-
-        if widget.valueReset != '':
-            self.remoteSetParameter(widget.module, widget.parameter, widget.valueReset)
-            self.exp.updateSendParameter(widget.module, widget.parameter, widget.valueReset)
-
-    def remoteSwitchSendParameter(self, widget):
-        """
-        Gets called when a user interacts with the switch and sends the specified parameter to the bench
-        :param widget: the widget the user interacted with
-        """
-        if widget.isChecked():
-            value = widget.valueOn
-            widget.setText(widget.widgetName + '\n' + widget.valueOff)
-        else:
-            value = widget.valueOff
-            widget.setText(widget.widgetName + '\n' + widget.valueOn)
-
-        self.remoteSendParamter(widget.module, widget.parameter, value)
-        self.remoteSliderUpdate(widget, value, sliderMoved=False)
-
-    def remoteSliderSendParameter(self, widget, value):
-        """
-        Gets called when a user interacts with the slider and sends the specified parameter to the bench
-        :param widget: the widget the user interacted with
-        :param value: the actual value of the widget
-        """
-        self.remoteSliderUpdate(widget, value)
-        self.remoteSendParamter(widget.module, widget.parameter, widget.value)
-
-    def remoteSliderUpdate(self, widget, value, sliderMoved=True):
-        """
-        Gets called when a user interacts with the slider
-        :param widget: the widget the user interacted with
-        :param value: the actual value of the widget
-        :param sliderMoved: False if gets called from another widget
-        """
-        if not sliderMoved:
-            for wid in self.remoteWidgetLayout.list:
-                if isinstance(wid, MovableSlider):
-                    if wid.module == widget.module and wid.parameter == widget.parameter:
-                        wid.valueChanged.disconnect()
-                        wid.setValue(float(value))
-                        wid.valueOn = value
-                        wid.label.setText(wid.widgetName + ": {:.3f}".format(wid.value))
-                        wid.valueChanged.connect(lambda value, _wid=wid: self.remoteSliderSendParameter(_wid, value))
-        else:
-            widget.valueOn = value
-
-            if isinstance(widget, MovableSlider):
-                value = widget.calcValue(value)
-
-            widget.label.setText(widget.widgetName + ": {:.3f}".format(value))
-
-    def remoteSendParamter(self, module, parameter, value):
-        self.remoteSetParameter(module, parameter, value)
+    def _sendRemoteParameters(self):
+        """ sends the parameters set by the remote widgets, if the experiment runs """
         if self.actSendParameter.isEnabled():
             self.sendChangedParameter()
 
-    def remoteSetParameter(self, module, parameter, value):
-        exp = deepcopy(self.exp.getExperiment())
-        del exp['Name']
+    def saveExperiments(self, fileName=None):
+        """
+        Writes all experiments including the remote widgets and their positions to a config file.
 
-        for key, val in exp.items():
-            if key != module:
-                continue
-            for k, v in val.items():
-                if k != parameter:
-                    continue
-                exp[key][k] = value
-                self.exp.editExperiment(exp)
+        :param fileName: target file, defaults to the loaded config file
+        :return: `True` if successful
+        """
+        fileName = fileName or self._configFile
+        if fileName is None:
+            return self.saveExperimentsAs()
+        fileName = os.path.abspath(fileName)
 
-                return
+        # positions of widgets that have not been moved yet
+        self.remotePanel.storePositions()
+
+        try:
+            text = dumpExperiments(self._fileExperiments or self._experiments)
+            # keep the hand written original, comments are lost when saving
+            if os.path.exists(fileName) and fileName not in self._backedUpFiles:
+                shutil.copy2(fileName, fileName + '.bak')
+                self._backedUpFiles.add(fileName)
+            # write to a temporary file first, so a failure does not destroy the config
+            fd, tmpName = tempfile.mkstemp(dir=os.path.dirname(fileName), suffix='.sreg')
+            try:
+                with os.fdopen(fd, 'w') as f:
+                    f.write(text)
+                # mkstemp creates the file only readable by the owner
+                if os.path.exists(fileName):
+                    shutil.copymode(fileName, tmpName)
+                else:
+                    umask = os.umask(0)
+                    os.umask(umask)
+                    os.chmod(tmpName, 0o666 & ~umask)
+                os.replace(tmpName, fileName)
+            except BaseException:
+                os.unlink(tmpName)
+                raise
+        except (OSError, yaml.YAMLError) as e:
+            self._logger.error(f"Cannot save experiments to {fileName}: {e}")
+            return False
+
+        self._configFile = fileName
+        self._backedUpFiles.add(fileName)
+        self._logger.info(f"Saved experiments to {fileName}")
+        return True
+
+    def saveExperimentsAs(self):
+        """ asks for a file name and saves all experiments to it """
+        start = self._configFile or os.path.join(os.getcwd(), 'default.sreg')
+        fileName, _ = QFileDialog.getSaveFileName(self, "Save experiments", start,
+                                                  "Experiment files (*.sreg);;All files (*)")
+        if not fileName:
+            return False
+        if not os.path.splitext(fileName)[1]:
+            fileName += '.sreg'
+        return self.saveExperiments(fileName)
 
     def copyRemoteSource(self):
-        text = "  Remote:\n"
-        if 'Remote' in self._experiments[self._currentExperimentIndex]:
-            text += yaml.dump(self._experiments[self._currentExperimentIndex]['Remote'], default_flow_style=False)
-        text = text.replace("\n", "\n    ")
-        clipboard = QApplication.clipboard()
-        clipboard.setText(text)
+        self.remotePanel.copySource()
 
-    def remoteWidgetMenue(self, position):
-        """
-        Gets called when a user opens the context menu from the remoteDock
-        :param position: the position where the user opened the context menu
-        """
-        menu = QMenu(self)
-        addAction = menu.addAction("Add widget")
-        saveAction = menu.addAction("Copy remote source")
-        action = menu.exec_(self.remoteWidget.mapToGlobal(position))
-        if action == addAction:
-            self.remoteAddWidget()
-        elif action == saveAction:
-            self.copyRemoteSource()
+    def _addStatusTime(self, caption, tooltip):
+        """ adds a time with its caption on the right of the status bar, returns the label of the value """
+        return self._addStatusValue(caption, tooltip, timeString(0))
+
+    def _addStatusValue(self, caption, tooltip, value):
+        """ adds a value with its caption on the right of the status bar, returns the label of the value """
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
+        self.statusBar.addPermanentWidget(sep)
+
+        widget = QWidget()
+        widget.setToolTip(tooltip)
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(6, 0, 6, 0)
+        layout.setSpacing(6)
+        captionLabel = QLabel(caption)
+        captionLabel.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        valueLabel = QLabel(value)
+        font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        font.setBold(True)
+        valueLabel.setFont(font)
+        layout.addWidget(captionLabel)
+        layout.addWidget(valueLabel)
+        self.statusBar.addPermanentWidget(widget)
+        return valueLabel
+
+    def setTheme(self, name):
+        """ applies the theme with the given name, unknown names fall back to the system theme """
+        if name not in THEMES:
+            name = 'System'
+        applyTheme(name)
+        self._settings.setValue("theme/name", name)
+        # the toggle returns to the last theme of the other kind
+        self._settings.setValue("theme/dark" if isDark(name) else "theme/light", name)
+
+        for act in self._themeActions.actions():
+            act.setChecked(act.text() == name)
+        self.actToggleTheme.setToolTip("Switch to light mode" if isDark(name) else "Switch to dark mode")
+        for act, (icon, colors) in self._themedIcons.items():
+            act.setIcon(themedIcon(getResource(icon), colors and colors[isDark(name)]))
+        # fixed width of the longer label so the toolbar does not shift on a swap, the style sets the margins
+        for btn, a, b in self._toggleButtons:
+            current = btn.defaultAction()
+            widths = []
+            for act in (a, b):
+                btn.setDefaultAction(act)
+                widths.append(btn.sizeHint().width())
+            btn.setDefaultAction(current)
+            btn.setFixedWidth(max(widths))
+        if self.visualizer is not None:
+            self.visualizer.updateTheme()
+
+    def toggleTheme(self):
+        """ switches between the last used light and dark theme """
+        dark = isDark(self._settings.value("theme/name"))
+        self.setTheme(self._settings.value("theme/light" if dark else "theme/dark"))
+
+
+def logUncaughtException(excType, excValue, excTraceback):
+    """
+    Exception hook that logs uncaught exceptions. Since PyQt 5.5 an unhandled exception
+    in a slot aborts the application if the default hook is installed.
+    """
+    if issubclass(excType, KeyboardInterrupt):
+        sys.__excepthook__(excType, excValue, excTraceback)
+        return
+    logging.getLogger("pywisp").critical("Unhandled exception",
+                                         exc_info=(excType, excValue, excTraceback))
+
+
+def findDefaultConfig(name='default.sreg'):
+    """
+    Looks for the default config file in the current working directory and
+    in the directory of the main script.
+    :return: path of the config file or `None`
+    """
+    dirs = [os.getcwd()]
+    mainFile = getattr(sys.modules.get('__main__'), '__file__', None)
+    if mainFile:
+        dirs.append(os.path.dirname(os.path.abspath(mainFile)))
+    for d in dirs:
+        path = os.path.join(d, name)
+        if os.path.isfile(path):
+            return path
+    return None
+
 
 def timeString(seconds):
-    return "{:02d}:{:02d}:{:02d}".format(
-            int(seconds // 3600),
-            int(seconds % 3600 // 60),
-            int(seconds % 60),
-        )
-
+    return f"{int(seconds // 3600):02d}:{int(seconds % 3600 // 60):02d}:{int(seconds % 60):02d}"

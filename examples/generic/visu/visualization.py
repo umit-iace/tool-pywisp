@@ -65,19 +65,17 @@ class MplDoublePendulumVisualizer(MplVisualizer):
         self.axes.add_patch(self.pendulum1Shaft)
         self.axes.add_patch(self.pendulum2)
         self.axes.add_patch(self.pendulum2Shaft)
+        # the beam does not move, it is part of the cached background
+        self.setAnimated(self.cart, self.pendulumShaft, self.pendulum2, self.pendulum1, self.pendulum1Shaft,
+                         self.pendulum2Shaft)
 
         self.canvas.draw_idle()
 
     def update(self, dataPoints):
         x = phi1 = phi2 = 0
-        for name, buffer in dataPoints.items():
-            if buffer.values:
-                if name == 'pos':
-                    x = buffer.values[-1]
-                elif name == 'phi1':
-                    phi1 = -buffer.values[-1]
-                elif name == 'phi2':
-                    phi2 = -buffer.values[-1]
+        state = dataPoints.get('state')
+        if state is not None and state.values:
+            x, phi1, phi2 = state.values[-1] * [1, -1, -1]
 
         x0 = np.array([x, 0])
         x1 = x0 + np.array([-np.sin(phi1), np.cos(phi1)]) * st.pendulum1Height
@@ -101,5 +99,5 @@ class MplDoublePendulumVisualizer(MplVisualizer):
         self.pendulum2.set_transform(t_phi2)
         self.pendulum2Shaft.set_center(x2)
 
-        self.canvas.draw_idle()
+        self.draw()
         self.saveIfChecked()

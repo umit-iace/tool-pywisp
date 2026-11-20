@@ -25,7 +25,7 @@ struct Model {
     TrajType trajType;
 
     FrameRegistry &fr {support.min.reg};
-    Min::Out &out {support.min.out};
+    Sink<Frame> &out {support.out};
 
     void reset(uint32_t) {
         doublePendulum.reset();
@@ -33,6 +33,11 @@ struct Model {
     }
 
     void init() {
+        // status frames, pywisp shows whether the rig responds and checks the start
+        e.enableStatus(out);
+        // log messages of these levels are sent to pywisp too, the cyclic prints (NONE) stay local
+        e.enableLog(out, Logger::bit(Logger::INFO) | Logger::bit(Logger::WARN) | Logger::bit(Logger::ERROR));
+
         // reset
         e.onEvent(e.INIT).call(*this, &Model::reset);
 
@@ -75,11 +80,20 @@ struct Model {
                 doublePendulum.input = (Later<Pendulum::Input>) trajType.out;
                 break;
             }
+            default:
+                k.log.warn("unknown model config %u\n", config);
         }
     }
 
     void setTrajType(Frame &f) {
-        trajType.mkType(f.unpack<TrajType::Type>());
+        auto t = f.unpack<TrajType::Type>();
+        static const char *names[] = {"NONE", "LIN", "POLY"};
+        if (t > TrajType::POLY) {
+            k.log.error("unknown trajectory type %u\n", (unsigned) t);
+            return;
+        }
+        trajType.mkType(t);
+        k.log.info("trajectory type set to %s\n", names[t]);
     }
 };
 

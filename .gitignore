@@ -92,3 +92,11 @@ Thumbs.db
 sh.exe.stackdump
 
 uv.lock
+
+# test output
+tests/test.csv
+tests/test.png
+tests/*.pkl
+coverage.xml
+report.xml
+.coverage

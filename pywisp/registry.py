@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
 from .experimentModules import ExperimentModule
-from .visualization import Visualizer
 from .connection import Connection
 
 class Registry(dict):
+    # keyed by the name of the base class, so the core does not import the visualizers (QtWidgets)
     def __init__(self):
-        self[ExperimentModule] = {}
-        self[Connection] = {}
-        self[Visualizer] = {}
+        super().__init__(ExperimentModule={}, Connection={}, Visualizer={})
 
     def register(self, type, mod):
         if not issubclass(mod, type):
             raise TypeError(f"Cannot register {mod} as {type}!")
-        if mod in self[type].values():
+        classes = self[type.__name__]
+        if mod in classes.values():
             raise ValueError(f'class {mod} already registered as {type}')
-        self[type][mod.__name__] = mod
+        if mod.__name__ in classes:
+            raise ValueError(f'another class named {mod.__name__} is already registered as {type}')
+        classes[mod.__name__] = mod
 
 _registry = Registry()
 
@@ -30,12 +31,13 @@ def getRegisteredExperimentModules():
     hook to retrieve registered experiment modules
     :return: list of experiment modules
     """
-    return _registry[ExperimentModule]
+    return _registry['ExperimentModule']
 
 
 def registerConnection(connCls):
     """
-    hook to register a connection in the pywisp framework
+    hook to register a connection in the pywisp framework, several connections can be registered,
+    the user selects the active one in the gui, the first one is the default
     :param connCls: class to be registered
     """
     _registry.register(Connection, connCls)
@@ -45,7 +47,7 @@ def getRegisteredConnections():
     hook to retrieve registered connections
     :return: list of connection classes
     """
-    return _registry[Connection]
+    return _registry['Connection']
 
 
 def registerVisualizer(visCls):
@@ -53,6 +55,7 @@ def registerVisualizer(visCls):
     hook to register a visualizer for the experiment GUI
     :param visCls: class to be registered
     """
+    from .visualization import Visualizer
     _registry.register(Visualizer, visCls)
 
 def getRegisteredVisualizers():
@@ -60,4 +63,4 @@ def getRegisteredVisualizers():
     hook to retrieve registered visualizers
     :return: list of visualizer classes
     """
-    return _registry[Visualizer]
+    return _registry['Visualizer']

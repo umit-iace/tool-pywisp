@@ -10,5 +10,5 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-pywisp = { path = "../../" }
+pywisp = { path = "../../", editable = true }
 exampleData = { path = "data/",  editable = true }

@@ -1,5 +1,4 @@
-from PyQt5.QtCore import QSettings
-from PyQt5.QtGui import QColor
+from PyQt6.QtCore import QSettings
 
 import os
 
@@ -8,9 +7,7 @@ _default = {
         ("CRITICAL", "#DC143C"),
         ("ERROR", "#B22222"),
         ("WARNING", "#DAA520"),
-        ("INFO", "#101010"),
         ("DEBUG", "#4682B4"),
-        ("NOTSET", "#000000"),
     ],
     "path": [
         ("export_dir", os.path.curdir),
@@ -28,8 +25,10 @@ _default = {
         ("olive", "#bcbd22"),
         ("cyan", "#17becf"),
     ],
-    "view": [
-        ("show_coordinates", "True"),
+    "theme": [
+        ("name", "System"),
+        ("light", "System"),
+        ("dark", "Dark"),
     ],
 }
 class Settings(QSettings):
@@ -44,10 +43,18 @@ class Settings(QSettings):
             self.endGroup()
 
     def color(self, ix, kind='plot'):
+        # QtGui only for the gui, the core (QtCore) uses the settings as well
+        from PyQt6.QtGui import QColor
         """ kind: one of ['plot', 'log'] """
-        self.beginGroup(f'{kind}_colors')
-        items = self.childKeys()
-        key = ix if kind=='log' else items[ ix % len(items) ]
-        ret = QColor(self.value(key))
-        self.endGroup()
-        return ret
+        group = f'{kind}_colors'
+        if kind == 'log':
+            # INFO and NOTSET of older versions are ignored, they take the text color of the theme
+            if ix not in dict(_default[group]):
+                return QColor()
+            key = ix
+        else:
+            # QSettings returns its keys sorted alphabetically, so take the
+            # order from the defaults to keep the intended color cycle
+            keys = [k for k, _ in _default[group]]
+            key = keys[ix % len(keys)]
+        return QColor(self.value(f'{group}/{key}'))
